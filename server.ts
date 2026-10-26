@@ -239,7 +239,7 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
         u.assignedProjects = [...cleanProjectsList];
       }
       if (u.passwordHash && !String(u.passwordHash).startsWith('scrypt$')) {
-        if (u.username === 'admin') {
+        if (u.username === 'admin' || u.username === 'admin2') {
           u.passwordHash = hashPasswordSecure('admin123');
         }
       }
@@ -256,7 +256,50 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
       if (u.username === 'admin' && !u.clientAuthDigest) {
         u.clientAuthDigest = computeClientAuthDigest('admin', 'admin123');
       }
+      if (
+        u.id === 'usr_admin2' ||
+        u.username === 'admin2' ||
+        String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata'
+      ) {
+        u.id = 'usr_admin2';
+        u.username = 'Hassan shehata';
+        u.fullName = 'حسن شحاتة (Hassan Shehata)';
+        u.roleId = 'role_admin';
+        u.passwordHash = hashPasswordSecure('HD_CAPITAL');
+        u.clientAuthDigest = computeClientAuthDigest('hassan shehata', 'HD_CAPITAL');
+        u.jobTitle = 'Co-Founder & System Administrator';
+        u.jobTitleAr = 'مدير شريك ومدير نظام معتمد';
+        u.avatarUrl = createAvatarSvg('HS', '#1E40AF', '#3B82F6');
+        u.email = 'hassan.shehata@propsphere.eg';
+      }
     });
+
+    const hasAdmin2 = parsedDb.users.some(
+      (u: any) =>
+        u.id === 'usr_admin2' ||
+        String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata'
+    );
+    if (!hasAdmin2) {
+      parsedDb.users.splice(1, 0, {
+        id: 'usr_admin2',
+        username: 'Hassan shehata',
+        passwordHash: hashPasswordSecure('HD_CAPITAL'),
+        clientAuthDigest: computeClientAuthDigest('hassan shehata', 'HD_CAPITAL'),
+        fullName: 'حسن شحاتة (Hassan Shehata)',
+        roleId: 'role_admin',
+        jobTitle: 'Co-Founder & System Administrator',
+        jobTitleAr: 'مدير شريك ومدير نظام معتمد',
+        avatarUrl: createAvatarSvg('HS', '#1E40AF', '#3B82F6'),
+        email: 'hassan.shehata@propsphere.eg',
+        phone: '',
+        location: 'القاهرة الجديدة · التجمع الخامس',
+        assignedProjects: [...cleanProjectsList],
+        isActiveForRouting: false,
+        routingWeight: 1,
+        preferredLang: 'ar',
+        createdAt: '2026-01-15T09:00:00.000Z',
+      });
+    }
 
     // Re-assign any leads whose assignedTo references a deleted user ID (or is stuck on usr_admin when sales employees exist) to active sales employees
     const validUserIds = new Set(parsedDb.users.map((u: any) => u.id));
@@ -462,7 +505,8 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       if (
         notification.userId === 'all' ||
         client.userId === notification.userId ||
-        client.userId === 'usr_admin'
+        client.userId === 'usr_admin' ||
+        client.userId === 'usr_admin2'
       ) {
         try {
           client.res.write(payload);
@@ -661,7 +705,15 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     }
     const cleanUser = String(username).trim().toLowerCase();
     const cleanPass = String(password).trim();
-    const user = db.users.find((u: any) => u.username.toLowerCase() === cleanUser);
+    const normalizedUserLookup = cleanUser.replace(/[\s_]+/g, '');
+    const user = db.users.find((u: any) => {
+      const stored = String(u.username || '').trim().toLowerCase();
+      return (
+        stored === cleanUser ||
+        stored.replace(/[\s_]+/g, '') === normalizedUserLookup ||
+        (u.id === 'usr_admin2' && (cleanUser === 'admin2' || normalizedUserLookup === 'hassanshehata'))
+      );
+    });
     if (!user) {
       return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
     }
@@ -1201,7 +1253,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       return res.status(403).json({ error: 'فقط مدير النظام يمكنه حذف المستخدمين' });
     }
     const targetId = req.params.id;
-    if (targetId === 'usr_admin') {
+    if (targetId === 'usr_admin' || targetId === 'usr_admin2') {
       return res.status(400).json({ error: 'لا يمكن حذف الحساب الرئيسي لمدير النظام' });
     }
     db.users = db.users.filter((u: any) => u.id !== targetId);

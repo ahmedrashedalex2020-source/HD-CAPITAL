@@ -480,7 +480,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
                         <Edit3 className="w-3.5 h-3.5" />
                       </button>
                     )}
-                    {canManageUsers && emp.id !== 'usr_admin' && (
+                    {canManageUsers && emp.id !== 'usr_admin' && emp.id !== 'usr_admin2' && (
                       <button
                         onClick={() => handleDeleteUser(emp)}
                         className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 cursor-pointer"

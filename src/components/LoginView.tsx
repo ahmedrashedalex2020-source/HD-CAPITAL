@@ -47,7 +47,16 @@ export const LoginView: React.FC<LoginViewProps> = ({
   };
 
   const handleQuickAccountSelect = async (acc: any) => {
-    const defaultPass = acc.username === 'admin' ? 'admin123' : '123456';
+    const isHassan =
+      acc.id === 'usr_admin2' ||
+      String(acc.username || '').toLowerCase().includes('hassan') ||
+      String(acc.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata';
+    const defaultPass =
+      isHassan
+        ? 'HD_CAPITAL'
+        : acc.username === 'admin'
+        ? 'admin123'
+        : '123456';
     setUsername(acc.username);
     setPassword(defaultPass);
     setError('');

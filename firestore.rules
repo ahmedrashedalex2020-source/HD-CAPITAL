@@ -19,7 +19,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if true;
       allow create, update: if isValidUserPayload();
-      allow delete: if userId != 'usr_admin';
+      allow delete: if userId != 'usr_admin' && userId != 'usr_admin2';
     }
 
     // Core CRM Collections
