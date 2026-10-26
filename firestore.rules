@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Deny-all for client SDKs: All database reads and writes are performed
+    // exclusively from the backend server via firebase-admin.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

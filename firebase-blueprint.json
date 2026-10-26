@@ -1,0 +1,239 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "CRM user account and sales representative profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "passwordHash": { "type": "string" },
+        "fullName": { "type": "string" },
+        "roleId": { "type": "string" },
+        "jobTitle": { "type": "string" },
+        "jobTitleAr": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "location": { "type": "string" },
+        "isActiveForRouting": { "type": "boolean" },
+        "routingWeight": { "type": "number" },
+        "preferredLang": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "username", "passwordHash", "fullName", "roleId"]
+    },
+    "Role": {
+      "title": "Role",
+      "description": "RBAC role and module permissions matrix",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "nameAr": { "type": "string" },
+        "description": { "type": "string" },
+        "isSystem": { "type": "boolean" }
+      },
+      "required": ["id", "name", "nameAr"]
+    },
+    "Lead": {
+      "title": "Lead",
+      "description": "Real estate customer lead with normalized phone key",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fullName": { "type": "string" },
+        "phone": { "type": "string" },
+        "phoneNormalized": { "type": "string" },
+        "secondaryPhone": { "type": "string" },
+        "email": { "type": "string" },
+        "source": { "type": "string" },
+        "campaignName": { "type": "string" },
+        "projectInterest": { "type": "string" },
+        "propertyType": { "type": "string" },
+        "budgetMin": { "type": "number" },
+        "budgetMax": { "type": "number" },
+        "status": { "type": "string" },
+        "priority": { "type": "string" },
+        "assignedTo": { "type": "string" },
+        "assignedBy": { "type": "string" },
+        "notes": { "type": "string" },
+        "lastContactedAt": { "type": "string" },
+        "nextFollowUpAt": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "fullName", "phone", "phoneNormalized", "status", "assignedTo", "createdAt"]
+    },
+    "LeadActivity": {
+      "title": "LeadActivity",
+      "description": "Subcollection activity entry for a lead",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "leadId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "type": { "type": "string" },
+        "summary": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "leadId", "userId", "type", "summary", "createdAt"]
+    },
+    "LeadPhone": {
+      "title": "LeadPhone",
+      "description": "Unique index document mapping phoneNormalized to leadId",
+      "type": "object",
+      "properties": {
+        "phoneNormalized": { "type": "string" },
+        "leadId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["phoneNormalized", "leadId"]
+    },
+    "PropertyUnit": {
+      "title": "PropertyUnit",
+      "description": "Real estate unit in inventory catalog",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "title": { "type": "string" },
+        "titleAr": { "type": "string" },
+        "projectName": { "type": "string" },
+        "price": { "type": "number" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "code", "projectName", "price", "status"]
+    },
+    "Deal": {
+      "title": "Deal",
+      "description": "Real estate sales deal",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "leadId": { "type": "string" },
+        "projectName": { "type": "string" },
+        "assignedTo": { "type": "string" },
+        "stage": { "type": "string" },
+        "dealValue": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "assignedTo", "stage", "dealValue"]
+    },
+    "CalendarEvent": {
+      "title": "CalendarEvent",
+      "description": "Site visit or follow-up appointment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "assignedTo": { "type": "string" },
+        "completed": { "type": "boolean" }
+      },
+      "required": ["id", "title", "date", "time", "assignedTo"]
+    },
+    "SheetConnection": {
+      "title": "SheetConnection",
+      "description": "Google Sheets Meta Lead Ads sync configuration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "spreadsheetId": { "type": "string" },
+        "routingMode": { "type": "string" }
+      },
+      "required": ["id", "name", "spreadsheetId"]
+    },
+    "SyncLog": {
+      "title": "SyncLog",
+      "description": "Audit log of Google Sheets synchronization runs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "connectionId": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "newLeadsImported": { "type": "number" }
+      },
+      "required": ["id", "connectionId", "timestamp"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Real-time notification for sales reps and admins",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "titleAr": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "isRead", "createdAt"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Global CRM settings and roundRobinCursor state",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "roundRobinCursor": { "type": "number" }
+      },
+      "required": ["id", "roundRobinCursor"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "CRM users collection"
+    },
+    "/roles/{roleId}": {
+      "schema": "Role",
+      "description": "RBAC roles collection"
+    },
+    "/leads/{leadId}": {
+      "schema": "Lead",
+      "description": "Leads collection"
+    },
+    "/leads/{leadId}/activities/{activityId}": {
+      "schema": "LeadActivity",
+      "description": "Subcollection of activities for each lead"
+    },
+    "/leadPhones/{phoneNormalized}": {
+      "schema": "LeadPhone",
+      "description": "Unique phoneNormalized lookup collection for duplicate prevention"
+    },
+    "/properties/{propertyId}": {
+      "schema": "PropertyUnit",
+      "description": "Real estate units catalog"
+    },
+    "/deals/{dealId}": {
+      "schema": "Deal",
+      "description": "Sales deals pipeline"
+    },
+    "/events/{eventId}": {
+      "schema": "CalendarEvent",
+      "description": "Calendar and site visits"
+    },
+    "/sheetConnections/{connectionId}": {
+      "schema": "SheetConnection",
+      "description": "Connected Google Sheets configurations"
+    },
+    "/syncLogs/{logId}": {
+      "schema": "SyncLog",
+      "description": "Google Sheets import audit logs"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications"
+    },
+    "/settings/{settingId}": {
+      "schema": "Settings",
+      "description": "System settings and round-robin cursor"
+    }
+  }
+}

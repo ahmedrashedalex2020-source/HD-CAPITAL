@@ -1,0 +1,6 @@
+{
+  "name": "PropSphere Real Estate CRM",
+  "description": "نظام إدارة علاقات العملاء العقاري الاحترافي مع استيراد وتوزيع الليدز تلقائياً من Google Sheets ومصفوفة صلاحيات متقدمة وتقارير مبيعات يومية.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
