@@ -8,13 +8,40 @@ import {
 
 export const DEFAULT_PROJECTS = ['ليدز مغتربين'];
 
-const SNAPSHOT_KEY = 'propsphere_crm1_strict_v5';
-const LEGACY_KEYS = [
-  'propsphere_workspace_backup_v3',
-  'propsphere_crm1_clean_v4',
-  'propsphere_workspace_backup_v2',
-  'propsphere_workspace_backup_v1',
-];
+/**
+ * Architectural Requirement: Pure Google Firebase Cloud Firestore persistence.
+ * Zero reliance on browser localStorage for CRM records, leads, users, or workspace snapshots.
+ */
+export function purgeAllLegacyLocalStorage(): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (
+        key &&
+        (key.startsWith('propsphere_crm') ||
+          key.startsWith('propsphere_workspace_') ||
+          key.startsWith('propsphere_live_') ||
+          key.startsWith('propsphere_snap') ||
+          key === 'propsphere_crm1_strict_v5' ||
+          key === 'propsphere_crm1_clean_v4')
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+    for (const key of keysToRemove) {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+// Immediately purge on module evaluation
+if (typeof window !== 'undefined') {
+  purgeAllLegacyLocalStorage();
+}
 
 const FAKE_PROJECT_NAMES = new Set([
   'Palm Hills New Cairo',
@@ -298,41 +325,41 @@ function createBrowserSessionToken(user: any): string {
 }
 
 export function saveLocalSnapshot(bootstrapData: any): void {
+  purgeAllLegacyLocalStorage();
   if (!bootstrapData || typeof bootstrapData !== 'object') return;
   try {
-    const existing = loadLocalSnapshot() || {};
     const rawMerged = {
-      ...existing,
+      ...(cachedLiveSnapshot || {}),
       ...bootstrapData,
       roles:
         Array.isArray(bootstrapData.roles) && bootstrapData.roles.length > 0
           ? bootstrapData.roles
-          : existing.roles || DEFAULT_ROLES,
-      users: mergeById(existing.users || [], bootstrapData.users || []),
-      leads: mergeById(existing.leads || [], bootstrapData.leads || []),
-      deals: mergeById(existing.deals || [], bootstrapData.deals || []),
-      properties: mergeById(existing.properties || [], bootstrapData.properties || []),
-      events: mergeById(existing.events || [], bootstrapData.events || []),
+          : cachedLiveSnapshot?.roles || DEFAULT_ROLES,
+      users: mergeById(cachedLiveSnapshot?.users || [], bootstrapData.users || []),
+      leads: mergeById(cachedLiveSnapshot?.leads || [], bootstrapData.leads || []),
+      deals: mergeById(cachedLiveSnapshot?.deals || [], bootstrapData.deals || []),
+      properties: mergeById(cachedLiveSnapshot?.properties || [], bootstrapData.properties || []),
+      events: mergeById(cachedLiveSnapshot?.events || [], bootstrapData.events || []),
       sheetConnections:
         Array.isArray(bootstrapData.sheetConnections) && bootstrapData.sheetConnections.length > 0
           ? bootstrapData.sheetConnections
-          : existing.sheetConnections || [],
+          : cachedLiveSnapshot?.sheetConnections || [],
       syncLogs:
         Array.isArray(bootstrapData.syncLogs) && bootstrapData.syncLogs.length > 0
           ? bootstrapData.syncLogs
-          : existing.syncLogs || [],
+          : cachedLiveSnapshot?.syncLogs || [],
       notifications:
         Array.isArray(bootstrapData.notifications) && bootstrapData.notifications.length > 0
           ? bootstrapData.notifications
-          : existing.notifications || [],
+          : cachedLiveSnapshot?.notifications || [],
       projects:
         Array.isArray(bootstrapData.projects) && bootstrapData.projects.length > 0
           ? bootstrapData.projects
-          : existing.projects || DEFAULT_PROJECTS,
+          : cachedLiveSnapshot?.projects || DEFAULT_PROJECTS,
     };
     const { cleaned: merged } = sanitizeCrm1Workspace(rawMerged);
     cachedLiveSnapshot = merged;
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(merged));
+    // Persist directly and exclusively to Google Firebase Firestore
     if (
       bootstrapData.currentRole?.id === 'role_admin' ||
       bootstrapData.currentRole?.permissions?.leads?.read === 'all'
@@ -340,7 +367,7 @@ export function saveLocalSnapshot(bootstrapData: any): void {
       void saveFirestoreWorkspace(merged);
     }
   } catch {
-    // ignore storage errors
+    // ignore
   }
 }
 
@@ -364,18 +391,12 @@ function mergeById(baseList: any[], incomingList: any[]): any[] {
   return Array.from(map.values());
 }
 
+/**
+ * Returns null: Local storage persistence is completely disabled per architectural specification.
+ * Google Firebase Cloud Firestore is the sole authoritative data store.
+ */
 export function loadLocalSnapshot(): any {
-  try {
-    for (const legacyKey of LEGACY_KEYS) {
-      localStorage.removeItem(legacyKey);
-    }
-    const raw = localStorage.getItem(SNAPSHOT_KEY);
-    if (raw) {
-      return sanitizeCrm1Workspace(JSON.parse(raw)).cleaned;
-    }
-  } catch {
-    // ignore
-  }
+  purgeAllLegacyLocalStorage();
   return null;
 }
 
@@ -397,10 +418,10 @@ async function fetchStaticSnapshotJson(now: number): Promise<any | null> {
 }
 
 async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
-  const local = loadLocalSnapshot();
+  purgeAllLegacyLocalStorage();
   const now = Date.now();
 
-  if (forceRemote || !cachedLiveSnapshot || now - lastRemoteFetchTime > 6000) {
+  if (forceRemote || !cachedLiveSnapshot || now - lastRemoteFetchTime > 4000) {
     lastRemoteFetchTime = now;
     try {
       const [staticSnap, rawFirestoreSnap] = await Promise.all([
@@ -413,24 +434,28 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
         : { cleaned: null, hadFakeData: false };
       const firestoreSnap = firestoreSanitized.cleaned;
 
+      // When Cloud Firestore has existing workspace records, it is the primary authoritative source
+      if (
+        firestoreSnap &&
+        Array.isArray(firestoreSnap.users) &&
+        firestoreSnap.users.length > 0 &&
+        Array.isArray(firestoreSnap.leads) &&
+        firestoreSnap.leads.length > 0
+      ) {
+        cachedLiveSnapshot = firestoreSnap;
+        return firestoreSnap;
+      }
+
+      // If Cloud Firestore is empty or missing CRM1 leads, bootstrap it with the canonical CRM1 dataset
       if (staticSnap || firestoreSnap) {
         const base = staticSnap || {};
         const cloud = firestoreSnap || {};
 
-        let combinedUsers = mergeById(base.users || [], local?.users || []);
-        combinedUsers = mergeById(combinedUsers, cloud.users || []);
-
-        let combinedLeads = mergeById(base.leads || [], local?.leads || []);
-        combinedLeads = mergeById(combinedLeads, cloud.leads || []);
-
-        let combinedDeals = mergeById(base.deals || [], local?.deals || []);
-        combinedDeals = mergeById(combinedDeals, cloud.deals || []);
-
-        let combinedProperties = mergeById(base.properties || [], local?.properties || []);
-        combinedProperties = mergeById(combinedProperties, cloud.properties || []);
-
-        let combinedEvents = mergeById(base.events || [], local?.events || []);
-        combinedEvents = mergeById(combinedEvents, cloud.events || []);
+        let combinedUsers = mergeById(base.users || [], cloud.users || []);
+        let combinedLeads = mergeById(base.leads || [], cloud.leads || []);
+        let combinedDeals = mergeById(base.deals || [], cloud.deals || []);
+        let combinedProperties = mergeById(base.properties || [], cloud.properties || []);
+        let combinedEvents = mergeById(base.events || [], cloud.events || []);
 
         const rawMerged = {
           ...base,
@@ -440,7 +465,7 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
               ? cloud.roles
               : Array.isArray(base.roles) && base.roles.length > 0
               ? base.roles
-              : local?.roles || DEFAULT_ROLES,
+              : DEFAULT_ROLES,
           users: combinedUsers,
           leads: combinedLeads,
           deals: combinedDeals,
@@ -449,62 +474,38 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
           sheetConnections:
             Array.isArray(cloud.sheetConnections) && cloud.sheetConnections.length > 0
               ? cloud.sheetConnections
-              : Array.isArray(local?.sheetConnections) && local.sheetConnections.length > 0
-              ? local.sheetConnections
               : base.sheetConnections || [],
           syncLogs:
             Array.isArray(cloud.syncLogs) && cloud.syncLogs.length > 0
               ? cloud.syncLogs
-              : Array.isArray(local?.syncLogs) && local.syncLogs.length > 0
-              ? local.syncLogs
               : base.syncLogs || [],
           notifications:
             Array.isArray(cloud.notifications) && cloud.notifications.length > 0
               ? cloud.notifications
-              : Array.isArray(local?.notifications) && local.notifications.length > 0
-              ? local.notifications
               : base.notifications || [],
           projects: DEFAULT_PROJECTS,
         };
 
         const { cleaned: merged, hadFakeData } = sanitizeCrm1Workspace(rawMerged);
-
         cachedLiveSnapshot = merged;
-        try {
-          localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(merged));
-        } catch {
-          // ignore
-        }
 
-        // Synchronize clean CRM1 state to Cloud Firestore if Firestore had stale/fake data or missing leads
-        if (
-          !firestoreSnap ||
-          firestoreSanitized.hadFakeData ||
-          hadFakeData ||
-          (firestoreSnap.users || []).length !== merged.users.length ||
-          (firestoreSnap.leads || []).length !== merged.leads.length
-        ) {
-          void saveFirestoreWorkspace(merged);
-          for (const u of merged.users) {
-            void saveFirestoreUser(u);
-          }
-          for (const fakeId of FAKE_DEMO_USER_IDS) {
-            void removeFirestoreUser(fakeId);
-          }
+        // Persist directly and authoritatively to Google Firebase Firestore
+        void saveFirestoreWorkspace(merged);
+        for (const u of merged.users) {
+          void saveFirestoreUser(u);
+        }
+        for (const fakeId of FAKE_DEMO_USER_IDS) {
+          void removeFirestoreUser(fakeId);
         }
 
         return merged;
       }
-    } catch {
-      // ignore network failure and use local
+    } catch (err) {
+      console.warn('[CloudStore] Firestore load notice:', err);
     }
   }
 
   if (cachedLiveSnapshot) return cachedLiveSnapshot;
-  if (local && Array.isArray(local.users) && local.users.length > 0) {
-    cachedLiveSnapshot = local;
-    return local;
-  }
 
   const fallback = {
     roles: DEFAULT_ROLES,
@@ -558,13 +559,10 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
 }
 
 async function persistState(snap: any): Promise<void> {
+  purgeAllLegacyLocalStorage();
   const { cleaned } = sanitizeCrm1Workspace(snap);
   cachedLiveSnapshot = cleaned;
-  try {
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(cleaned));
-  } catch {
-    // ignore
-  }
+  // Exclusively write to Google Firebase Firestore
   await saveFirestoreWorkspace(cleaned);
 }
 
@@ -722,11 +720,7 @@ export async function handleLocalFallbackRequest(
     if (firestoreUser) {
       user = user ? { ...user, ...firestoreUser } : firestoreUser;
       snap.users = mergeById(snap.users, [user]);
-      try {
-        localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snap));
-      } catch {
-        // ignore
-      }
+      cachedLiveSnapshot = snap;
     }
 
     if (!user) {

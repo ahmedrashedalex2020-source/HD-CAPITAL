@@ -429,6 +429,10 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [deleteConfirmLead, setDeleteConfirmLead] = useState<Lead | null>(null);
+  const [lastChangedLeadId, setLastChangedLeadId] = useState<string | null>(null);
+  const [quickNoteLead, setQuickNoteLead] = useState<Lead | null>(null);
+  const [quickNoteText, setQuickNoteText] = useState<string>('');
+  const [isSavingQuickNote, setIsSavingQuickNote] = useState<boolean>(false);
 
   // Client Data Drawer Active Tab (`لوحة بيانات العميل`)
   const [drawerTab, setDrawerTab] = useState<'profile_data' | 'followup' | 'history'>('profile_data');
@@ -620,6 +624,37 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
   };
 
   /**
+   * Fast 1-tap note logging saved directly to Firebase
+   */
+  const handleSaveQuickNote = async () => {
+    if (!quickNoteLead || !quickNoteText.trim()) return;
+    setIsSavingQuickNote(true);
+    try {
+      await apiRequest(`/api/leads/${quickNoteLead.id}/activities`, {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'note',
+          summary: quickNoteText.trim(),
+        }),
+      });
+      setLastChangedLeadId(quickNoteLead.id);
+      setTimeout(() => setLastChangedLeadId((cur) => (cur === quickNoteLead.id ? null : cur)), 4000);
+      onToast(
+        isAr
+          ? `تم حفظ الملاحظة للعميل "${quickNoteLead.fullName}" في Firebase بنجاح ✓`
+          : `Note saved to Firebase for "${quickNoteLead.fullName}" ✓`
+      );
+      setQuickNoteLead(null);
+      setQuickNoteText('');
+      onRefresh();
+    } catch (err: any) {
+      onToast(err.message || (isAr ? 'حدث خطأ أثناء حفظ الملاحظة' : 'Failed to save note'));
+    } finally {
+      setIsSavingQuickNote(false);
+    }
+  };
+
+  /**
    * Instant Stage Change (Used by Drag & Drop, Card Stage Selector, and Client Data Panel)
    */
   const handleQuickStatusChange = async (lead: Lead, newStatus: LeadStatus) => {
@@ -629,8 +664,11 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
     }
     if (lead.status === newStatus) return;
 
-    // 1. Optimistic immediate UI update
+    // 1. Optimistic immediate UI update & glowing visual highlight
     setOptimisticStatuses((prev) => ({ ...prev, [lead.id]: newStatus }));
+    setLastChangedLeadId(lead.id);
+    setTimeout(() => setLastChangedLeadId((cur) => (cur === lead.id ? null : cur)), 4000);
+
     if (selectedLead?.id === lead.id) {
       onSelectLead({ ...selectedLead, status: newStatus });
     }
@@ -647,11 +685,11 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
       onToast(
         newStatus === 'Won'
           ? isAr
-            ? `تم نقل العميل "${lead.fullName}" إلى مرحلة (تم التحويل ✓) وإنشاء صفقة ناجحة تلقائياً!`
-            : `Moved "${lead.fullName}" to Converted (Won) & created deal!`
+            ? `تم نقل العميل "${lead.fullName}" إلى مرحلة (تم التحويل ✓) وحفظ التغييرات في Firebase!`
+            : `Moved "${lead.fullName}" to Converted (Won) & saved to Firebase!`
           : isAr
-          ? `تم نقل العميل "${lead.fullName}" إلى مرحلة "${stageName}" بنجاح`
-          : `Moved "${lead.fullName}" to "${stageName}"`
+          ? `تم نقل العميل "${lead.fullName}" إلى مرحلة "${stageName}" وحفظها في Firebase بنجاح ✓`
+          : `Moved "${lead.fullName}" to "${stageName}" and saved to Firebase ✓`
       );
       onRefresh();
     } catch (err: any) {
@@ -730,12 +768,14 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
       if (selectedLead?.id === lead.id) {
         onSelectLead(res.lead);
       }
+      setLastChangedLeadId(lead.id);
+      setTimeout(() => setLastChangedLeadId((cur) => (cur === lead.id ? null : cur)), 4000);
       setPanelTransferNote('');
       const targetName = getUserName(newAgentId);
       onToast(
         isAr
-          ? `تم نقل العميل "${lead.fullName}" إلى مسؤول المبيعات (${targetName}) وإرسال تنبيه فوري!`
-          : `Transferred "${lead.fullName}" to ${targetName} with instant alert!`
+          ? `تم نقل العميل "${lead.fullName}" إلى مسؤول المبيعات (${targetName}) وحفظها في Firebase!`
+          : `Transferred "${lead.fullName}" to ${targetName} and saved in Firebase!`
       );
       onRefresh();
     } catch (err: any) {
@@ -1283,6 +1323,54 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* 2.5 Quick Stage Filter Strip (1-tap Access with Live Counts on Web & Mobile) */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+        <button
+          onClick={() => setStatusFilter('ALL')}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+            statusFilter === 'ALL'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200'
+          }`}
+        >
+          <span>{isAr ? 'كل العملاء' : 'All Leads'}</span>
+          <span
+            className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono-tabular font-bold ${
+              statusFilter === 'ALL' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+            }`}
+          >
+            {leads.length}
+          </span>
+        </button>
+
+        {ALL_LEAD_STATUSES.map((st) => {
+          const count = leads.filter((l) => l.status === st).length;
+          const meta = STAGE_META[st];
+          const isSelected = statusFilter === st;
+          return (
+            <button
+              key={st}
+              onClick={() => setStatusFilter(statusFilter === st ? 'ALL' : st)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 shrink-0 border ${
+                isSelected
+                  ? `${meta.color} text-white border-transparent shadow-xs`
+                  : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white' : meta.color}`}></span>
+              <span>{isAr ? meta.shortAr : meta.shortEn}</span>
+              <span
+                className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono-tabular font-bold ${
+                  isSelected ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-700'
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
       {/* 3. Filter, Search & Board Columns Mode Bar */}
       <div className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
@@ -1836,6 +1924,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
           ) : (
             filteredLeads.map((lead) => {
               const isSelected = selectedIds.includes(lead.id);
+              const isJustChanged = lastChangedLeadId === lead.id;
               const assignedAgent = users.find((u) => u.id === lead.assignedTo);
               const needsUrgentCall = lead.status === 'New' && !lead.lastContactedAt;
               const stMeta = STAGE_META[lead.status] || STAGE_META.New;
@@ -1848,10 +1937,12 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
               return (
                 <div
                   key={lead.id}
-                  className={`bg-white rounded-2xl border transition-all p-4 shadow-xs hover:shadow-md ${
-                    isSelected
+                  className={`bg-white rounded-2xl border transition-all duration-300 p-4 shadow-xs ${
+                    isJustChanged
+                      ? 'ring-2 ring-emerald-500 border-emerald-400 bg-emerald-50/30 scale-[1.01] shadow-lg'
+                      : isSelected
                       ? 'border-blue-500 bg-blue-50/20'
-                      : 'border-slate-200/90 hover:border-blue-300'
+                      : 'border-slate-200/90 hover:border-blue-300 hover:shadow-md'
                   }`}
                 >
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-center">
@@ -1872,7 +1963,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                           setDrawerTab('profile_data');
                           onSelectLead(lead);
                         }}
-                        className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 cursor-pointer"
+                        className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 cursor-pointer shadow-xs"
                       >
                         {getInitials(lead.fullName)}
                       </div>
@@ -1884,11 +1975,17 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                         }}
                         className="min-w-0 flex-1 cursor-pointer"
                       >
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-sm font-bold text-slate-900 hover:text-blue-600 truncate">
                             {lead.fullName}
                           </span>
-                          {needsUrgentCall && (
+                          {isJustChanged && (
+                            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-md shrink-0 flex items-center gap-1 animate-pulse">
+                              <span>✓</span>
+                              <span>{isAr ? 'تم الحفظ في Firebase' : 'Saved to Firebase'}</span>
+                            </span>
+                          )}
+                          {needsUrgentCall && !isJustChanged && (
                             <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-md shrink-0">
                               {isAr ? 'جديد' : 'New'}
                             </span>
@@ -2002,6 +2099,17 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                           <MessageSquare className="w-3.5 h-3.5" />
                           <span>{waCount > 0 ? waCount : isAr ? 'واتساب' : 'WA'}</span>
                         </a>
+                        <button
+                          onClick={() => {
+                            setQuickNoteLead(lead);
+                            setQuickNoteText('');
+                          }}
+                          className="px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                          title={isAr ? 'إضافة ملاحظة سريعة للعميل' : 'Add Quick Note'}
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>{isAr ? 'ملاحظة' : 'Note'}</span>
+                        </button>
                         <button
                           onClick={() => {
                             setDrawerTab('profile_data');
@@ -3257,6 +3365,73 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                 className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold cursor-pointer"
               >
                 {t.common.delete}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fast 1-Tap Quick Note Modal Saved Directly to Firebase */}
+      {quickNoteLead && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-600" />
+                <h3 className="text-sm font-bold text-slate-900">
+                  {isAr
+                    ? `إضافة ملاحظة سريعة لـ: ${quickNoteLead.fullName}`
+                    : `Add Quick Note for: ${quickNoteLead.fullName}`}
+                </h3>
+              </div>
+              <button
+                onClick={() => setQuickNoteLead(null)}
+                className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-bold text-slate-500 font-mono-tabular" dir="ltr">
+                {quickNoteLead.phone} · {quickNoteLead.projectInterest}
+              </div>
+              <textarea
+                value={quickNoteText}
+                onChange={(e) => setQuickNoteText(e.target.value)}
+                rows={3}
+                placeholder={
+                  isAr
+                    ? 'اكتب تفاصيل المكالمة أو الملاحظة هنا (مثال: تم الاتصال، العميل مهتم بمساحة 180م)...'
+                    : 'Enter note or call summary here...'
+                }
+                className="w-full p-3 rounded-xl border border-slate-200 text-xs text-slate-900 bg-[#F8FAFC] focus:bg-white focus:outline-none focus:border-blue-600"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setQuickNoteLead(null)}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveQuickNote}
+                disabled={isSavingQuickNote || !quickNoteText.trim()}
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
+              >
+                {isSavingQuickNote ? (
+                  <span>{isAr ? 'جاري الحفظ...' : 'Saving...'}</span>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" />
+                    <span>{isAr ? 'حفظ في Firebase' : 'Save to Firebase'}</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

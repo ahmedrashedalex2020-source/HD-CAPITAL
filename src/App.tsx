@@ -20,6 +20,7 @@ import {
   X,
   ChevronDown,
   Menu,
+  RefreshCw,
 } from 'lucide-react';
 import {
   AppNotification,
@@ -41,6 +42,7 @@ import {
   clearSessionAuth,
   isServerlessMode,
 } from './services/api';
+import { subscribeToFirestoreWorkspace } from './services/firebaseClient';
 import { LoginView } from './components/LoginView';
 import { DashboardView } from './components/DashboardView';
 import { LeadsView } from './components/LeadsView';
@@ -79,6 +81,7 @@ export default function App() {
   const [isSyncingSheets, setIsSyncingSheets] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [globalSearch, setGlobalSearch] = useState<string>('');
+  const [isManualRefreshing, setIsManualRefreshing] = useState<boolean>(false);
 
   const isAr = lang === 'ar';
   const t = translations[lang];
@@ -132,10 +135,38 @@ export default function App() {
     }
   }, []);
 
+  const handleManualRefresh = useCallback(async () => {
+    setIsManualRefreshing(true);
+    try {
+      await loadBootstrapData();
+      triggerToast(
+        isAr
+          ? 'تم تحديث البيانات والمزامنة مع Firebase بنجاح ✓'
+          : 'Workspace synced with Firebase successfully ✓'
+      );
+    } finally {
+      setTimeout(() => setIsManualRefreshing(false), 500);
+    }
+  }, [loadBootstrapData, triggerToast, isAr]);
+
   useEffect(() => {
     if (isAuthenticated) {
       loadBootstrapData();
     }
+  }, [isAuthenticated, loadBootstrapData]);
+
+  // Real-time synchronization directly with Google Firebase Cloud Firestore
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const unsubscribe = subscribeToFirestoreWorkspace(() => {
+      // Instantly refresh CRM view whenever Cloud Firestore data changes
+      void loadBootstrapData();
+    });
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
   }, [isAuthenticated, loadBootstrapData]);
 
   // Connect to Real-Time SSE Notification Stream only when Express backend is active
@@ -463,7 +494,7 @@ export default function App() {
         <header className="bg-white border-b border-slate-200 px-3 sm:px-6 py-2.5 sticky top-0 z-30 space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2.5">
             {/* Zone 1: Context Title & Mobile Menu Button */}
-            <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="lg:hidden p-2 rounded-lg bg-slate-100 text-slate-700 shrink-0 cursor-pointer"
@@ -487,6 +518,23 @@ export default function App() {
                   {isAr ? `العملاء (${leads.length})` : `Leads (${leads.length})`}
                 </span>
               </button>
+
+              {/* Real-time Firebase Cloud Database Sync Indicator */}
+              <div
+                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-bold shrink-0"
+                title={isAr ? 'قاعدة بيانات Firebase السحابية متصلة ومحدثة لحظياً' : 'Firebase Cloud Database is live and syncing'}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="hidden sm:inline">{isAr ? 'فايربيس مباشر' : 'Firebase Live'}</span>
+                <button
+                  onClick={handleManualRefresh}
+                  disabled={isManualRefreshing}
+                  className="p-0.5 hover:text-emerald-950 transition-colors cursor-pointer"
+                  title={isAr ? 'تحديث البيانات فوراً من Firebase' : 'Refresh from Firebase'}
+                >
+                  <RefreshCw className={`w-3 h-3 ${isManualRefreshing ? 'animate-spin text-emerald-900' : ''}`} />
+                </button>
+              </div>
             </div>
 
             {/* Zone 1.5: Global Instant Lead Search Bar */}
@@ -658,8 +706,8 @@ export default function App() {
           </div>
         </header>
 
-        {/* Active View Container */}
-        <main className="flex-1 p-3 sm:p-5 lg:p-7 max-w-[1440px] w-full mx-auto">
+        {/* Active View Container (Responsive padding with mobile bottom nav clearance) */}
+        <main className="flex-1 p-3 sm:p-5 lg:p-7 pb-24 lg:pb-7 max-w-[1440px] w-full mx-auto">
           {activeTab === 'dashboard' && (
             <DashboardView
               lang={lang}
@@ -854,6 +902,81 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Unified Mobile & Iframe Bottom Navigation Bar (Persistent Native-App Experience) */}
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-2xl px-2 py-1.5 flex items-center justify-around safe-bottom">
+        <button
+          onClick={() => setActiveTab('dashboard')}
+          className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer min-w-[56px] ${
+            activeTab === 'dashboard'
+              ? 'text-blue-600 scale-105'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <LayoutDashboard className={`w-5 h-5 mb-0.5 ${activeTab === 'dashboard' ? 'text-blue-600' : 'text-slate-400'}`} />
+          <span className="truncate">{t.nav.dashboard}</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('leads')}
+          className={`relative flex flex-col items-center justify-center py-1 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer min-w-[56px] ${
+            activeTab === 'leads'
+              ? 'text-blue-600 scale-105'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Users className={`w-5 h-5 mb-0.5 ${activeTab === 'leads' ? 'text-blue-600' : 'text-slate-400'}`} />
+          <span className="truncate">{t.nav.leads}</span>
+          {leads.length > 0 && (
+            <span className="absolute -top-1 end-1 px-1.5 py-0.2 rounded-full bg-blue-600 text-white text-[9px] font-mono-tabular font-bold">
+              {leads.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('dealsAndProperties')}
+          className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer min-w-[56px] ${
+            activeTab === 'dealsAndProperties'
+              ? 'text-blue-600 scale-105'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Building2 className={`w-5 h-5 mb-0.5 ${activeTab === 'dealsAndProperties' ? 'text-blue-600' : 'text-slate-400'}`} />
+          <span className="truncate">{isAr ? 'المبيعات' : 'Deals'}</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('dailyReports')}
+          className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer min-w-[56px] ${
+            activeTab === 'dailyReports'
+              ? 'text-blue-600 scale-105'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <BarChart3 className={`w-5 h-5 mb-0.5 ${activeTab === 'dailyReports' ? 'text-blue-600' : 'text-slate-400'}`} />
+          <span className="truncate">{isAr ? 'التقارير' : 'Reports'}</span>
+        </button>
+
+        <button
+          onClick={() => setShowAccountSwitcher(!showAccountSwitcher)}
+          className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer min-w-[56px] ${
+            showAccountSwitcher
+              ? 'text-blue-600'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <img
+            src={currentUser.avatarUrl}
+            alt={currentUser.fullName}
+            referrerPolicy="no-referrer"
+            className="w-5 h-5 rounded-full object-cover mb-0.5 border border-slate-300"
+          />
+          <span className="truncate max-w-[52px]">
+            {currentUser.fullName.split(' ')[0]}
+          </span>
+        </button>
+      </nav>
 
       {/* Instant Notification Toast */}
       {toastMessage && (

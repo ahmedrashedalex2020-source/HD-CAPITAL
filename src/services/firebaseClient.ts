@@ -10,13 +10,42 @@ import {
   query,
   where,
   deleteDoc,
-  terminate,
+  onSnapshot,
+  getDocFromServer,
+  Unsubscribe,
 } from 'firebase/firestore';
+import { getAuth, Auth } from 'firebase/auth';
 import appletConfig from '../../firebase-applet-config.json';
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
 
 let firebaseApp: FirebaseApp | null = null;
 let firestoreDb: Firestore | null = null;
-let firestoreAvailable = true;
+let firebaseAuth: Auth | null = null;
 
 function getFirebaseConfig() {
   const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
@@ -31,64 +60,139 @@ function getFirebaseConfig() {
   };
 }
 
-function disableFirestoreCircuit(): void {
-  firestoreAvailable = false;
-  if (firestoreDb) {
-    const dbToTerminate = firestoreDb;
-    firestoreDb = null;
-     void terminate(dbToTerminate).catch(() => {});
-  }
-}
-
-export function getClientFirestore(): Firestore | null {
-  // Only initialize client-side Firestore in browser contexts
-  if (typeof window === 'undefined' || !firestoreAvailable) return null;
-  if (firestoreDb) return firestoreDb;
+export function getClientApp(): FirebaseApp | null {
+  if (typeof window === 'undefined') return null;
+  if (firebaseApp) return firebaseApp;
   try {
     const cfg = getFirebaseConfig();
-    if (!cfg.projectId || !cfg.apiKey) {
-      firestoreAvailable = false;
-      return null;
-    }
+    if (!cfg.projectId || !cfg.apiKey) return null;
     firebaseApp = getApps().length === 0 ? initializeApp(cfg) : getApp();
-    const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
-    const dbId = env.VITE_FIRESTORE_DATABASE_ID || (appletConfig as any).firestoreDatabaseId;
-    firestoreDb =
-      dbId && dbId !== '(default)'
-        ? getFirestore(firebaseApp, dbId)
-        : getFirestore(firebaseApp);
-    return firestoreDb;
-  } catch {
-    firestoreAvailable = false;
+    return firebaseApp;
+  } catch (err) {
+    console.error('[Firebase] Failed to initialize Firebase App:', err);
     return null;
   }
 }
 
-function withFastTimeout<T>(promise: Promise<T>, ms = 1200): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('FIRESTORE_CLIENT_TIMEOUT')), ms)
-    ),
-  ]);
+export function getClientAuth(): Auth | null {
+  if (typeof window === 'undefined') return null;
+  if (firebaseAuth) return firebaseAuth;
+  const app = getClientApp();
+  if (!app) return null;
+  try {
+    firebaseAuth = getAuth(app);
+    return firebaseAuth;
+  } catch {
+    return null;
+  }
+}
+
+export function getClientFirestore(): Firestore | null {
+  if (typeof window === 'undefined') return null;
+  if (firestoreDb) return firestoreDb;
+  try {
+    const app = getClientApp();
+    if (!app) return null;
+    const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
+    const dbId = env.VITE_FIRESTORE_DATABASE_ID || (appletConfig as any).firestoreDatabaseId;
+    firestoreDb =
+      dbId && dbId !== '(default)'
+        ? getFirestore(app, dbId)
+        : getFirestore(app);
+    return firestoreDb;
+  } catch (err) {
+    console.error('[Firebase] Failed to get Firestore instance:', err);
+    return null;
+  }
+}
+
+export function handleFirestoreError(
+  error: unknown,
+  operationType: OperationType,
+  path: string | null
+): never {
+  const authInstance = getClientAuth();
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: authInstance?.currentUser?.uid,
+      email: authInstance?.currentUser?.email,
+      emailVerified: authInstance?.currentUser?.emailVerified,
+      isAnonymous: authInstance?.currentUser?.isAnonymous,
+      tenantId: authInstance?.currentUser?.tenantId,
+      providerInfo:
+        authInstance?.currentUser?.providerData?.map((provider) => ({
+          providerId: provider.providerId,
+          email: provider.email,
+        })) || [],
+    },
+    operationType,
+    path,
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+/**
+ * Validates connection to Cloud Firestore on boot per skill instructions.
+ */
+export async function testConnection(): Promise<boolean> {
+  const db = getClientFirestore();
+  if (!db) return false;
+  try {
+    await getDocFromServer(doc(db, 'crm_state', 'workspace'));
+    return true;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error('Please check your Firebase configuration.');
+    }
+    return false;
+  }
+}
+
+// Proactively run connection test on browser load
+if (typeof window !== 'undefined') {
+  void testConnection();
+}
+
+/**
+ * Real-time subscription to the entire shared CRM workspace in Cloud Firestore.
+ * Updates instantly propagate to any open browser, mobile device, or iframe.
+ */
+export function subscribeToFirestoreWorkspace(
+  onUpdate: (data: any) => void,
+  onError?: (err: any) => void
+): Unsubscribe {
+  const db = getClientFirestore();
+  if (!db) return () => {};
+  const docRef = doc(db, 'crm_state', 'workspace');
+  return onSnapshot(
+    docRef,
+    (snapshot) => {
+      if (snapshot.exists()) {
+        onUpdate(snapshot.data());
+      }
+    },
+    (error) => {
+      console.warn('[Firestore] Real-time snapshot listener notice:', error?.message || error);
+      if (onError) onError(error);
+    }
+  );
 }
 
 /**
  * Fetches the shared CRM workspace state and users collection directly from Firebase Firestore.
- * Uses a fast 1.2s circuit breaker so unprovisioned or offline Firestore never slows down the UI.
  */
 export async function fetchFirestoreWorkspace(): Promise<any | null> {
   const db = getClientFirestore();
   if (!db) return null;
 
   try {
-    const [workspaceSnap, usersSnap] = await withFastTimeout(
-      Promise.all([
-        getDoc(doc(db, 'crm_state', 'workspace')),
-        getDocs(collection(db, 'users')).catch(() => null),
-      ]),
-      1200
-    );
+    const docRef = doc(db, 'crm_state', 'workspace');
+    const [workspaceSnap, usersSnap] = await Promise.all([
+      getDoc(docRef),
+      getDocs(collection(db, 'users')).catch(() => null),
+    ]);
 
     const workspaceData = workspaceSnap.exists() ? workspaceSnap.data() : {};
     const collectionUsers: any[] = [];
@@ -110,14 +214,19 @@ export async function fetchFirestoreWorkspace(): Promise<any | null> {
           ? mergeRecordsById(workspaceData.users || [], collectionUsers)
           : workspaceData.users || [],
     };
-  } catch {
-    disableFirestoreCircuit();
+  } catch (error) {
+    console.warn('[Firestore] Error fetching workspace:', error);
+    try {
+      handleFirestoreError(error, OperationType.GET, 'crm_state/workspace');
+    } catch {
+      // handled
+    }
     return null;
   }
 }
 
 /**
- * Queries Firebase Firestore directly for a user by username (used during login on mobile/Vercel).
+ * Queries Firebase Firestore directly for a user by username (used during login on mobile/Vercel/iframes).
  */
 export async function queryFirestoreUserByUsername(username: string): Promise<any | null> {
   const db = getClientFirestore();
@@ -127,12 +236,12 @@ export async function queryFirestoreUserByUsername(username: string): Promise<an
 
   try {
     const q = query(collection(db, 'users'), where('username', '==', cleanUsername));
-    const snap = await withFastTimeout(getDocs(q), 1200);
+    const snap = await getDocs(q);
     if (!snap.empty) {
       return snap.docs[0].data();
     }
 
-    const wsSnap = await withFastTimeout(getDoc(doc(db, 'crm_state', 'workspace')), 1200);
+    const wsSnap = await getDoc(doc(db, 'crm_state', 'workspace'));
     if (wsSnap.exists()) {
       const ws = wsSnap.data();
       if (Array.isArray(ws.users)) {
@@ -142,8 +251,13 @@ export async function queryFirestoreUserByUsername(username: string): Promise<an
         if (found) return found;
       }
     }
-  } catch {
-    disableFirestoreCircuit();
+  } catch (error) {
+    console.warn(`[Firestore] query user ${cleanUsername} error:`, error);
+    try {
+      handleFirestoreError(error, OperationType.GET, 'users');
+    } catch {
+      // handled
+    }
   }
   return null;
 }
@@ -154,11 +268,17 @@ export async function queryFirestoreUserByUsername(username: string): Promise<an
 export async function saveFirestoreUser(user: any): Promise<void> {
   const db = getClientFirestore();
   if (!db || !user || !user.id) return;
+  const path = `users/${user.id}`;
   try {
     const cleanUser = JSON.parse(JSON.stringify(user));
-    await withFastTimeout(setDoc(doc(db, 'users', user.id), cleanUser, { merge: true }), 1200);
-  } catch {
-    disableFirestoreCircuit();
+    await setDoc(doc(db, 'users', user.id), cleanUser, { merge: true });
+  } catch (error) {
+    console.error(`[Firestore] Error saving user ${user.id}:`, error);
+    try {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    } catch {
+      // handled
+    }
   }
 }
 
@@ -168,19 +288,26 @@ export async function saveFirestoreUser(user: any): Promise<void> {
 export async function removeFirestoreUser(userId: string): Promise<void> {
   const db = getClientFirestore();
   if (!db || !userId) return;
+  const path = `users/${userId}`;
   try {
-    await withFastTimeout(deleteDoc(doc(db, 'users', userId)), 1200);
-  } catch {
-    disableFirestoreCircuit();
+    await deleteDoc(doc(db, 'users', userId));
+  } catch (error) {
+    console.error(`[Firestore] Error deleting user ${userId}:`, error);
+    try {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    } catch {
+      // handled
+    }
   }
 }
 
 /**
- * Persists the entire CRM workspace state to `crm_state/workspace` in Firebase Firestore.
+ * Persists the entire CRM workspace state directly to `crm_state/workspace` in Firebase Firestore.
  */
 export async function saveFirestoreWorkspace(state: any): Promise<void> {
   const db = getClientFirestore();
   if (!db || !state) return;
+  const pathForWrite = 'crm_state/workspace';
   try {
     const payload = JSON.parse(
       JSON.stringify({
@@ -191,18 +318,20 @@ export async function saveFirestoreWorkspace(state: any): Promise<void> {
         deals: state.deals || [],
         events: state.events || [],
         sheetConnections: state.sheetConnections || [],
-        syncLogs: (state.syncLogs || []).slice(0, 30),
-        notifications: (state.notifications || []).slice(0, 60),
+        syncLogs: (state.syncLogs || []).slice(0, 50),
+        notifications: (state.notifications || []).slice(0, 100),
         projects: state.projects || [],
         updatedAt: new Date().toISOString(),
       })
     );
-    await withFastTimeout(
-      setDoc(doc(db, 'crm_state', 'workspace'), payload, { merge: true }),
-      1500
-    );
-  } catch {
-    disableFirestoreCircuit();
+    await setDoc(doc(db, 'crm_state', 'workspace'), payload, { merge: true });
+  } catch (error) {
+    console.error('[Firestore] Error saving workspace:', error);
+    try {
+      handleFirestoreError(error, OperationType.WRITE, pathForWrite);
+    } catch {
+      // handled
+    }
   }
 }
 
