@@ -78,20 +78,20 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const isAr = lang === 'ar';
 
   return (
-    <div className="min-h-screen bg-[#F4F7FE] flex flex-col justify-between p-6">
+    <div className="min-h-dvh w-full max-w-[100vw] overflow-x-hidden bg-[#F4F7FE] flex flex-col justify-between p-3 sm:p-6">
       {/* Top Bar */}
-      <header className="max-w-6xl w-full mx-auto flex items-center justify-between py-2">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm">
+      <header className="max-w-6xl w-full mx-auto flex items-center justify-between py-2 gap-2">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm shrink-0">
             <Building2 className="w-5 h-5" />
           </div>
-          <span className="text-xl font-bold tracking-tight text-slate-900">
+          <span className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 truncate">
             PropSphere CRM
           </span>
         </div>
         <button
           onClick={onToggleLang}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+          className="flex items-center gap-1.5 sm:gap-2 px-3 py-2 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shrink-0 cursor-pointer"
         >
           <Globe className="w-4 h-4 text-blue-600" />
           <span>{isAr ? 'English (LTR)' : 'العربية (RTL)'}</span>
@@ -99,50 +99,50 @@ export const LoginView: React.FC<LoginViewProps> = ({
       </header>
 
       {/* Main Split Card */}
-      <main className="max-w-5xl w-full mx-auto my-auto grid grid-cols-1 lg:grid-cols-12 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <main className="max-w-5xl w-full mx-auto my-4 sm:my-auto grid grid-cols-1 lg:grid-cols-12 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         {/* Left / Right Blue Brand Column */}
-        <div className="lg:col-span-5 bg-gradient-to-br from-[#2563EB] via-[#3B82F6] to-[#1D4ED8] text-white p-8 lg:p-10 flex flex-col justify-between">
+        <div className="lg:col-span-5 bg-gradient-to-br from-[#2563EB] via-[#3B82F6] to-[#1D4ED8] text-white p-6 sm:p-8 lg:p-10 flex flex-col justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 text-xs font-medium text-blue-100 mb-6">
-              <ShieldCheck className="w-4 h-4" />
+            <div className="inline-flex items-center gap-2 text-xs font-medium text-blue-100 mb-4 sm:mb-6">
+              <ShieldCheck className="w-4 h-4 shrink-0" />
               <span>
                 {isAr
                   ? 'نظام إدارة علاقات العملاء والتسويق العقاري'
                   : 'Real Estate CRM & Lead Distribution System'}
               </span>
             </div>
-            <h1 className="text-2xl lg:text-3xl font-bold leading-snug mb-4">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold leading-snug mb-3 sm:mb-4">
               {isAr
                 ? 'إدارة احترافية لليدز، الصلاحيات، وأداء المبيعات اليومي'
                 : 'Professional Real Estate Leads, RBAC & Daily Sales Analytics'}
             </h1>
-            <p className="text-sm text-blue-100 leading-relaxed">
+            <p className="text-xs sm:text-sm text-blue-100 leading-relaxed">
               {isAr
                 ? 'استيراد تلقائي لعملاء شيت CRM1 من Google Drive كل 15 دقيقة بدون تكرار، وتوزيع فوري على السيلز حسب المشروع، مع تنبيهات لحظية وشاشات مخصصة طبقاً للصلاحيات.'
                 : 'Automatic CRM1 sheet import from Google Drive every 15 minutes without duplicates, smart project-based routing to sales reps, and role-based views.'}
             </p>
           </div>
 
-          <div className="mt-8 pt-6 border-t border-white/15 space-y-3 text-xs text-blue-100">
+          <div className="mt-6 sm:mt-8 pt-5 border-t border-white/15 space-y-2.5 text-xs text-blue-100">
             <div className="flex items-center justify-between">
               <span>{isAr ? 'مزامنة شيت CRM1 تلقائية' : 'CRM1 Google Drive Sync'}</span>
               <span className="font-mono-tabular font-semibold text-white">Every 15 Mins</span>
             </div>
             <div className="flex items-center justify-between">
-              <span>{isAr ? 'مصفوفة صلاحيات متقدمة' : 'Granular Access Matrix'}</span>
-              <span className="font-mono-tabular font-semibold text-white">5+ Custom Roles</span>
+              <span>{isAr ? 'قاعدة بيانات سحابية مباشرة' : 'Cloud Database'}</span>
+              <span className="font-mono-tabular font-semibold text-white">Firebase Firestore</span>
             </div>
             <div className="flex items-center justify-between">
               <span>{isAr ? 'حماية الجلسات وتشفير الكلمات' : 'Session Security'}</span>
-              <span className="font-mono-tabular font-semibold text-white">Scrypt + HMAC</span>
+              <span className="font-mono-tabular font-semibold text-white">Scrypt + SHA-256</span>
             </div>
           </div>
         </div>
 
         {/* Form & Account Switcher Column */}
-        <div className="lg:col-span-7 p-8 lg:p-10 flex flex-col justify-center">
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-slate-900">
+        <div className="lg:col-span-7 p-6 sm:p-8 lg:p-10 flex flex-col justify-center">
+          <div className="mb-5 sm:mb-6">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900">
               {isAr ? 'تسجيل الدخول إلى النظام' : 'Sign in to your CRM account'}
             </h2>
             <p className="text-xs text-slate-500 mt-1">
@@ -164,7 +164,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 {isAr ? 'اسم المستخدم (Username)' : 'Username'}
               </label>
               <div className="relative">
-                <User className="w-4 h-4 text-slate-400 absolute top-3 start-3.5" />
+                <User className="w-4 h-4 text-slate-400 absolute top-3.5 start-3.5" />
                 <input
                   type="text"
                   value={username}
@@ -173,8 +173,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   autoCorrect="off"
                   spellCheck={false}
                   dir="ltr"
-                  className="w-full ps-10 pe-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition-colors"
-                  placeholder="admin / sara / omar..."
+                  className="w-full ps-10 pe-4 py-2.5 rounded-lg border border-slate-200 text-base sm:text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition-colors"
+                  placeholder="admin / omarahmed1..."
                   required
                 />
               </div>
@@ -185,7 +185,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 {isAr ? 'كلمة المرور (Password)' : 'Password'}
               </label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-slate-400 absolute top-3 start-3.5" />
+                <Lock className="w-4 h-4 text-slate-400 absolute top-3.5 start-3.5" />
                 <input
                   type="password"
                   value={password}
@@ -193,7 +193,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   autoCapitalize="none"
                   autoCorrect="off"
                   dir="ltr"
-                  className="w-full ps-10 pe-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition-colors"
+                  className="w-full ps-10 pe-4 py-2.5 rounded-lg border border-slate-200 text-base sm:text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition-colors"
                   placeholder="••••••••"
                   required
                 />
@@ -208,7 +208,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               <span>
                 {loading
                   ? isAr
-                    ? 'جاري الدخول...'
+                    ? 'جاري التحقق والدخول...'
                     : 'Signing in...'
                   : isAr
                   ? 'دخول للنظام'
@@ -219,14 +219,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
           </form>
 
           {/* Quick Role Preview Selector */}
-          <div className="mt-7 pt-6 border-t border-slate-100">
+          <div className="mt-6 sm:mt-7 pt-5 sm:pt-6 border-t border-slate-100">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-semibold text-slate-700">
                 {isAr
                   ? 'دخول سريع للحسابات المسجلة (لمعاينة شاشات كل صلاحية):'
                   : 'Quick Login with Registered Accounts (Test Role Views):'}
               </span>
-              <span className="text-[11px] text-slate-400 font-mono-tabular">
+              <span className="text-[11px] text-slate-400 font-mono-tabular shrink-0">
                 {accounts.length} {isAr ? 'مستخدمين' : 'users'}
               </span>
             </div>

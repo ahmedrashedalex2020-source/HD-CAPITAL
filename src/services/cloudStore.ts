@@ -1,3 +1,11 @@
+import {
+  fetchFirestoreWorkspace,
+  queryFirestoreUserByUsername,
+  removeFirestoreUser,
+  saveFirestoreUser,
+  saveFirestoreWorkspace,
+} from './firebaseClient';
+
 export const DEFAULT_PROJECTS = [
   'Palm Hills New Cairo',
   'Mountain View iCity',
@@ -134,6 +142,8 @@ export function saveLocalSnapshot(bootstrapData: any): void {
     };
     cachedLiveSnapshot = merged;
     localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(merged));
+    // Also mirror in background to Firebase Firestore so other devices stay synced
+    void saveFirestoreWorkspace(merged);
   } catch {
     // ignore storage errors
   }
@@ -171,55 +181,114 @@ export function loadLocalSnapshot(): any {
   return null;
 }
 
-async function ensureLiveDatabaseLoaded(): Promise<any> {
+async function fetchStaticSnapshotJson(now: number): Promise<any | null> {
+  try {
+    const res = await fetch(`/crm-live-snapshot.json?t=${now}`, {
+      cache: 'no-store',
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && Array.isArray(data.users)) {
+        return data;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
   const local = loadLocalSnapshot();
   const now = Date.now();
 
-  if (!cachedLiveSnapshot || now - lastRemoteFetchTime > 8000) {
+  if (forceRemote || !cachedLiveSnapshot || now - lastRemoteFetchTime > 6000) {
     lastRemoteFetchTime = now;
     try {
-      const res = await fetch(`/crm-live-snapshot.json?t=${now}`, {
-        cache: 'no-store',
-      });
-      if (res.ok) {
-        const remoteSnap = await res.json();
-        if (remoteSnap && Array.isArray(remoteSnap.users)) {
-          const merged = {
-            ...remoteSnap,
-            roles:
-              Array.isArray(remoteSnap.roles) && remoteSnap.roles.length > 0
-                ? remoteSnap.roles
-                : local?.roles || DEFAULT_ROLES,
-            users: mergeById(remoteSnap.users || [], local?.users || []),
-            leads: mergeById(remoteSnap.leads || [], local?.leads || []),
-            deals: mergeById(remoteSnap.deals || [], local?.deals || []),
-            properties: mergeById(remoteSnap.properties || [], local?.properties || []),
-            events: mergeById(remoteSnap.events || [], local?.events || []),
-            sheetConnections:
-              Array.isArray(local?.sheetConnections) && local.sheetConnections.length > 0
-                ? local.sheetConnections
-                : remoteSnap.sheetConnections || [],
-            syncLogs:
-              Array.isArray(local?.syncLogs) && local.syncLogs.length > 0
-                ? local.syncLogs
-                : remoteSnap.syncLogs || [],
-            notifications:
-              Array.isArray(local?.notifications) && local.notifications.length > 0
-                ? local.notifications
-                : remoteSnap.notifications || [],
-            projects:
-              Array.isArray(remoteSnap.projects) && remoteSnap.projects.length > 0
-                ? remoteSnap.projects
-                : local?.projects || DEFAULT_PROJECTS,
-          };
-          cachedLiveSnapshot = merged;
-          try {
-            localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(merged));
-          } catch {
-            // ignore
-          }
-          return merged;
+      const [staticSnap, firestoreSnap] = await Promise.all([
+        fetchStaticSnapshotJson(now),
+        fetchFirestoreWorkspace(),
+      ]);
+
+      if (staticSnap || firestoreSnap) {
+        const base = staticSnap || {};
+        const cloud = firestoreSnap || {};
+
+        let combinedUsers = mergeById(base.users || [], local?.users || []);
+        combinedUsers = mergeById(combinedUsers, cloud.users || []);
+
+        let combinedLeads = mergeById(base.leads || [], local?.leads || []);
+        combinedLeads = mergeById(combinedLeads, cloud.leads || []);
+
+        let combinedDeals = mergeById(base.deals || [], local?.deals || []);
+        combinedDeals = mergeById(combinedDeals, cloud.deals || []);
+
+        let combinedProperties = mergeById(base.properties || [], local?.properties || []);
+        combinedProperties = mergeById(combinedProperties, cloud.properties || []);
+
+        let combinedEvents = mergeById(base.events || [], local?.events || []);
+        combinedEvents = mergeById(combinedEvents, cloud.events || []);
+
+        const merged = {
+          ...base,
+          ...cloud,
+          roles:
+            Array.isArray(cloud.roles) && cloud.roles.length > 0
+              ? cloud.roles
+              : Array.isArray(base.roles) && base.roles.length > 0
+              ? base.roles
+              : local?.roles || DEFAULT_ROLES,
+          users: combinedUsers,
+          leads: combinedLeads,
+          deals: combinedDeals,
+          properties: combinedProperties,
+          events: combinedEvents,
+          sheetConnections:
+            Array.isArray(cloud.sheetConnections) && cloud.sheetConnections.length > 0
+              ? cloud.sheetConnections
+              : Array.isArray(local?.sheetConnections) && local.sheetConnections.length > 0
+              ? local.sheetConnections
+              : base.sheetConnections || [],
+          syncLogs:
+            Array.isArray(cloud.syncLogs) && cloud.syncLogs.length > 0
+              ? cloud.syncLogs
+              : Array.isArray(local?.syncLogs) && local.syncLogs.length > 0
+              ? local.syncLogs
+              : base.syncLogs || [],
+          notifications:
+            Array.isArray(cloud.notifications) && cloud.notifications.length > 0
+              ? cloud.notifications
+              : Array.isArray(local?.notifications) && local.notifications.length > 0
+              ? local.notifications
+              : base.notifications || [],
+          projects:
+            Array.isArray(cloud.projects) && cloud.projects.length > 0
+              ? cloud.projects
+              : Array.isArray(base.projects) && base.projects.length > 0
+              ? base.projects
+              : local?.projects || DEFAULT_PROJECTS,
+        };
+
+        cachedLiveSnapshot = merged;
+        try {
+          localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(merged));
+        } catch {
+          // ignore
         }
+
+        // If Cloud Firestore didn't have all users or leads yet, synchronize them up to Firestore
+        if (
+          !firestoreSnap ||
+          (firestoreSnap.users || []).length < combinedUsers.length ||
+          (firestoreSnap.leads || []).length < combinedLeads.length
+        ) {
+          void saveFirestoreWorkspace(merged);
+          for (const u of combinedUsers) {
+            void saveFirestoreUser(u);
+          }
+        }
+
+        return merged;
       }
     } catch {
       // ignore network failure and use local
@@ -283,13 +352,14 @@ async function ensureLiveDatabaseLoaded(): Promise<any> {
   return fallback;
 }
 
-function persistState(snap: any) {
+async function persistState(snap: any): Promise<void> {
   cachedLiveSnapshot = snap;
   try {
     localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snap));
   } catch {
     // ignore
   }
+  await saveFirestoreWorkspace(snap);
 }
 
 function checkScope(
@@ -344,7 +414,17 @@ export async function handleLocalFallbackRequest(
   options: RequestInit,
   currentUserId: string
 ): Promise<any> {
-  const snap = await ensureLiveDatabaseLoaded();
+  const method = (options.method || 'GET').toUpperCase();
+  const urlObj = new URL(path, 'http://localhost');
+  const pathname = urlObj.pathname;
+
+  // Force remote refresh from Firebase Firestore on auth / bootstrap requests
+  const shouldForceFirestoreSync =
+    pathname === '/api/auth/login' ||
+    pathname === '/api/auth/accounts-preview' ||
+    pathname === '/api/bootstrap';
+
+  const snap = await ensureLiveDatabaseLoaded(shouldForceFirestoreSync);
   if (!Array.isArray(snap.roles) || snap.roles.length === 0) {
     snap.roles = DEFAULT_ROLES;
   }
@@ -352,7 +432,6 @@ export async function handleLocalFallbackRequest(
     snap.users = [];
   }
 
-  const method = (options.method || 'GET').toUpperCase();
   const body =
     options.body && typeof options.body === 'string'
       ? (() => {
@@ -363,9 +442,6 @@ export async function handleLocalFallbackRequest(
           }
         })()
       : {};
-
-  const urlObj = new URL(path, 'http://localhost');
-  const pathname = urlObj.pathname;
 
   const activeUser =
     snap.users.find((u: any) => u.id === currentUserId) ||
@@ -393,7 +469,7 @@ export async function handleLocalFallbackRequest(
     return { accounts };
   }
 
-  // 2. Auth: Login
+  // 2. Auth: Login (Queries merged state AND directly queries Firebase Firestore)
   if (pathname === '/api/auth/login' && method === 'POST') {
     const cleanUser = String(body.username || '').trim().toLowerCase();
     const cleanPass = String(body.password || '').trim();
@@ -404,9 +480,22 @@ export async function handleLocalFallbackRequest(
       throw new Error('تم تعطيل الدخول التجاوزي (demo_bypass) لأسباب أمنية');
     }
 
-    const user = snap.users.find(
+    let user = snap.users.find(
       (u: any) => String(u.username || '').trim().toLowerCase() === cleanUser
     );
+
+    // Direct Firebase Firestore query if user was newly created on another device
+    const firestoreUser = await queryFirestoreUserByUsername(cleanUser);
+    if (firestoreUser) {
+      user = user ? { ...user, ...firestoreUser } : firestoreUser;
+      snap.users = mergeById(snap.users, [user]);
+      try {
+        localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snap));
+      } catch {
+        // ignore
+      }
+    }
+
     if (!user) {
       throw new Error('اسم المستخدم أو كلمة المرور غير صحيحة');
     }
@@ -525,26 +614,27 @@ export async function handleLocalFallbackRequest(
       campaignName: body.campaignName || '',
       formResponses: Array.isArray(body.formResponses) ? body.formResponses : [],
       projectInterest: body.projectInterest || DEFAULT_PROJECTS[0],
-      unitType: body.unitType || 'Villa',
-      budgetEgp: Number(body.budgetEgp) || 0,
+      propertyType: body.propertyType || body.unitType || 'Villa',
+      budgetMax: Number(body.budgetMax || body.budgetEgp) || 0,
       status: body.status || 'New',
       priority: body.priority || 'Warm',
       assignedTo: body.assignedTo || activeUser.id,
       observerIds: Array.isArray(body.observerIds) ? body.observerIds : [],
+      notes: body.notes || '',
       createdAt: new Date().toISOString(),
       activities: [
         {
           id: `act_${Date.now()}`,
-          type: 'Note',
+          type: 'note',
           summary: 'تمت إضافة العميل يدوياً',
-          createdAt: new Date().toISOString(),
+          timestamp: new Date().toISOString(),
           userId: activeUser.id,
           userName: activeUser.fullName,
         },
       ],
     };
     snap.leads = [newLead, ...(snap.leads || [])];
-    persistState(snap);
+    await persistState(snap);
     return { lead: newLead };
   }
 
@@ -559,9 +649,9 @@ export async function handleLocalFallbackRequest(
         activities: [
           {
             id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
-            type: 'Transfer',
+            type: 'transfer',
             summary: reason || 'تم تحويل العميل',
-            createdAt: new Date().toISOString(),
+            timestamp: new Date().toISOString(),
             userId: activeUser.id,
             userName: activeUser.fullName,
           },
@@ -569,7 +659,7 @@ export async function handleLocalFallbackRequest(
         ],
       };
     });
-    persistState(snap);
+    await persistState(snap);
     return { transferredCount: ids.size };
   }
 
@@ -584,7 +674,7 @@ export async function handleLocalFallbackRequest(
       }
       return l;
     });
-    persistState(snap);
+    await persistState(snap);
     return { distributedCount };
   }
 
@@ -594,15 +684,18 @@ export async function handleLocalFallbackRequest(
     if (leadIdx === -1) throw new Error('العميل غير موجود');
     const act = {
       id: `act_${Date.now()}`,
-      type: body.type || 'Note',
+      type: body.type || 'note',
       summary: body.summary || '',
-      createdAt: new Date().toISOString(),
+      timestamp: new Date().toISOString(),
       userId: activeUser.id,
       userName: activeUser.fullName,
     };
     snap.leads[leadIdx].activities = [act, ...(snap.leads[leadIdx].activities || [])];
     snap.leads[leadIdx].lastContactedAt = new Date().toISOString();
-    persistState(snap);
+    if (body.newStatus) {
+      snap.leads[leadIdx].status = body.newStatus;
+    }
+    await persistState(snap);
     return { lead: snap.leads[leadIdx], activity: act };
   }
 
@@ -611,18 +704,18 @@ export async function handleLocalFallbackRequest(
     const idx = (snap.leads || []).findIndex((l: any) => l.id === leadId);
     if (idx === -1) throw new Error('العميل غير موجود');
     snap.leads[idx] = { ...snap.leads[idx], ...body };
-    persistState(snap);
+    await persistState(snap);
     return { lead: snap.leads[idx] };
   }
 
   if (pathname.startsWith('/api/leads/') && method === 'DELETE') {
     const leadId = pathname.split('/')[3];
     snap.leads = (snap.leads || []).filter((l: any) => l.id !== leadId);
-    persistState(snap);
+    await persistState(snap);
     return { ok: true };
   }
 
-  // 7. Users CRUD
+  // 7. Users CRUD (Directly persisted to Firebase Firestore `users` collection + `crm_state/workspace`)
   if (pathname === '/api/users' && method === 'POST') {
     const cleanUsername = String(body.username || '').trim().toLowerCase();
     if (!cleanUsername || !body.password || !body.fullName) {
@@ -663,7 +756,7 @@ export async function handleLocalFallbackRequest(
       createdAt: new Date().toISOString(),
     };
     snap.users.push(newUser);
-    persistState(snap);
+    await Promise.all([saveFirestoreUser(newUser), persistState(snap)]);
     return { user: newUser };
   }
 
@@ -672,6 +765,9 @@ export async function handleLocalFallbackRequest(
     const idx = snap.users.findIndex((u: any) => u.id === userId);
     if (idx === -1) throw new Error('المستخدم غير موجود');
     const existing = { ...snap.users[idx], ...body };
+    if (body.username) {
+      existing.username = String(body.username).trim().toLowerCase();
+    }
     if (body.password && String(body.password).trim()) {
       existing.clientAuthDigest = await computeSha256Hex(
         `propsphere_auth:${String(existing.username).toLowerCase()}:${String(body.password).trim()}`
@@ -679,14 +775,14 @@ export async function handleLocalFallbackRequest(
     }
     delete existing.password;
     snap.users[idx] = existing;
-    persistState(snap);
+    await Promise.all([saveFirestoreUser(existing), persistState(snap)]);
     return { user: existing };
   }
 
   if (pathname.startsWith('/api/users/') && method === 'DELETE') {
     const userId = pathname.split('/')[3];
     snap.users = snap.users.filter((u: any) => u.id !== userId);
-    persistState(snap);
+    await Promise.all([removeFirestoreUser(userId), persistState(snap)]);
     return { ok: true };
   }
 
@@ -718,7 +814,7 @@ export async function handleLocalFallbackRequest(
       createdAt: new Date().toISOString(),
     };
     snap.deals = [deal, ...(snap.deals || [])];
-    persistState(snap);
+    await persistState(snap);
     return { deal };
   }
 
@@ -727,7 +823,7 @@ export async function handleLocalFallbackRequest(
     const idx = (snap.deals || []).findIndex((d: any) => d.id === dealId);
     if (idx !== -1) {
       snap.deals[idx] = { ...snap.deals[idx], ...body };
-      persistState(snap);
+      await persistState(snap);
       return { deal: snap.deals[idx] };
     }
   }
@@ -738,7 +834,7 @@ export async function handleLocalFallbackRequest(
       ...body,
     };
     snap.properties = [property, ...(snap.properties || [])];
-    persistState(snap);
+    await persistState(snap);
     return { property };
   }
 
@@ -756,7 +852,7 @@ export async function handleLocalFallbackRequest(
       assignedTo: body.assignedTo || activeUser.id,
     };
     snap.events = [event, ...(snap.events || [])];
-    persistState(snap);
+    await persistState(snap);
     return { event };
   }
 
@@ -765,7 +861,7 @@ export async function handleLocalFallbackRequest(
     const idx = (snap.events || []).findIndex((e: any) => e.id === evtId);
     if (idx !== -1) {
       snap.events[idx] = { ...snap.events[idx], ...body };
-      persistState(snap);
+      await persistState(snap);
       return { event: snap.events[idx] };
     }
   }
@@ -773,7 +869,7 @@ export async function handleLocalFallbackRequest(
   if (pathname === '/api/roles/matrix' && method === 'PUT') {
     if (Array.isArray(body.roles)) {
       snap.roles = body.roles;
-      persistState(snap);
+      await persistState(snap);
     }
     return { roles: snap.roles };
   }
@@ -789,11 +885,14 @@ export async function handleLocalFallbackRequest(
       permissions: body.permissions || DEFAULT_ROLES[2].permissions,
     };
     snap.roles.push(role);
-    persistState(snap);
+    await persistState(snap);
     return { role };
   }
 
-  if (pathname === '/api/reports/daily-employees' && method === 'GET') {
+  if (
+    (pathname === '/api/reports/daily' || pathname === '/api/reports/daily-employees') &&
+    method === 'GET'
+  ) {
     const dateFilter = urlObj.searchParams.get('date') || new Date().toISOString().slice(0, 10);
     const visibleLeads = getVisibleLeads(snap, activeUser, activeRole);
     const salesAgents = snap.users.filter((u: any) =>
@@ -804,8 +903,17 @@ export async function handleLocalFallbackRequest(
     const agentStats = salesAgents.map((agent: any) => {
       const agentLeads = visibleLeads.filter((l: any) => l.assignedTo === agent.id);
       const qualifiedCount = agentLeads.filter((l: any) =>
-        ['Qualified', 'Site Visit Scheduled', 'Proposal Sent', 'Closed Won'].includes(l.status)
+        ['Qualified', 'Site Visit Scheduled', 'Negotiation', 'Won', 'Closed Won'].includes(
+          l.status
+        )
       ).length;
+      const wonLeads = agentLeads.filter(
+        (l: any) => l.status === 'Won' || l.status === 'Closed Won'
+      );
+      const wonRevenue = wonLeads.reduce(
+        (sum: number, l: any) => sum + (Number(l.budgetMax || l.budgetEgp) || 0),
+        0
+      );
       return {
         userId: agent.id,
         fullName: agent.fullName,
@@ -825,14 +933,19 @@ export async function handleLocalFallbackRequest(
         whatsappToday: 0,
         visitsScheduledToday: 0,
         qualifiedCount,
-        wonDealsCount: 0,
-        wonRevenue: 0,
+        wonDealsCount: wonLeads.length,
+        wonRevenue,
         conversionRate:
           agentLeads.length > 0 ? Math.round((qualifiedCount / agentLeads.length) * 100) : 0,
         avgResponseMinutes: 5,
       };
     });
-    return { date: dateFilter, agentStats };
+    const projectBreakdown = visibleLeads.reduce<Record<string, number>>((acc, l: any) => {
+      const p = l.projectInterest || DEFAULT_PROJECTS[0];
+      acc[p] = (acc[p] || 0) + 1;
+      return acc;
+    }, {});
+    return { date: dateFilter, agentStats, projectBreakdown };
   }
 
   if (pathname === '/api/sheets/sync' && method === 'POST') {
@@ -845,7 +958,7 @@ export async function handleLocalFallbackRequest(
 
   if (pathname === '/api/notifications/read-all' && method === 'PUT') {
     snap.notifications = (snap.notifications || []).map((n: any) => ({ ...n, isRead: true }));
-    persistState(snap);
+    await persistState(snap);
     return { ok: true };
   }
 

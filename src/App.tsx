@@ -39,6 +39,7 @@ import {
   getSessionToken,
   setSessionToken,
   clearSessionAuth,
+  isServerlessMode,
 } from './services/api';
 import { LoginView } from './components/LoginView';
 import { DashboardView } from './components/DashboardView';
@@ -56,7 +57,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // CRM State loaded from Backend Database
+  // CRM State loaded from Backend Database / Firebase Firestore
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [currentRole, setCurrentRole] = useState<Role | null>(null);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -137,9 +138,9 @@ export default function App() {
     }
   }, [isAuthenticated, loadBootstrapData]);
 
-  // Connect to Real-Time SSE Notification Stream using Signed Session Token
+  // Connect to Real-Time SSE Notification Stream only when Express backend is active
   useEffect(() => {
-    if (!isAuthenticated || !currentUser) return;
+    if (!isAuthenticated || !currentUser || isServerlessMode()) return;
     const token = getSessionToken();
     const tokenQuery = token ? `&token=${encodeURIComponent(token)}` : '';
     const evtSource = new EventSource(
@@ -154,6 +155,13 @@ export default function App() {
         loadBootstrapData();
       } catch {
         // ignore malformed event
+      }
+    };
+
+    evtSource.onerror = () => {
+      // Close cleanly if running on a static/serverless host to prevent 404 retry loops
+      if (isServerlessMode()) {
+        evtSource.close();
       }
     };
 
@@ -224,6 +232,73 @@ export default function App() {
     }
   };
 
+  // Permission-filtered Sidebar Navigation Items (Route Guard Contract)
+  const navItems = React.useMemo(() => {
+    if (!currentRole) return [];
+    return [
+      {
+        id: 'dashboard',
+        label: t.nav.dashboard,
+        icon: LayoutDashboard,
+        visible: true,
+      },
+      {
+        id: 'leads',
+        label: t.nav.leads,
+        icon: Users,
+        visible: currentRole.permissions?.leads?.read !== 'none',
+        badge: leads.filter((l) => l.status === 'New').length,
+      },
+      {
+        id: 'sheetsSync',
+        label: t.nav.sheetsSync,
+        icon: FileSpreadsheet,
+        visible:
+          currentRole.id === 'role_admin' ||
+          currentRole.permissions?.sheets_sync?.read !== 'none',
+      },
+      {
+        id: 'dealsAndProperties',
+        label: t.nav.dealsAndProperties,
+        icon: Building2,
+        visible:
+          currentRole.permissions?.deals?.read !== 'none' ||
+          currentRole.permissions?.properties?.read !== 'none',
+      },
+      {
+        id: 'calendar',
+        label: t.nav.calendar,
+        icon: Calendar,
+        visible: currentRole.permissions?.calendar?.read !== 'none',
+      },
+      {
+        id: 'dailyReports',
+        label: t.nav.dailyReports,
+        icon: BarChart3,
+        visible: currentRole.permissions?.reports?.read !== 'none',
+      },
+      {
+        id: 'employees',
+        label: t.nav.employees,
+        icon: UserCheck,
+        visible: currentRole.permissions?.users?.read !== 'none',
+      },
+      {
+        id: 'permissions',
+        label: t.nav.permissions,
+        icon: ShieldCheck,
+        visible: currentRole.id === 'role_admin' || currentRole.id === 'role_supervisor',
+      },
+    ].filter((item) => item.visible);
+  }, [currentRole, t.nav, leads]);
+
+  // Route Guard: Redirect to dashboard if current role loses access to activeTab
+  useEffect(() => {
+    if (navItems.length > 0 && !navItems.some((item) => item.id === activeTab)) {
+      setActiveTab('dashboard');
+    }
+  }, [navItems, activeTab]);
+
   if (!isAuthenticated) {
     return (
       <LoginView
@@ -239,8 +314,8 @@ export default function App() {
 
   if (!currentUser || !currentRole) {
     return (
-      <div className="min-h-screen bg-[#F4F7FE] flex items-center justify-center p-6">
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-4 max-w-sm w-full">
+      <div className="min-h-dvh bg-[#F4F7FE] flex items-center justify-center p-4 sm:p-6">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 text-center space-y-4 max-w-sm w-full">
           <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center mx-auto animate-pulse">
             <Building2 className="w-5 h-5" />
           </div>
@@ -270,63 +345,6 @@ export default function App() {
     );
   }
 
-  // Permission-filtered Sidebar Navigation Items
-  const navItems = [
-    {
-      id: 'dashboard',
-      label: t.nav.dashboard,
-      icon: LayoutDashboard,
-      visible: true,
-    },
-    {
-      id: 'leads',
-      label: t.nav.leads,
-      icon: Users,
-      visible: currentRole.permissions?.leads?.read !== 'none',
-      badge: leads.filter((l) => l.status === 'New').length,
-    },
-    {
-      id: 'sheetsSync',
-      label: t.nav.sheetsSync,
-      icon: FileSpreadsheet,
-      visible:
-        currentRole.id === 'role_admin' ||
-        currentRole.permissions?.sheets_sync?.read !== 'none',
-    },
-    {
-      id: 'dealsAndProperties',
-      label: t.nav.dealsAndProperties,
-      icon: Building2,
-      visible:
-        currentRole.permissions?.deals?.read !== 'none' ||
-        currentRole.permissions?.properties?.read !== 'none',
-    },
-    {
-      id: 'calendar',
-      label: t.nav.calendar,
-      icon: Calendar,
-      visible: currentRole.permissions?.calendar?.read !== 'none',
-    },
-    {
-      id: 'dailyReports',
-      label: t.nav.dailyReports,
-      icon: BarChart3,
-      visible: currentRole.permissions?.reports?.read !== 'none',
-    },
-    {
-      id: 'employees',
-      label: t.nav.employees,
-      icon: UserCheck,
-      visible: currentRole.permissions?.users?.read !== 'none',
-    },
-    {
-      id: 'permissions',
-      label: t.nav.permissions,
-      icon: ShieldCheck,
-      visible: currentRole.id === 'role_admin' || currentRole.id === 'role_supervisor',
-    },
-  ].filter((item) => item.visible);
-
   const unreadCount = notifications.filter((n) => !n.isRead).length;
   const quickSearchMatches =
     globalSearch.trim().length > 0
@@ -341,11 +359,19 @@ export default function App() {
       : [];
 
   return (
-    <div className="min-h-screen bg-[#F4F7FE] flex flex-col lg:flex-row">
-      {/* Left / Right Sidebar (Inspired directly by Reference Image 1 Royal Blue Gradient Sidebar) */}
+    <div className="min-h-dvh w-full max-w-[100vw] overflow-x-hidden bg-[#F4F7FE] flex flex-col lg:flex-row">
+      {/* Mobile Backdrop Overlay for Sidebar Drawer */}
+      {mobileMenuOpen && (
+        <div
+          onClick={() => setMobileMenuOpen(false)}
+          className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs lg:hidden"
+        />
+      )}
+
+      {/* Left / Right Sidebar (Responsive Drawer on Mobile + Sticky Sidebar on Desktop) */}
       <aside
-        className={`lg:w-64 shrink-0 bg-gradient-to-b from-[#1D4ED8] via-[#2563EB] to-[#3B82F6] text-white flex flex-col justify-between p-4 lg:min-h-screen ${
-          mobileMenuOpen ? 'block' : 'hidden lg:flex'
+        className={`fixed inset-y-0 start-0 z-50 w-72 max-w-[82vw] lg:static lg:w-64 shrink-0 bg-gradient-to-b from-[#1D4ED8] via-[#2563EB] to-[#3B82F6] text-white flex flex-col justify-between p-4 lg:min-h-dvh overflow-y-auto transition-transform duration-200 ease-in-out ${
+          mobileMenuOpen ? 'translate-x-0 shadow-2xl' : 'hidden lg:flex'
         }`}
       >
         <div>
@@ -361,7 +387,7 @@ export default function App() {
             </div>
             <button
               onClick={() => setMobileMenuOpen(false)}
-              className="lg:hidden p-1 text-white/80"
+              className="lg:hidden p-1 text-white/80 hover:text-white cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -431,34 +457,35 @@ export default function App() {
       </aside>
 
       {/* Main Content Viewport */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top Bar Contract (With Centered Search Bar matching Reference Image 1) */}
-        <header className="bg-white border-b border-slate-200 px-6 py-3.5 flex items-center justify-between gap-4 sticky top-0 z-30">
+      <div className="flex-1 flex flex-col min-w-0 w-full">
+        {/* Top Bar Contract (Responsive across Mobile, Tablet, Desktop & iframe) */}
+        <header className="bg-white border-b border-slate-200 px-3 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-2.5 sticky top-0 z-30">
           {/* Zone 1: Context Title & Mobile Menu Button */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-2 rounded-lg bg-slate-100 text-slate-700"
+              className="lg:hidden p-2 rounded-lg bg-slate-100 text-slate-700 shrink-0 cursor-pointer"
+              aria-label="Menu"
             >
               <Menu className="w-5 h-5" />
             </button>
-            <span className="text-sm font-bold text-slate-900 whitespace-nowrap">
+            <span className="text-xs sm:text-sm font-bold text-slate-900 truncate">
               {navItems.find((n) => n.id === activeTab)?.label || t.nav.dashboard}
             </span>
           </div>
 
-          {/* Zone 1.5: Global Instant Lead Search Bar (Matches Reference Image 1 Top Center Search) */}
-          <div className="relative hidden md:block w-full max-w-md">
+          {/* Zone 1.5: Global Instant Lead Search Bar */}
+          <div className="relative order-3 md:order-2 w-full md:w-auto md:flex-1 md:max-w-md">
             <input
               type="text"
               value={globalSearch}
               onChange={(e) => setGlobalSearch(e.target.value)}
               placeholder={
                 isAr
-                  ? 'بحث فوري عن عميل بالاسم، رقم الهاتف، أو المشروع لفتح متابعته...'
+                  ? 'بحث فوري عن عميل بالاسم، رقم الهاتف، أو المشروع...'
                   : 'Quick search lead by name, phone, or project...'
               }
-              className="w-full px-4 py-2 rounded-xl bg-[#F4F7FE] border border-slate-200/80 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
+              className="w-full px-3.5 py-2 rounded-xl bg-[#F4F7FE] border border-slate-200/80 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
             />
             {quickSearchMatches.length > 0 && (
               <div className="absolute start-0 end-0 mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-xl p-2 z-50 divide-y divide-slate-50">
@@ -472,13 +499,13 @@ export default function App() {
                     }}
                     className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-blue-50/60 text-start text-xs transition-colors cursor-pointer"
                   >
-                    <div>
-                      <div className="font-bold text-slate-900">{match.fullName}</div>
-                      <div className="text-[11px] text-slate-500 font-mono-tabular">
+                    <div className="min-w-0 pe-2">
+                      <div className="font-bold text-slate-900 truncate">{match.fullName}</div>
+                      <div className="text-[11px] text-slate-500 font-mono-tabular truncate">
                         {match.phone} · {match.projectInterest}
                       </div>
                     </div>
-                    <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-bold">
+                    <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-bold shrink-0">
                       {t.status[match.status]}
                     </span>
                   </button>
@@ -488,7 +515,7 @@ export default function App() {
           </div>
 
           {/* Zone 2: Quick Actions & Role Switcher */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 order-2 md:order-3 shrink-0">
             {/* Quick Role/Account Switcher to test RBAC permissions */}
             <div className="relative">
               <button

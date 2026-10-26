@@ -17,6 +17,38 @@ if (rawSavedToken && !isValidSignedTokenFormat(rawSavedToken)) {
 }
 let currentSessionToken = rawSavedToken;
 
+/**
+ * Detects whether the frontend is hosted on a static/serverless platform (e.g. Vercel,
+ * InfinityFree, GitHub Pages, Netlify, or AI Studio Shared Preview `ais-pre-*`) where
+ * `/api/*` routes are not served by an Express instance and all operations should
+ * execute directly against Firebase Firestore via `cloudStore`.
+ */
+function detectInitialServerlessHost(): boolean {
+  if (typeof window === 'undefined') return false;
+  const host = (window.location.hostname || '').toLowerCase();
+  if (!host) return false;
+  if (
+    host.endsWith('.vercel.app') ||
+    host.endsWith('.infinityfreeapp.com') ||
+    host.endsWith('.epizy.com') ||
+    host.endsWith('.rf.gd') ||
+    host.endsWith('.github.io') ||
+    host.endsWith('.netlify.app') ||
+    host.endsWith('.pages.dev') ||
+    host.endsWith('.web.app') ||
+    host.endsWith('.firebaseapp.com')
+  ) {
+    return true;
+  }
+  return false;
+}
+
+let serverlessModeActive = detectInitialServerlessHost();
+
+export function isServerlessMode(): boolean {
+  return serverlessModeActive;
+}
+
 interface SwrCacheEntry<T = any> {
   data: T;
   timestamp: number;
@@ -162,6 +194,12 @@ export async function apiRequest<T = any>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
+  // In serverless/Vercel/Firebase mode, execute directly against Firebase Firestore + CloudStore
+  // without issuing HTTP requests to non-existent `/api/*` routes.
+  if (serverlessModeActive) {
+    return (await handleLocalFallbackRequest(path, options, currentUserId)) as T;
+  }
+
   const googleToken = await getAccessToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -187,6 +225,7 @@ export async function apiRequest<T = any>(
       headers,
     });
   } catch {
+    serverlessModeActive = true;
     return (await handleLocalFallbackRequest(path, options, currentUserId)) as T;
   }
 
@@ -194,13 +233,19 @@ export async function apiRequest<T = any>(
   const isJson = contentType.includes('application/json');
   const data = isJson ? await res.json().catch(() => ({})) : {};
 
-  // If the server returned a non-JSON 404/405/502 (e.g. static hosting / ais-pre preview), use the live snapshot engine
-  if (!res.ok && !data.error && [404, 405, 502, 503, 504].includes(res.status)) {
+  // If the server returned 404/405/502/503/504 (e.g. Vercel static hosting or custom domain without Express),
+  // switch permanently to direct Firebase Firestore mode and resolve the request immediately.
+  if (!res.ok && [404, 405, 502, 503, 504].includes(res.status)) {
+    serverlessModeActive = true;
     return (await handleLocalFallbackRequest(path, options, currentUserId)) as T;
   }
 
   if (!res.ok) {
-    throw new Error(data.error || `Request failed with status ${res.status}`);
+    const errorMsg =
+      typeof data.error === 'string'
+        ? data.error
+        : data.error?.message || `Request failed with status ${res.status}`;
+    throw new Error(errorMsg);
   }
 
   if (path === '/api/bootstrap' && data && data.currentUser) {

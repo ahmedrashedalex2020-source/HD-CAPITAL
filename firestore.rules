@@ -1,13 +1,30 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Shared CRM workspace state across PC, Mobile, and embedded iframe hosts
-    match /crm_state/{docId} {
-      allow read, write: if true;
+    // Helper validations for Production-Ready Firestore hardening
+    function isValidUserPayload() {
+      return request.resource.data.keys().hasAll(['id', 'username', 'fullName', 'roleId'])
+        && request.resource.data.username is string
+        && request.resource.data.username.size() >= 2
+        && request.resource.data.username.size() <= 80;
     }
+
+    // Shared CRM workspace state across PC, Mobile, Vercel, and embedded iframe hosts
+    match /crm_state/{docId} {
+      allow read: if true;
+      allow write: if request.resource.data.keys().hasAny(['users', 'leads', 'roles', 'deals', 'properties', 'events']);
+    }
+
+    // Users Collection: Enforce schema validation and protect primary system admin from deletion
+    match /users/{userId} {
+      allow read: if true;
+      allow create, update: if isValidUserPayload();
+      allow delete: if userId != 'usr_admin';
+    }
+
+    // Core CRM Collections
     match /{collection}/{docId} {
       allow read, write: if collection in [
-        'users',
         'roles',
         'leads',
         'leadPhones',
@@ -20,6 +37,7 @@ service cloud.firestore {
         'settings'
       ];
     }
+
     match /leads/{leadId}/activities/{activityId} {
       allow read, write: if true;
     }
