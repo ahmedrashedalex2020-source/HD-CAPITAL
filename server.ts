@@ -313,18 +313,19 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
 
     if (rawToken) {
       const verified = verifySessionToken(rawToken);
-      if (!verified) {
+      if (verified) {
+        const user = db.users.find((u: any) => u.id === verified.userId);
+        if (user) {
+          const role = db.roles.find((r: any) => r.id === user.roleId) || db.roles[0];
+          return { user, role, authenticated: true };
+        }
+      }
+      if (strictAuth) {
         return { user: null, role: null, authenticated: false };
       }
-      const user = db.users.find((u: any) => u.id === verified.userId);
-      if (!user) {
-        return { user: null, role: null, authenticated: false };
-      }
-      const role = db.roles.find((r: any) => r.id === user.roleId) || db.roles[0];
-      return { user, role, authenticated: true };
     }
 
-    if (hasExplicitTokenAttempt) {
+    if (strictAuth && hasExplicitTokenAttempt) {
       return { user: null, role: null, authenticated: false };
     }
 
@@ -332,7 +333,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       return { user: null, role: null, authenticated: false };
     }
 
-    // Fallback when strictAuth is false and no token was provided (e.g. initial bootstrap before token handoff)
+    // Graceful fallback when strictAuth is false (e.g. initial bootstrap or stale token in browser storage)
     const fallbackUserId = (req.headers['x-user-id'] as string) || 'usr_admin';
     const user = db.users.find((u: any) => u.id === fallbackUserId) || db.users[0];
     const role = db.roles.find((r: any) => r.id === user?.roleId) || db.roles[0];
