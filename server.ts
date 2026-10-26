@@ -124,6 +124,17 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
           u.passwordHash = hashPasswordSecure('123456');
         }
       }
+      // Prevent multi-megabyte raw camera photos from bloating /api/bootstrap JSON payload
+      if (typeof u.avatarUrl === 'string' && u.avatarUrl.length > 150000) {
+        const initials =
+          String(u.fullName || u.username || 'U')
+            .split(' ')
+            .slice(0, 2)
+            .map((w: string) => w[0] || '')
+            .join('')
+            .toUpperCase() || 'U';
+        u.avatarUrl = createAvatarSvg(initials, '#2563EB', '#60A5FA');
+      }
     });
   }
 

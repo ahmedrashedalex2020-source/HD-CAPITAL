@@ -97,6 +97,11 @@ export default function App() {
   const loadBootstrapData = useCallback(async () => {
     try {
       const data = await apiRequest('/api/bootstrap');
+      if (!data || !data.currentUser || !data.currentRole) {
+        clearSessionAuth();
+        setIsAuthenticated(false);
+        return;
+      }
       if (data.sessionToken) {
         setSessionToken(data.sessionToken);
       }
@@ -235,12 +240,30 @@ export default function App() {
   if (!currentUser || !currentRole) {
     return (
       <div className="min-h-screen bg-[#F4F7FE] flex items-center justify-center p-6">
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-3 max-w-sm w-full">
+        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-4 max-w-sm w-full">
           <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center mx-auto animate-pulse">
             <Building2 className="w-5 h-5" />
           </div>
           <div className="text-sm font-bold text-slate-900">
             {isAr ? 'جاري تحميل مساحة العمل والصلاحيات...' : 'Loading CRM Workspace...'}
+          </div>
+          <div className="pt-2 flex items-center justify-center gap-2">
+            <button
+              onClick={() => loadBootstrapData()}
+              className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 cursor-pointer"
+            >
+              {isAr ? 'تحديث الآن' : 'Reload Now'}
+            </button>
+            <button
+              onClick={() => {
+                clearSessionAuth();
+                setCurrentApiUser('usr_admin');
+                setIsAuthenticated(false);
+              }}
+              className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 cursor-pointer"
+            >
+              {isAr ? 'صفحة تسجيل الدخول' : 'Sign In Page'}
+            </button>
           </div>
         </div>
       </div>

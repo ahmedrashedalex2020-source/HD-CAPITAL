@@ -1,14 +1,20 @@
 import { getAccessToken } from './googleAuth';
 import { Lead } from '../types/crm';
-import { handleLocalFallbackRequest, saveLocalSnapshot } from './cloudStore';
+
+function isValidSignedTokenFormat(token: string | null | undefined): boolean {
+  if (!token || typeof token !== 'string') return false;
+  if (token.startsWith('cloud_tok_') || token.startsWith('local_tok_')) return false;
+  const parts = token.trim().split('.');
+  return parts.length === 2 && parts[0].length > 10 && parts[1].length > 10;
+}
 
 let currentUserId = localStorage.getItem('propsphere_user_id') || 'usr_admin';
-let currentSessionToken = localStorage.getItem('propsphere_session_token') || '';
-
-const REMOTE_BACKEND_URLS = [
-  'https://ais-dev-q63kgi2aijebcyoq7vajhz-23209438678.europe-west2.run.app',
-  'https://ais-pre-q63kgi2aijebcyoq7vajhz-23209438678.europe-west2.run.app',
-];
+let rawSavedToken = localStorage.getItem('propsphere_session_token') || '';
+if (rawSavedToken && !isValidSignedTokenFormat(rawSavedToken)) {
+  localStorage.removeItem('propsphere_session_token');
+  rawSavedToken = '';
+}
+let currentSessionToken = rawSavedToken;
 
 interface SwrCacheEntry<T = any> {
   data: T;
@@ -28,17 +34,18 @@ export function setCurrentApiUser(userId: string, token?: string) {
     currentUserId = userId;
     localStorage.setItem('propsphere_user_id', userId);
   }
-  if (token) {
+  if (token && isValidSignedTokenFormat(token)) {
     currentSessionToken = token;
     localStorage.setItem('propsphere_session_token', token);
   }
 }
 
 export function setSessionToken(token: string) {
-  currentSessionToken = token;
-  if (token) {
+  if (token && isValidSignedTokenFormat(token)) {
+    currentSessionToken = token;
     localStorage.setItem('propsphere_session_token', token);
   } else {
+    currentSessionToken = '';
     localStorage.removeItem('propsphere_session_token');
   }
 }
@@ -161,69 +168,27 @@ export async function apiRequest<T = any>(
     ...(options.headers as Record<string, string>),
   };
 
-  if (currentSessionToken && !currentSessionToken.startsWith('local_tok_')) {
+  if (currentSessionToken && isValidSignedTokenFormat(currentSessionToken)) {
     headers['x-session-token'] = currentSessionToken;
   }
 
   if (googleToken) {
     headers['x-google-access-token'] = googleToken;
     headers['Authorization'] = `Bearer ${googleToken}`;
-  } else if (currentSessionToken && !currentSessionToken.startsWith('local_tok_')) {
+  } else if (currentSessionToken && isValidSignedTokenFormat(currentSessionToken)) {
     headers['Authorization'] = `Bearer ${currentSessionToken}`;
   }
 
-  // Try current origin first; if on external static host or if 404/401 occurs across instances, try remote backend URLs
-  const candidateUrls: string[] = [path];
-  if (typeof window !== 'undefined') {
-    const currentOrigin = window.location.origin;
-    REMOTE_BACKEND_URLS.forEach((base) => {
-      if (base !== currentOrigin) {
-        candidateUrls.push(`${base}${path}`);
-      }
-    });
+  const res = await fetch(path, {
+    ...options,
+    headers,
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `Request failed with status ${res.status}`);
   }
-
-  let lastStatus = 0;
-  let lastErrorMsg = '';
-
-  for (const targetUrl of candidateUrls) {
-    try {
-      const res = await fetch(targetUrl, {
-        ...options,
-        headers,
-      });
-
-      lastStatus = res.status;
-      const contentType = res.headers.get('content-type') || '';
-      const isJson = contentType.includes('application/json');
-      const data = isJson ? await res.json().catch(() => ({})) : {};
-
-      if (res.ok && isJson) {
-        if (path === '/api/bootstrap') {
-          saveLocalSnapshot(data);
-        }
-        return data as T;
-      }
-
-      if (data?.error) {
-        lastErrorMsg = data.error;
-      }
-
-      // If it's a validation error (400, 403, 409) on the primary server, stop and report it immediately
-      if (res.status === 400 || res.status === 403 || res.status === 409) {
-        break;
-      }
-    } catch (err: any) {
-      lastErrorMsg = err?.message || '';
-    }
-  }
-
-  // If all HTTP endpoints returned 404 or network failure (e.g. static hosting), use instantaneous local fallback
-  if (lastStatus === 404 || lastStatus === 0 || lastStatus >= 500) {
-    return handleLocalFallbackRequest(path, options, currentUserId) as T;
-  }
-
-  throw new Error(lastErrorMsg || `Request failed with status ${lastStatus}`);
+  return data as T;
 }
 
 export async function swrFetch<T = any>(

@@ -157,7 +157,22 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {
-        setFormData((prev) => ({ ...prev, avatarUrl: reader.result as string }));
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_SIZE = 160;
+          canvas.width = MAX_SIZE;
+          canvas.height = MAX_SIZE;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, MAX_SIZE, MAX_SIZE);
+            const compressed = canvas.toDataURL('image/jpeg', 0.8);
+            setFormData((prev) => ({ ...prev, avatarUrl: compressed }));
+          } else {
+            setFormData((prev) => ({ ...prev, avatarUrl: reader.result as string }));
+          }
+        };
+        img.src = reader.result;
       }
     };
     reader.readAsDataURL(file);
