@@ -379,6 +379,22 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
   const app = express();
   app.use(express.json({ limit: '10mb' }));
 
+  // Allow embedding inside external iframes (e.g. InfinityFree hosting) and cross-origin API calls
+  app.use((req: Request, res: Response, next) => {
+    res.removeHeader('X-Frame-Options');
+    res.setHeader('Content-Security-Policy', 'frame-ancestors *');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Authorization, x-user-id, x-session-token, x-google-access-token'
+    );
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204);
+    }
+    next();
+  });
+
   app.get('/api/health', (_req: Request, res: Response) => {
     res.json({
       ok: true,
