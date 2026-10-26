@@ -434,18 +434,22 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       return res.status(401).json({ error: 'تم تعطيل الدخول التجاوزي (demo_bypass) لأسباب أمنية' });
     }
     const cleanUser = String(username).trim().toLowerCase();
+    const cleanPass = String(password).trim();
     const user = db.users.find((u: any) => u.username.toLowerCase() === cleanUser);
     if (!user) {
       return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
     }
 
-    const verification = verifyPasswordSecure(String(password), user.passwordHash);
+    let verification = verifyPasswordSecure(cleanPass, user.passwordHash);
+    if (!verification.valid && cleanPass !== String(password)) {
+      verification = verifyPasswordSecure(String(password), user.passwordHash);
+    }
     if (!verification.valid) {
       return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
     }
 
     if (verification.needsUpgrade) {
-      user.passwordHash = hashPasswordSecure(String(password));
+      user.passwordHash = hashPasswordSecure(cleanPass);
       saveDb(db);
     }
 
@@ -792,9 +796,9 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
         .toUpperCase() || 'U';
 
     const newUser = {
-      id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      id: req.body.id || `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       username: cleanUsername,
-      passwordHash: hashPasswordSecure(String(password)),
+      passwordHash: hashPasswordSecure(String(password).trim()),
       fullName: String(fullName).trim(),
       roleId: roleId || 'role_employee',
       jobTitle: jobTitle || 'Property Sales Advisor',

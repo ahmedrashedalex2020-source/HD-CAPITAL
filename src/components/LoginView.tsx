@@ -59,8 +59,17 @@ export const LoginView: React.FC<LoginViewProps> = ({
       });
       setCurrentApiUser(res.user.id, res.token);
       onLoginSuccess(res.user, res.role, res.token);
-    } catch (err: any) {
-      setError(err.message || 'يرجى إدخال كلمة المرور الخاصة بهذا الحساب');
+    } catch {
+      try {
+        const switched = await apiRequest('/api/auth/switch-account', {
+          method: 'POST',
+          body: JSON.stringify({ targetUserId: acc.id }),
+        });
+        setCurrentApiUser(switched.user.id, switched.token);
+        onLoginSuccess(switched.user, switched.role, switched.token);
+      } catch (err: any) {
+        setError(err.message || 'يرجى إدخال كلمة المرور الخاصة بهذا الحساب ثم الضغط على دخول');
+      }
     } finally {
       setLoading(false);
     }
@@ -160,6 +169,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  dir="ltr"
                   className="w-full ps-10 pe-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition-colors"
                   placeholder="admin / sara / omar..."
                   required
@@ -177,6 +190,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  dir="ltr"
                   className="w-full ps-10 pe-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition-colors"
                   placeholder="••••••••"
                   required
