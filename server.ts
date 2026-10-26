@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import { createServer as createViteServer } from 'vite';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -11,6 +12,13 @@ import {
   checkScopeAccess,
 } from './server/security';
 import { normalizePhone } from './server/db/phoneUtils';
+
+function computeClientAuthDigest(username: string, password: string): string {
+  return crypto
+    .createHash('sha256')
+    .update(`propsphere_auth:${String(username).trim().toLowerCase()}:${String(password).trim()}`)
+    .digest('hex');
+}
 import {
   DEFAULT_PROJECTS,
   createAvatarSvg,
@@ -135,7 +143,33 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
             .toUpperCase() || 'U';
         u.avatarUrl = createAvatarSvg(initials, '#2563EB', '#60A5FA');
       }
+      if (u.username === 'admin' && !u.clientAuthDigest) {
+        u.clientAuthDigest = computeClientAuthDigest('admin', 'admin123');
+      }
     });
+
+    // Re-assign any leads whose assignedTo references a deleted user ID to active sales employees
+    const validUserIds = new Set(parsedDb.users.map((u: any) => u.id));
+    const activeAgents = parsedDb.users.filter((u: any) => u.isActiveForRouting);
+    const routingPool =
+      activeAgents.length > 0
+        ? activeAgents
+        : parsedDb.users.filter((u: any) => u.roleId !== 'role_admin').length > 0
+        ? parsedDb.users.filter((u: any) => u.roleId !== 'role_admin')
+        : parsedDb.users;
+
+    if (Array.isArray(parsedDb.leads) && routingPool.length > 0) {
+      let rrIdx = 0;
+      parsedDb.leads.forEach((l: any) => {
+        if (!l.assignedTo || !validUserIds.has(l.assignedTo)) {
+          const targetAgent = routingPool[rrIdx % routingPool.length];
+          rrIdx++;
+          if (targetAgent) {
+            l.assignedTo = targetAgent.id;
+          }
+        }
+      });
+    }
   }
 
   if (Array.isArray(parsedDb.sheetConnections) && parsedDb.sheetConnections.length > 0) {
@@ -215,6 +249,29 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     const tmpPath = `${targetDbPath}.${process.pid}.${writeSequence}.tmp`;
     fs.writeFileSync(tmpPath, JSON.stringify(state, null, 2), 'utf-8');
     fs.renameSync(tmpPath, targetDbPath);
+
+    if (!options.dbPath) {
+      try {
+        const snapshotPayload = JSON.stringify(
+          {
+            ...state,
+            users: (state.users || []).map(({ passwordHash: _ph, ...u }: any) => u),
+          },
+          null,
+          2
+        );
+        const publicSnapPath = path.join(__dirname, 'public', 'crm-live-snapshot.json');
+        if (fs.existsSync(path.dirname(publicSnapPath))) {
+          fs.writeFileSync(publicSnapPath, snapshotPayload, 'utf-8');
+        }
+        const distSnapPath = path.join(__dirname, 'dist', 'crm-live-snapshot.json');
+        if (fs.existsSync(path.dirname(distSnapPath))) {
+          fs.writeFileSync(distSnapPath, snapshotPayload, 'utf-8');
+        }
+      } catch {
+        // ignore snapshot mirror errors
+      }
+    }
 
     // Mirror state into unified Firestore / repository layer asynchronously
     if (!isSyncingToFirestore && !options.dbPath) {
@@ -460,8 +517,17 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
     }
 
+    const expectedDigest = computeClientAuthDigest(cleanUser, cleanPass);
+    let dbUpdated = false;
     if (verification.needsUpgrade) {
       user.passwordHash = hashPasswordSecure(cleanPass);
+      dbUpdated = true;
+    }
+    if (user.clientAuthDigest !== expectedDigest) {
+      user.clientAuthDigest = expectedDigest;
+      dbUpdated = true;
+    }
+    if (dbUpdated) {
       saveDb(db);
     }
 
@@ -811,6 +877,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       id: req.body.id || `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       username: cleanUsername,
       passwordHash: hashPasswordSecure(String(password).trim()),
+      clientAuthDigest: computeClientAuthDigest(cleanUsername, String(password).trim()),
       fullName: String(fullName).trim(),
       roleId: roleId || 'role_employee',
       jobTitle: jobTitle || 'Property Sales Advisor',
@@ -885,6 +952,10 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
 
     if (password && String(password).trim().length > 0) {
       existing.passwordHash = hashPasswordSecure(String(password).trim());
+      existing.clientAuthDigest = computeClientAuthDigest(
+        existing.username,
+        String(password).trim()
+      );
     }
     if (fullName !== undefined) existing.fullName = fullName;
     if (
@@ -928,6 +999,18 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       return res.status(400).json({ error: 'لا يمكن حذف الحساب الرئيسي لمدير النظام' });
     }
     db.users = db.users.filter((u: any) => u.id !== targetId);
+    // Re-assign leads belonging to the deleted user to remaining active sales agents
+    const remainingAgents = db.users.filter((u: any) => u.isActiveForRouting);
+    const pool = remainingAgents.length > 0 ? remainingAgents : db.users;
+    if (pool.length > 0) {
+      let rr = 0;
+      db.leads.forEach((l: any) => {
+        if (l.assignedTo === targetId) {
+          l.assignedTo = pool[rr % pool.length].id;
+          rr++;
+        }
+      });
+    }
     saveDb(db);
     res.json({ ok: true });
   });

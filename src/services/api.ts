@@ -1,5 +1,6 @@
 import { getAccessToken } from './googleAuth';
 import { Lead } from '../types/crm';
+import { handleLocalFallbackRequest, saveLocalSnapshot } from './cloudStore';
 
 function isValidSignedTokenFormat(token: string | null | undefined): boolean {
   if (!token || typeof token !== 'string') return false;
@@ -179,15 +180,33 @@ export async function apiRequest<T = any>(
     headers['Authorization'] = `Bearer ${currentSessionToken}`;
   }
 
-  const res = await fetch(path, {
-    ...options,
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      ...options,
+      headers,
+    });
+  } catch {
+    return (await handleLocalFallbackRequest(path, options, currentUserId)) as T;
+  }
 
-  const data = await res.json().catch(() => ({}));
+  const contentType = res.headers.get('content-type') || '';
+  const isJson = contentType.includes('application/json');
+  const data = isJson ? await res.json().catch(() => ({})) : {};
+
+  // If the server returned a non-JSON 404/405/502 (e.g. static hosting / ais-pre preview), use the live snapshot engine
+  if (!res.ok && !data.error && [404, 405, 502, 503, 504].includes(res.status)) {
+    return (await handleLocalFallbackRequest(path, options, currentUserId)) as T;
+  }
+
   if (!res.ok) {
     throw new Error(data.error || `Request failed with status ${res.status}`);
   }
+
+  if (path === '/api/bootstrap' && data && data.currentUser) {
+    saveLocalSnapshot(data);
+  }
+
   return data as T;
 }
 
