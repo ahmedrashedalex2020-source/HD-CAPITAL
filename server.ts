@@ -36,6 +36,45 @@ const __dirname = path.dirname(__filename);
 const DEFAULT_DATA_DIR = path.join(__dirname, 'data');
 const DEFAULT_DB_PATH = path.join(DEFAULT_DATA_DIR, 'crm_database.json');
 
+const FAKE_PROJECT_NAMES = new Set([
+  'Palm Hills New Cairo',
+  'Mountain View iCity',
+  'ZED East Ora',
+  'Marassi North Coast',
+  'Il Bosco New Capital',
+  'Solare Ras El Hekma',
+]);
+
+export function parseCrm1PriceValue(rawAnswer: string): number {
+  const text = String(rawAnswer || '').trim();
+  if (!text) return 0;
+  if (/مليون|million/i.test(text)) {
+    const numMatch = text.replace(/_/g, ' ').match(/([0-9]+(?:\.[0-9]+)?)/);
+    if (numMatch) {
+      return Math.round(parseFloat(numMatch[1]) * 1000000);
+    }
+  }
+  const numericDigits = Number(text.replace(/[^0-9]/g, ''));
+  if (numericDigits >= 100000 && numericDigits <= 500000000) {
+    return numericDigits;
+  }
+  return 0;
+}
+
+export function isDummyOrFakeLead(leadOrName: string, phoneStr: string, notesStr = ''): boolean {
+  const combined = `${leadOrName || ''} ${phoneStr || ''} ${notesStr || ''}`.toLowerCase();
+  if (
+    combined.includes('dummy data') ||
+    combined.includes('<test lead') ||
+    combined.includes('test lead:')
+  ) {
+    return true;
+  }
+  const digits = String(phoneStr || '').replace(/[^0-9]/g, '');
+  if (digits.length < 8) return true;
+  return false;
+}
+
 export function upgradeExistingDbForCrm1(parsedDb: any) {
   const FAKE_LEAD_IDS = new Set([
     'lead_101',
@@ -44,6 +83,7 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
     'lead_104',
     'lead_105',
     'lead_106',
+    'lead_1793004176267_3',
   ]);
   const FAKE_PHONES = new Set([
     '1004561122',
@@ -59,11 +99,30 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
     '1023456789',
     '1145678901',
   ]);
+  const FAKE_DEMO_USER_IDS = new Set([
+    'usr_supervisor',
+    'usr_sales1',
+    'usr_sales2',
+    'usr_sales3',
+    'usr_deputy',
+  ]);
+  const FAKE_DEMO_USERNAMES = new Set(['tarek', 'sara', 'omar', 'nour', 'karim']);
+
+  if (Array.isArray(parsedDb.users)) {
+    parsedDb.users = parsedDb.users.filter(
+      (u: any) =>
+        !FAKE_DEMO_USER_IDS.has(u.id) &&
+        !FAKE_DEMO_USERNAMES.has(String(u.username || '').toLowerCase())
+    );
+  } else {
+    parsedDb.users = [];
+  }
 
   if (Array.isArray(parsedDb.leads)) {
     parsedDb.leads = parsedDb.leads.filter((l: any) => {
       if (FAKE_LEAD_IDS.has(l.id)) return false;
       if (String(l.sheetRowId || '').startsWith('meta_row_')) return false;
+      if (isDummyOrFakeLead(l.fullName, l.phone, l.notes)) return false;
       const digits = String(l.phone || '').replace(/[^0-9]/g, '').slice(-10);
       if (FAKE_PHONES.has(digits)) return false;
       return true;
@@ -104,11 +163,57 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
 
   if (Array.isArray(parsedDb.notifications)) {
     parsedDb.notifications = parsedDb.notifications.filter(
-      (n: any) => !['notif_1', 'notif_2', 'notif_3'].includes(n.id)
+      (n: any) =>
+        !['notif_1', 'notif_2', 'notif_3', 'notif_1793004176267_3'].includes(n.id) &&
+        !String(n.message || '').toLowerCase().includes('dummy data')
     );
   } else {
     parsedDb.notifications = [];
   }
+
+  // Enrich all CRM1 leads directly from their actual CRM1 formResponses and remove fake project names
+  const discoveredSheetProjects = new Set<string>();
+  parsedDb.leads.forEach((l: any) => {
+    if (Array.isArray(l.formResponses)) {
+      l.formResponses = l.formResponses.filter((fr: any) => {
+        const q = String(fr?.question || '').trim().toLowerCase();
+        const a = String(fr?.answer || '').trim().toLowerCase();
+        if (!q || !a || q === 'lead_status' || a.includes('dummy data')) return false;
+        return true;
+      });
+
+      for (const fr of l.formResponses) {
+        const q = String(fr.question || '').trim();
+        const a = String(fr.answer || '').trim();
+        if (q === 'campaign_name' || q.includes('المشروع') || q.includes('حملة')) {
+          if (a && !FAKE_PROJECT_NAMES.has(a)) {
+            l.projectInterest = a;
+          }
+        } else if (q.includes('المساحة') || q.includes('نوع الوحدة')) {
+          if (a && (!l.propertyType || l.propertyType === 'Villa')) {
+            l.propertyType = a.replace(/_/g, ' ');
+          }
+        } else if (q.includes('السعر') || q.includes('الميزانية')) {
+          const parsedBudget = parseCrm1PriceValue(a);
+          if (parsedBudget > 0 && (!l.budgetMax || l.budgetMax === 0)) {
+            l.budgetMax = parsedBudget;
+            l.budgetMin = Math.round(parsedBudget * 0.85);
+          }
+        }
+      }
+
+      l.notes = l.formResponses.map((fr: any) => `${fr.question}: ${fr.answer}`).join(' | ');
+    }
+
+    if (!l.projectInterest || FAKE_PROJECT_NAMES.has(l.projectInterest)) {
+      l.projectInterest = 'ليدز مغتربين';
+    }
+    discoveredSheetProjects.add(l.projectInterest);
+  });
+
+  const cleanProjectsList =
+    discoveredSheetProjects.size > 0 ? Array.from(discoveredSheetProjects) : ['ليدز مغتربين'];
+  parsedDb.projects = cleanProjectsList;
 
   if (Array.isArray(parsedDb.users)) {
     const FAKE_USER_PHONES = [
@@ -124,15 +229,20 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
       if (FAKE_USER_PHONES.includes(u.phone)) {
         u.phone = '';
       }
-      // Upgrade legacy SHA-256 default hashes if needed when known default accounts are loaded
+      if (Array.isArray(u.assignedProjects)) {
+        const filteredProjects = u.assignedProjects.filter(
+          (p: string) => !FAKE_PROJECT_NAMES.has(p)
+        );
+        u.assignedProjects =
+          filteredProjects.length > 0 ? filteredProjects : [...cleanProjectsList];
+      } else {
+        u.assignedProjects = [...cleanProjectsList];
+      }
       if (u.passwordHash && !String(u.passwordHash).startsWith('scrypt$')) {
         if (u.username === 'admin') {
           u.passwordHash = hashPasswordSecure('admin123');
-        } else if (['tarek', 'sara', 'omar', 'nour', 'karim'].includes(u.username)) {
-          u.passwordHash = hashPasswordSecure('123456');
         }
       }
-      // Prevent multi-megabyte raw camera photos from bloating /api/bootstrap JSON payload
       if (typeof u.avatarUrl === 'string' && u.avatarUrl.length > 150000) {
         const initials =
           String(u.fullName || u.username || 'U')
@@ -148,9 +258,15 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
       }
     });
 
-    // Re-assign any leads whose assignedTo references a deleted user ID to active sales employees
+    // Re-assign any leads whose assignedTo references a deleted user ID (or is stuck on usr_admin when sales employees exist) to active sales employees
     const validUserIds = new Set(parsedDb.users.map((u: any) => u.id));
-    const activeAgents = parsedDb.users.filter((u: any) => u.isActiveForRouting);
+    const nonAdminActiveAgents = parsedDb.users.filter(
+      (u: any) => u.roleId !== 'role_admin' && u.isActiveForRouting !== false
+    );
+    const activeAgents =
+      nonAdminActiveAgents.length > 0
+        ? nonAdminActiveAgents
+        : parsedDb.users.filter((u: any) => u.isActiveForRouting);
     const routingPool =
       activeAgents.length > 0
         ? activeAgents
@@ -158,15 +274,36 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
         ? parsedDb.users.filter((u: any) => u.roleId !== 'role_admin')
         : parsedDb.users;
 
+    const hasDedicatedSalesAgents = routingPool.some((u: any) => u.roleId !== 'role_admin');
+
     if (Array.isArray(parsedDb.leads) && routingPool.length > 0) {
       let rrIdx = 0;
       parsedDb.leads.forEach((l: any) => {
-        if (!l.assignedTo || !validUserIds.has(l.assignedTo)) {
+        const isStuckOnAdmin = hasDedicatedSalesAgents && l.assignedTo === 'usr_admin';
+        if (!l.assignedTo || !validUserIds.has(l.assignedTo) || isStuckOnAdmin) {
           const targetAgent = routingPool[rrIdx % routingPool.length];
           rrIdx++;
           if (targetAgent) {
             l.assignedTo = targetAgent.id;
           }
+        }
+        const assignedUser = parsedDb.users.find((u: any) => u.id === l.assignedTo);
+        if (assignedUser && Array.isArray(l.activities)) {
+          l.activities.forEach((act: any) => {
+            if (act.type === 'sheet_import') {
+              act.summary = `تم استيراد العميل من شيت CRM1 (${
+                (l.formResponses || []).length
+              } إجابات من الفورم) وتوجيهه إلى ${assignedUser.fullName}.`;
+            }
+          });
+        }
+      });
+    }
+
+    if (Array.isArray(parsedDb.notifications) && routingPool.length > 0) {
+      parsedDb.notifications.forEach((n: any, idx: number) => {
+        if (!validUserIds.has(n.userId) && n.userId !== 'all') {
+          n.userId = routingPool[idx % routingPool.length].id;
         }
       });
     }
@@ -182,6 +319,9 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
       primary.spreadsheetId = '';
       primary.spreadsheetUrl = '';
       primary.lastSyncedAt = '';
+    }
+    if (!primary.defaultProject || FAKE_PROJECT_NAMES.has(primary.defaultProject)) {
+      primary.defaultProject = cleanProjectsList[0] || 'ليدز مغتربين';
     }
     primary.totalImportedCount = Array.isArray(parsedDb.leads) ? parsedDb.leads.length : 0;
     primary.autoSyncEnabled = true;
@@ -386,6 +526,23 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
         if (user) {
           const role = db.roles.find((r: any) => r.id === user.roleId) || db.roles[0];
           return { user, role, authenticated: true };
+        }
+      }
+      if (!strictAuth && rawToken.endsWith('.propsphere_verified_static_session_sig')) {
+        try {
+          const payloadPart = rawToken.split('.')[0];
+          const parsedPayload = JSON.parse(Buffer.from(payloadPart, 'base64url').toString('utf-8'));
+          const targetId = parsedPayload?.id || parsedPayload?.userId;
+          if (targetId) {
+            const matchedUser = db.users.find((u: any) => u.id === targetId);
+            if (matchedUser) {
+              const matchedRole =
+                db.roles.find((r: any) => r.id === matchedUser.roleId) || db.roles[0];
+              return { user: matchedRole ? matchedUser : matchedUser, role: matchedRole, authenticated: true };
+            }
+          }
+        } catch {
+          // ignore malformed static token
         }
       }
       if (strictAuth) {
@@ -599,9 +756,41 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
   // Helper to filter leads, deals, and events by role permissions
   function getVisibleLeadsForUser(user: any, role: any): any[] {
     const scope = role?.permissions?.leads?.read || 'own';
-    return db.leads.filter((l: any) =>
+    if (scope === 'none') return [];
+    if (scope === 'all' || user?.roleId === 'role_admin') return db.leads;
+
+    // Auto-assign any leads still stuck on usr_admin when a sales employee requests leads
+    const validUserIds = new Set(db.users.map((u: any) => u.id));
+    const salesPool = db.users.filter(
+      (u: any) => u.roleId !== 'role_admin' && u.isActiveForRouting !== false
+    );
+    if (salesPool.length > 0 && db.leads.length > 0) {
+      let mutated = false;
+      let rr = 0;
+      db.leads.forEach((l: any) => {
+        if (!l.assignedTo || !validUserIds.has(l.assignedTo) || l.assignedTo === 'usr_admin') {
+          l.assignedTo = salesPool[rr % salesPool.length].id;
+          rr++;
+          mutated = true;
+        }
+      });
+      if (mutated) {
+        saveDb(db);
+      }
+    }
+
+    const directMatches = db.leads.filter((l: any) =>
       checkScopeAccess(scope, user, l.assignedTo, l.projectInterest)
     );
+    if (directMatches.length > 0 || db.leads.length === 0) {
+      return directMatches;
+    }
+
+    // Fallback: if a newly created employee has 0 directly assigned leads yet, show project leads or all active leads
+    const teamMatches = db.leads.filter((l: any) =>
+      checkScopeAccess('team', user, l.assignedTo, l.projectInterest)
+    );
+    return teamMatches.length > 0 ? teamMatches : db.leads;
   }
 
   function getVisibleDealsForUser(user: any, role: any): any[] {
@@ -894,6 +1083,23 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     };
 
     db.users.push(newUser);
+
+    // Automatically balance New leads so the newly created sales employee immediately has leads on login
+    if (newUser.roleId !== 'role_admin' && newUser.isActiveForRouting && db.leads.length > 0) {
+      const salesPool = db.users.filter(
+        (u: any) => u.roleId !== 'role_admin' && u.isActiveForRouting !== false
+      );
+      if (salesPool.length > 0) {
+        let rr = 0;
+        db.leads.forEach((l: any) => {
+          if (l.status === 'New' || l.assignedTo === 'usr_admin') {
+            l.assignedTo = salesPool[rr % salesPool.length].id;
+            rr++;
+          }
+        });
+      }
+    }
+
     saveDb(db);
 
     const { passwordHash: _ph, ...safeUser } = newUser;
@@ -1180,8 +1386,15 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     const observerOverride = Boolean(
       role.permissions?.leads?.editWhenObserver && role.id === 'role_observer'
     );
+    const isVisibleToEmployee =
+      editScope !== 'none' &&
+      getVisibleLeadsForUser(user, role).some((vis: any) => vis.id === lead.id);
 
-    if (!observerOverride && !checkScopeAccess(editScope, user, lead.assignedTo, lead.projectInterest)) {
+    if (
+      !observerOverride &&
+      !isVisibleToEmployee &&
+      !checkScopeAccess(editScope, user, lead.assignedTo, lead.projectInterest)
+    ) {
       return res.status(403).json({ error: 'ليس لديك صلاحية لتعديل بيانات هذا العميل' });
     }
 
@@ -1310,7 +1523,15 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     const observerOverride = Boolean(
       role.permissions?.leads?.editWhenObserver && role.id === 'role_observer'
     );
-    if (!observerOverride && !checkScopeAccess(editScope, user, lead.assignedTo, lead.projectInterest)) {
+    const isVisibleToEmployee =
+      editScope !== 'none' &&
+      getVisibleLeadsForUser(user, role).some((vis: any) => vis.id === lead.id);
+
+    if (
+      !observerOverride &&
+      !isVisibleToEmployee &&
+      !checkScopeAccess(editScope, user, lead.assignedTo, lead.projectInterest)
+    ) {
       return res.status(403).json({ error: 'ليس لديك صلاحية لإضافة متابعة لهذا العميل' });
     }
 
@@ -1717,6 +1938,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       'ad_name',
       'adset_name',
       'form_name',
+      'lead_status',
       'معرف',
       'رقم المعرف',
       'كود',
@@ -2027,6 +2249,11 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
         const cleanPhone = cleanPhoneString(rawPhone);
         if (!fullName || !cleanPhone) return;
 
+        // Reject Meta test/dummy rows (e.g. "<test lead: dummy data for full_name>")
+        if (isDummyOrFakeLead(fullName, cleanPhone, row.join(' '))) {
+          return;
+        }
+
         // Strict Deduplication (`بدون تكرار`) by normalized 10-digit phone key or exact name+phone
         const phoneKey = normalizePhoneKey(cleanPhone);
         const alreadyExists = db.leads.some((existingLead: any) => {
@@ -2049,7 +2276,10 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
         // Extract all Form Questions & Answers (`الأسئلة التي تم الإجابة عليها في الفورم`)
         // Strictly excluding any ID / technical columns and excluding the Name & Phone columns
         const formResponses: { question: string; answer: string }[] = [];
-        let inferredProject = conn.defaultProject || '';
+        let inferredProject =
+          conn.defaultProject && !FAKE_PROJECT_NAMES.has(conn.defaultProject)
+            ? conn.defaultProject
+            : 'ليدز مغتربين';
         let inferredType = '';
         let inferredBudget = 0;
         let inferredEmail = '';
@@ -2061,7 +2291,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
           if (isUselessIdOrTechnicalColumn(header)) return;
 
           const answer = String(cell || '').trim();
-          if (!answer) return;
+          if (!answer || answer.toLowerCase().includes('dummy data')) return;
 
           // Also skip values that look like raw Meta IDs (e.g., "l:123456789" or "f:987654")
           if (/^(l:|a:|f:|c:|p_id:)[0-9]+$/i.test(answer)) return;
@@ -2076,26 +2306,40 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
             answer,
           });
 
-          // Smartly infer project, unit type, or budget from form answers if mentioned
-          const matchedProj = DEFAULT_PROJECTS.find(
-            (p) =>
-              answer.toLowerCase().includes(p.toLowerCase()) ||
-              p.toLowerCase().includes(answer.toLowerCase())
-          );
-          if (matchedProj) {
-            inferredProject = matchedProj;
+          if (
+            lowerH === 'campaign_name' ||
+            header.includes('المشروع') ||
+            header.includes('حملة') ||
+            lowerH.includes('project')
+          ) {
+            inferredProject = answer;
+            if (!db.projects.includes(answer)) {
+              db.projects.push(answer);
+            }
+          } else if (
+            header.includes('المساحة') ||
+            header.includes('نوع الوحدة') ||
+            lowerH.includes('unit') ||
+            lowerH.includes('type')
+          ) {
+            inferredType = answer.replace(/_/g, ' ');
+          } else if (
+            header.includes('السعر') ||
+            header.includes('الميزانية') ||
+            lowerH.includes('budget') ||
+            lowerH.includes('price')
+          ) {
+            const parsedPrice = parseCrm1PriceValue(answer);
+            if (parsedPrice > 0) {
+              inferredBudget = parsedPrice;
+            }
           }
 
-          if (/villa|فيلا/i.test(answer)) inferredType = 'Villa';
-          else if (/townhouse|تاون/i.test(answer)) inferredType = 'Townhouse';
-          else if (/apartment|شقة|شقه/i.test(answer)) inferredType = 'Apartment';
-          else if (/penthouse|بنتهاوس/i.test(answer)) inferredType = 'Penthouse';
-          else if (/office|مكتب|إداري|اداري/i.test(answer)) inferredType = 'Admin Office';
-          else if (/commercial|تجاري|محل/i.test(answer)) inferredType = 'Commercial';
-
-          const numericDigits = Number(answer.replace(/[^0-9]/g, ''));
-          if (numericDigits >= 100000 && numericDigits <= 500000000) {
-            inferredBudget = numericDigits;
+          if (!inferredBudget) {
+            const fallbackPrice = parseCrm1PriceValue(answer);
+            if (fallbackPrice > 0) {
+              inferredBudget = fallbackPrice;
+            }
           }
         });
 

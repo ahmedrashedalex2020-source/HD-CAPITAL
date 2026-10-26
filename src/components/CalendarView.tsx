@@ -36,8 +36,8 @@ const persistedCalendarFilterState = {
   searchQuery: '',
   categoryFilter: 'ALL',
   projectFilter: 'ALL',
-  dateFrom: getCurrentMonthDateRange().from,
-  dateTo: getCurrentMonthDateRange().to,
+  dateFrom: '',
+  dateTo: '',
 };
 
 export const CalendarView: React.FC<CalendarViewProps> = ({
@@ -80,7 +80,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     date: new Date().toISOString().slice(0, 10),
     time: '13:00',
     leadId: leads[0]?.id || '',
-    projectName: projects[0] || 'Palm Hills New Cairo',
+    projectName: projects[0] || 'ليدز مغتربين',
     assignedTo: currentUser.id,
     description: '',
   });

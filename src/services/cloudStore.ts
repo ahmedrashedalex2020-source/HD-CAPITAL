@@ -6,16 +6,206 @@ import {
   saveFirestoreWorkspace,
 } from './firebaseClient';
 
-export const DEFAULT_PROJECTS = [
+export const DEFAULT_PROJECTS = ['ليدز مغتربين'];
+
+const SNAPSHOT_KEY = 'propsphere_crm1_strict_v5';
+const LEGACY_KEYS = [
+  'propsphere_workspace_backup_v3',
+  'propsphere_crm1_clean_v4',
+  'propsphere_workspace_backup_v2',
+  'propsphere_workspace_backup_v1',
+];
+
+const FAKE_PROJECT_NAMES = new Set([
   'Palm Hills New Cairo',
   'Mountain View iCity',
   'ZED East Ora',
   'Marassi North Coast',
   'Il Bosco New Capital',
   'Solare Ras El Hekma',
-];
+]);
 
-const SNAPSHOT_KEY = 'propsphere_workspace_backup_v3';
+const FAKE_LEAD_IDS = new Set([
+  'lead_101',
+  'lead_102',
+  'lead_103',
+  'lead_104',
+  'lead_105',
+  'lead_106',
+  'lead_1793004176267_3',
+]);
+
+const FAKE_DEMO_USER_IDS = new Set([
+  'usr_supervisor',
+  'usr_sales1',
+  'usr_sales2',
+  'usr_sales3',
+  'usr_deputy',
+]);
+
+const FAKE_DEMO_USERNAMES = new Set(['tarek', 'sara', 'omar', 'nour', 'karim']);
+
+function parseCrm1Price(rawAnswer: string): number {
+  const text = String(rawAnswer || '').trim();
+  if (!text) return 0;
+  if (/مليون|million/i.test(text)) {
+    const numMatch = text.replace(/_/g, ' ').match(/([0-9]+(?:\.[0-9]+)?)/);
+    if (numMatch) {
+      return Math.round(parseFloat(numMatch[1]) * 1000000);
+    }
+  }
+  const numericDigits = Number(text.replace(/[^0-9]/g, ''));
+  if (numericDigits >= 100000 && numericDigits <= 500000000) {
+    return numericDigits;
+  }
+  return 0;
+}
+
+function isDummyOrFakeLeadRow(lead: any): boolean {
+  if (!lead || typeof lead !== 'object') return true;
+  if (FAKE_LEAD_IDS.has(lead.id)) return true;
+  if (String(lead.sheetRowId || '').startsWith('meta_row_')) return true;
+  const combined = `${lead.fullName || ''} ${lead.phone || ''} ${lead.notes || ''}`.toLowerCase();
+  if (
+    combined.includes('dummy data') ||
+    combined.includes('<test lead') ||
+    combined.includes('test lead:')
+  ) {
+    return true;
+  }
+  const digits = String(lead.phone || '').replace(/[^0-9]/g, '');
+  if (digits.length < 8) return true;
+  return false;
+}
+
+function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData: boolean } {
+  if (!rawSnap || typeof rawSnap !== 'object') {
+    return { cleaned: rawSnap, hadFakeData: false };
+  }
+  let hadFakeData = false;
+
+  const rawUsers: any[] = Array.isArray(rawSnap.users) ? rawSnap.users : [];
+  const cleanUsers = rawUsers.filter((u: any) => {
+    if (
+      FAKE_DEMO_USER_IDS.has(u?.id) ||
+      FAKE_DEMO_USERNAMES.has(String(u?.username || '').toLowerCase())
+    ) {
+      hadFakeData = true;
+      return false;
+    }
+    return true;
+  });
+
+  const rawLeads: any[] = Array.isArray(rawSnap.leads) ? rawSnap.leads : [];
+  const discoveredProjects = new Set<string>();
+  const cleanLeads = rawLeads
+    .filter((l: any) => {
+      if (isDummyOrFakeLeadRow(l)) {
+        hadFakeData = true;
+        return false;
+      }
+      return true;
+    })
+    .map((l: any) => {
+      const copy = { ...l };
+      if (Array.isArray(copy.formResponses)) {
+        copy.formResponses = copy.formResponses.filter((fr: any) => {
+          const q = String(fr?.question || '').trim().toLowerCase();
+          const a = String(fr?.answer || '').trim().toLowerCase();
+          if (!q || !a || q === 'lead_status' || a.includes('dummy data')) {
+            hadFakeData = true;
+            return false;
+          }
+          return true;
+        });
+
+        for (const fr of copy.formResponses) {
+          const q = String(fr.question || '').trim();
+          const a = String(fr.answer || '').trim();
+          if (q === 'campaign_name' || q.includes('المشروع') || q.includes('حملة')) {
+            if (a && !FAKE_PROJECT_NAMES.has(a)) {
+              copy.projectInterest = a;
+            }
+          } else if (q.includes('المساحة') || q.includes('نوع الوحدة')) {
+            if (a && (!copy.propertyType || copy.propertyType === 'Villa')) {
+              copy.propertyType = a.replace(/_/g, ' ');
+            }
+          } else if (q.includes('السعر') || q.includes('الميزانية')) {
+            const parsedBudget = parseCrm1Price(a);
+            if (parsedBudget > 0 && (!copy.budgetMax || copy.budgetMax === 0)) {
+              copy.budgetMax = parsedBudget;
+              copy.budgetMin = Math.round(parsedBudget * 0.85);
+            }
+          }
+        }
+
+        copy.notes = copy.formResponses.map((fr: any) => `${fr.question}: ${fr.answer}`).join(' | ');
+      }
+
+      if (!copy.projectInterest || FAKE_PROJECT_NAMES.has(copy.projectInterest)) {
+        if (FAKE_PROJECT_NAMES.has(copy.projectInterest)) hadFakeData = true;
+        copy.projectInterest = 'ليدز مغتربين';
+      }
+      discoveredProjects.add(copy.projectInterest);
+      return copy;
+    });
+
+  const cleanProjects =
+    discoveredProjects.size > 0 ? Array.from(discoveredProjects) : [...DEFAULT_PROJECTS];
+
+  cleanUsers.forEach((u: any) => {
+    if (Array.isArray(u.assignedProjects)) {
+      const filtered = u.assignedProjects.filter((p: string) => !FAKE_PROJECT_NAMES.has(p));
+      u.assignedProjects = filtered.length > 0 ? filtered : [...cleanProjects];
+    } else {
+      u.assignedProjects = [...cleanProjects];
+    }
+  });
+
+  const validUserIds = new Set(cleanUsers.map((u: any) => u.id));
+  const salesPool = cleanUsers.filter(
+    (u: any) => u.roleId !== 'role_admin' && u.isActiveForRouting !== false
+  );
+  if (salesPool.length > 0 && cleanLeads.length > 0) {
+    let rr = 0;
+    cleanLeads.forEach((l: any) => {
+      if (!l.assignedTo || !validUserIds.has(l.assignedTo) || l.assignedTo === 'usr_admin') {
+        l.assignedTo = salesPool[rr % salesPool.length].id;
+        rr++;
+      }
+      const owner = cleanUsers.find((u: any) => u.id === l.assignedTo);
+      if (owner && Array.isArray(l.activities)) {
+        l.activities = l.activities.map((act: any) =>
+          act.type === 'sheet_import'
+            ? {
+                ...act,
+                summary: `تم استيراد العميل من شيت CRM1 (${
+                  (l.formResponses || []).length
+                } إجابات من الفورم) وتوجيهه إلى ${owner.fullName}.`,
+              }
+            : act
+        );
+      }
+    });
+  }
+
+  const cleanNotifications = (rawSnap.notifications || []).filter(
+    (n: any) =>
+      !['notif_1', 'notif_2', 'notif_3', 'notif_1793004176267_3'].includes(n?.id) &&
+      !String(n?.message || '').toLowerCase().includes('dummy data')
+  );
+
+  return {
+    cleaned: {
+      ...rawSnap,
+      users: cleanUsers,
+      leads: cleanLeads,
+      notifications: cleanNotifications,
+      projects: cleanProjects,
+    },
+    hadFakeData,
+  };
+}
 
 const DEFAULT_ROLES = [
   {
@@ -111,7 +301,7 @@ export function saveLocalSnapshot(bootstrapData: any): void {
   if (!bootstrapData || typeof bootstrapData !== 'object') return;
   try {
     const existing = loadLocalSnapshot() || {};
-    const merged = {
+    const rawMerged = {
       ...existing,
       ...bootstrapData,
       roles:
@@ -140,10 +330,15 @@ export function saveLocalSnapshot(bootstrapData: any): void {
           ? bootstrapData.projects
           : existing.projects || DEFAULT_PROJECTS,
     };
+    const { cleaned: merged } = sanitizeCrm1Workspace(rawMerged);
     cachedLiveSnapshot = merged;
     localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(merged));
-    // Also mirror in background to Firebase Firestore so other devices stay synced
-    void saveFirestoreWorkspace(merged);
+    if (
+      bootstrapData.currentRole?.id === 'role_admin' ||
+      bootstrapData.currentRole?.permissions?.leads?.read === 'all'
+    ) {
+      void saveFirestoreWorkspace(merged);
+    }
   } catch {
     // ignore storage errors
   }
@@ -171,9 +366,12 @@ function mergeById(baseList: any[], incomingList: any[]): any[] {
 
 export function loadLocalSnapshot(): any {
   try {
+    for (const legacyKey of LEGACY_KEYS) {
+      localStorage.removeItem(legacyKey);
+    }
     const raw = localStorage.getItem(SNAPSHOT_KEY);
     if (raw) {
-      return JSON.parse(raw);
+      return sanitizeCrm1Workspace(JSON.parse(raw)).cleaned;
     }
   } catch {
     // ignore
@@ -189,7 +387,7 @@ async function fetchStaticSnapshotJson(now: number): Promise<any | null> {
     if (res.ok) {
       const data = await res.json();
       if (data && Array.isArray(data.users)) {
-        return data;
+        return sanitizeCrm1Workspace(data).cleaned;
       }
     }
   } catch {
@@ -205,10 +403,15 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
   if (forceRemote || !cachedLiveSnapshot || now - lastRemoteFetchTime > 6000) {
     lastRemoteFetchTime = now;
     try {
-      const [staticSnap, firestoreSnap] = await Promise.all([
+      const [staticSnap, rawFirestoreSnap] = await Promise.all([
         fetchStaticSnapshotJson(now),
         fetchFirestoreWorkspace(),
       ]);
+
+      const firestoreSanitized = rawFirestoreSnap
+        ? sanitizeCrm1Workspace(rawFirestoreSnap)
+        : { cleaned: null, hadFakeData: false };
+      const firestoreSnap = firestoreSanitized.cleaned;
 
       if (staticSnap || firestoreSnap) {
         const base = staticSnap || {};
@@ -229,7 +432,7 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
         let combinedEvents = mergeById(base.events || [], local?.events || []);
         combinedEvents = mergeById(combinedEvents, cloud.events || []);
 
-        const merged = {
+        const rawMerged = {
           ...base,
           ...cloud,
           roles:
@@ -261,13 +464,10 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
               : Array.isArray(local?.notifications) && local.notifications.length > 0
               ? local.notifications
               : base.notifications || [],
-          projects:
-            Array.isArray(cloud.projects) && cloud.projects.length > 0
-              ? cloud.projects
-              : Array.isArray(base.projects) && base.projects.length > 0
-              ? base.projects
-              : local?.projects || DEFAULT_PROJECTS,
+          projects: DEFAULT_PROJECTS,
         };
+
+        const { cleaned: merged, hadFakeData } = sanitizeCrm1Workspace(rawMerged);
 
         cachedLiveSnapshot = merged;
         try {
@@ -276,15 +476,20 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
           // ignore
         }
 
-        // If Cloud Firestore didn't have all users or leads yet, synchronize them up to Firestore
+        // Synchronize clean CRM1 state to Cloud Firestore if Firestore had stale/fake data or missing leads
         if (
           !firestoreSnap ||
-          (firestoreSnap.users || []).length < combinedUsers.length ||
-          (firestoreSnap.leads || []).length < combinedLeads.length
+          firestoreSanitized.hadFakeData ||
+          hadFakeData ||
+          (firestoreSnap.users || []).length !== merged.users.length ||
+          (firestoreSnap.leads || []).length !== merged.leads.length
         ) {
           void saveFirestoreWorkspace(merged);
-          for (const u of combinedUsers) {
+          for (const u of merged.users) {
             void saveFirestoreUser(u);
+          }
+          for (const fakeId of FAKE_DEMO_USER_IDS) {
+            void removeFirestoreUser(fakeId);
           }
         }
 
@@ -332,7 +537,7 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
         email: 'omarahmed1@propsphere.eg',
         phone: '01114477605',
         location: 'القاهرة الجديدة',
-        assignedProjects: ['Palm Hills New Cairo', 'Mountain View iCity'],
+        assignedProjects: DEFAULT_PROJECTS,
         isActiveForRouting: true,
         routingWeight: 1,
         preferredLang: 'ar',
@@ -353,13 +558,14 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
 }
 
 async function persistState(snap: any): Promise<void> {
-  cachedLiveSnapshot = snap;
+  const { cleaned } = sanitizeCrm1Workspace(snap);
+  cachedLiveSnapshot = cleaned;
   try {
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snap));
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(cleaned));
   } catch {
     // ignore
   }
-  await saveFirestoreWorkspace(snap);
+  await saveFirestoreWorkspace(cleaned);
 }
 
 function checkScope(
@@ -383,9 +589,36 @@ function checkScope(
 
 function getVisibleLeads(snap: any, user: any, role: any): any[] {
   const scope = role?.permissions?.leads?.read || 'own';
-  return (snap.leads || []).filter((l: any) =>
+  const allLeads: any[] = Array.isArray(snap.leads) ? snap.leads : [];
+  if (scope === 'none') return [];
+  if (scope === 'all' || user?.roleId === 'role_admin') return allLeads;
+
+  const validUserIds = new Set((snap.users || []).map((u: any) => u.id));
+  const salesPool = (snap.users || []).filter(
+    (u: any) => u.roleId !== 'role_admin' && u.isActiveForRouting !== false
+  );
+  if (salesPool.length > 0 && allLeads.length > 0) {
+    let rr = 0;
+    allLeads.forEach((l: any) => {
+      if (!l.assignedTo || !validUserIds.has(l.assignedTo) || l.assignedTo === 'usr_admin') {
+        l.assignedTo = salesPool[rr % salesPool.length].id;
+        rr++;
+      }
+    });
+  }
+
+  const directMatches = allLeads.filter((l: any) =>
     checkScope(scope, user, l.assignedTo, l.projectInterest)
   );
+  if (directMatches.length > 0 || allLeads.length === 0) {
+    return directMatches;
+  }
+
+  // Fallback for newly created employees so they never log into an empty screen
+  const teamMatches = allLeads.filter((l: any) =>
+    checkScope('team', user, l.assignedTo, l.projectInterest)
+  );
+  return teamMatches.length > 0 ? teamMatches : allLeads;
 }
 
 function getVisibleDeals(snap: any, user: any, role: any): any[] {
@@ -756,6 +989,27 @@ export async function handleLocalFallbackRequest(
       createdAt: new Date().toISOString(),
     };
     snap.users.push(newUser);
+    if (
+      newUser.roleId !== 'role_admin' &&
+      newUser.isActiveForRouting &&
+      Array.isArray(snap.leads) &&
+      snap.leads.length > 0
+    ) {
+      const salesPool = snap.users.filter(
+        (u: any) => u.roleId !== 'role_admin' && u.isActiveForRouting !== false
+      );
+      if (salesPool.length > 0) {
+        let rr = 0;
+        snap.leads = snap.leads.map((l: any) => {
+          if (l.status === 'New' || l.assignedTo === 'usr_admin') {
+            const target = salesPool[rr % salesPool.length];
+            rr++;
+            return { ...l, assignedTo: target.id };
+          }
+          return l;
+        });
+      }
+    }
     await Promise.all([saveFirestoreUser(newUser), persistState(snap)]);
     return { user: newUser };
   }
@@ -929,9 +1183,36 @@ export async function handleLocalFallbackRequest(
         contactedToday: agentLeads.filter((l: any) =>
           String(l.lastContactedAt || '').startsWith(dateFilter)
         ).length,
-        callsToday: 0,
-        whatsappToday: 0,
-        visitsScheduledToday: 0,
+        callsToday: agentLeads.reduce(
+          (sum: number, l: any) =>
+            sum +
+            (l.activities || []).filter(
+              (a: any) =>
+                a.type === 'call' &&
+                String(a.createdAt || a.timestamp || '').startsWith(dateFilter)
+            ).length,
+          0
+        ),
+        whatsappToday: agentLeads.reduce(
+          (sum: number, l: any) =>
+            sum +
+            (l.activities || []).filter(
+              (a: any) =>
+                a.type === 'whatsapp' &&
+                String(a.createdAt || a.timestamp || '').startsWith(dateFilter)
+            ).length,
+          0
+        ),
+        visitsScheduledToday: agentLeads.reduce(
+          (sum: number, l: any) =>
+            sum +
+            (l.activities || []).filter(
+              (a: any) =>
+                a.type === 'visit' &&
+                String(a.createdAt || a.timestamp || '').startsWith(dateFilter)
+            ).length,
+          0
+        ),
         qualifiedCount,
         wonDealsCount: wonLeads.length,
         wonRevenue,

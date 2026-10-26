@@ -124,7 +124,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
       email: '',
       phone: '',
       location: 'القاهرة الجديدة',
-      assignedProjects: [projects[0] || 'Palm Hills New Cairo'],
+      assignedProjects: [projects[0] || 'ليدز مغتربين'],
       isActiveForRouting: true,
       routingWeight: 1,
     });

@@ -127,7 +127,7 @@ test('4. Full API Integration: Zero Mock Data, Auth Enforcement, RBAC Scopes, CR
   });
   assert.equal(bypassRes.status, 401, 'demo_bypass password must be rejected');
 
-  // C. Login as Admin, Sales Agent (Sara), and Observer
+  // C. Login as Admin and Sales Employee (omarahmed1)
   const adminLogin = await api('/api/auth/login', {
     method: 'POST',
     body: { username: 'admin', password: 'admin123' },
@@ -136,12 +136,12 @@ test('4. Full API Integration: Zero Mock Data, Auth Enforcement, RBAC Scopes, CR
   assert.ok(adminLogin.data.token);
   const adminToken = adminLogin.data.token;
 
-  const saraLogin = await api('/api/auth/login', {
+  const employeeLogin = await api('/api/auth/login', {
     method: 'POST',
-    body: { username: 'sara', password: '123456' },
+    body: { username: 'omarahmed1', password: '123456' },
   });
-  assert.equal(saraLogin.status, 200);
-  const saraToken = saraLogin.data.token;
+  assert.equal(employeeLogin.status, 200);
+  const employeeToken = employeeLogin.data.token;
 
   // D. Verify zero mock data on fresh database initialization
   const bootRes = await api('/api/bootstrap', { token: adminToken });
@@ -154,11 +154,11 @@ test('4. Full API Integration: Zero Mock Data, Auth Enforcement, RBAC Scopes, CR
 
   // E. CRM1 Sheet Sync: Import real CSV rows with ID columns + Form Q&A, verify ID stripping & deduplication
   const sampleCrm1Csv = [
-    'id,lead_id,ad_id,الاسم,رقم التليفون,المشروع المطلوب,ما هو نوع الوحدة المفضلة؟,ما هي الميزانية التقريبية أو المقدم المتاح؟',
-    '9911,l:123456,a:9988,أحمد سمير عبد القادر,p:+201012345678,Palm Hills New Cairo,فيلا مستقلة,12500000',
-    '9912,l:123457,a:9989,منى الشاذلي,01123456789,Marassi North Coast,شقة فندقية,8500000',
+    'id,lead_id,ad_id,الاسم,رقم التليفون,campaign_name,ما_المساحة_المناسبة_؟,السعر_المناسب',
+    '9911,l:123456,a:9988,أحمد سمير عبد القادر,p:+201012345678,ليدز مغتربين,185م,4.5_مليون',
+    '9912,l:123457,a:9989,منى الشاذلي,01123456789,ليدز مغتربين,215م,6_مليون',
     // Duplicate row with different phone formatting for Ahmed Samir
-    '9913,l:123458,a:9990,أحمد سمير عبد القادر,01012345678,Palm Hills New Cairo,فيلا مستقلة,12500000',
+    '9913,l:123458,a:9990,أحمد سمير عبد القادر,01012345678,ليدز مغتربين,185م,4.5_مليون',
   ].join('\n');
 
   const syncRes1 = await api('/api/sheets/sync', {
@@ -194,26 +194,26 @@ test('4. Full API Integration: Zero Mock Data, Auth Enforcement, RBAC Scopes, CR
     'No ID column should ever appear in formResponses'
   );
 
-  // F. RBAC Enforcement: Sales Agent (Sara) cannot sync sheets, delete leads, or modify roles matrix
-  const saraSyncAttempt = await api('/api/sheets/sync', {
+  // F. RBAC Enforcement: Sales Employee (omarahmed1) cannot sync sheets, delete leads, or modify roles matrix
+  const empSyncAttempt = await api('/api/sheets/sync', {
     method: 'POST',
-    token: saraToken,
+    token: employeeToken,
     body: { csvText: sampleCrm1Csv },
   });
-  assert.equal(saraSyncAttempt.status, 403, 'Employee role must not be allowed to sync sheets');
+  assert.equal(empSyncAttempt.status, 403, 'Employee role must not be allowed to sync sheets');
 
-  const saraRoleModify = await api('/api/roles/matrix', {
+  const empRoleModify = await api('/api/roles/matrix', {
     method: 'PUT',
-    token: saraToken,
+    token: employeeToken,
     body: { roles: [] },
   });
-  assert.equal(saraRoleModify.status, 403, 'Employee role must not modify RBAC matrix');
+  assert.equal(empRoleModify.status, 403, 'Employee role must not modify RBAC matrix');
 
-  const saraDeleteLead = await api(`/api/leads/${ahmedLead.id}`, {
+  const empDeleteLead = await api(`/api/leads/${ahmedLead.id}`, {
     method: 'DELETE',
-    token: saraToken,
+    token: employeeToken,
   });
-  assert.equal(saraDeleteLead.status, 403, 'Employee role must not delete leads');
+  assert.equal(empDeleteLead.status, 403, 'Employee role must not delete leads');
 
   // G. Lead Transfer & Deal Auto-Creation on Won Status + Daily Reports Accuracy
   const transferRes = await api('/api/leads/transfer', {
@@ -221,17 +221,17 @@ test('4. Full API Integration: Zero Mock Data, Auth Enforcement, RBAC Scopes, CR
     token: adminToken,
     body: {
       leadIds: [ahmedLead.id],
-      toUserId: 'usr_sales1',
-      reason: 'اختبار نقل العميل إلى سارة',
+      toUserId: 'usr_1793010490703_1p0c',
+      reason: 'اختبار نقل العميل إلى عمر احمد',
     },
   });
   assert.equal(transferRes.status, 200);
   assert.equal(transferRes.data.transferredCount, 1);
 
-  // Sara can now log an activity and mark her assigned lead as Won
+  // Employee can now log an activity and mark his assigned lead as Won
   const actRes = await api(`/api/leads/${ahmedLead.id}/activities`, {
     method: 'POST',
-    token: saraToken,
+    token: employeeToken,
     body: {
       type: 'call',
       summary: 'تم التواصل مع العميل والاتفاق على التعاقد النهائي',
@@ -241,12 +241,12 @@ test('4. Full API Integration: Zero Mock Data, Auth Enforcement, RBAC Scopes, CR
   assert.equal(actRes.status, 200);
   assert.equal(actRes.data.lead.status, 'Won');
 
-  // Verify deal was automatically created and Daily Report reflects Sara's call & Won revenue
+  // Verify deal was automatically created and Daily Report reflects employee call & Won revenue
   const reportRes = await api('/api/reports/daily', { token: adminToken });
   assert.equal(reportRes.status, 200);
-  const saraStats = reportRes.data.agentStats.find((s: any) => s.userId === 'usr_sales1');
-  assert.ok(saraStats);
-  assert.equal(saraStats.callsToday, 1);
-  assert.equal(saraStats.wonDealsCount, 1);
-  assert.equal(saraStats.wonRevenue, 12500000);
+  const empStats = reportRes.data.agentStats.find((s: any) => s.userId === 'usr_1793010490703_1p0c');
+  assert.ok(empStats);
+  assert.equal(empStats.callsToday, 1);
+  assert.equal(empStats.wonDealsCount, 1);
+  assert.equal(empStats.wonRevenue, 4500000);
 });

@@ -152,12 +152,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <span className="mx-1.5">·</span>
               <span>{currentUser.location}</span>
             </p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => onNavigate('leads')}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+              >
+                <Users className="w-4 h-4" />
+                <span>
+                  {isAr
+                    ? `فتح قائمة العملاء والمتابعة (${totalLeads} عميل)`
+                    : `Open My Leads (${totalLeads})`}
+                </span>
+              </button>
               {canSyncSheets && (
                 <button
                   onClick={onQuickSyncSheets}
                   disabled={isSyncingSheets}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold transition-colors cursor-pointer"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isSyncingSheets ? 'animate-spin' : ''}`} />
                   <span>
@@ -174,7 +185,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               {canTransfer && (
                 <button
                   onClick={onOpenTransferModal}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-colors cursor-pointer"
                 >
                   <ArrowLeftRight className="w-3.5 h-3.5 text-blue-600" />
                   <span>{isAr ? 'نقل الليدز بين السيلز' : 'Transfer Leads'}</span>
@@ -184,10 +195,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* 4 Clean Unboxed Tabular Metrics (Matches 7789 / 25% / 476 / All Control in Image 1) */}
+        {/* 4 Clean Unboxed Tabular Metrics */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 pt-4 lg:pt-0 border-t lg:border-t-0 border-slate-100">
-          <div className="text-center lg:text-start">
-            <div className="text-2xl font-bold text-slate-900 font-mono-tabular">
+          <div
+            onClick={() => onNavigate('leads')}
+            className="text-center lg:text-start cursor-pointer group"
+          >
+            <div className="text-2xl font-bold text-slate-900 group-hover:text-blue-600 font-mono-tabular">
               {totalLeads}
             </div>
             <div className="text-xs text-slate-500 mt-0.5">
@@ -221,7 +235,118 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </section>
 
-      {/* 2. Two-Column Pipeline & Sales Velocity Row (Matches Guars Pipeline & Sales cards in Image 1) */}
+      {/* 1.5 Direct Leads Ready for Follow-Up (Immediate Visibility for Sales Reps & Admins) */}
+      {leads.length > 0 && (
+        <section className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Users className="w-4 h-4 text-blue-600" />
+                <span>
+                  {isAr
+                    ? `قائمة العملاء الجاهزة للمتابعة الفورية (${leads.length} عميل)`
+                    : `Active Leads Ready for Follow-Up (${leads.length})`}
+                </span>
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {isAr
+                  ? 'اضغط على أي عميل لفتح بياناته الكاملة وتسجيل مكالمة أو تغيير مرحلته، أو تواصل مباشرة عبر الهاتف وواتساب'
+                  : 'Click any lead to open their full profile & log calls, or reach out directly via Phone and WhatsApp'}
+              </p>
+            </div>
+            <button
+              onClick={() => onNavigate('leads')}
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <span>
+                {isAr ? `عرض وإدارة كل الليدز (${leads.length})` : `Manage All Leads (${leads.length})`}
+              </span>
+              <ArrowUpRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
+            {leads.slice(0, 6).map((lead) => {
+              const cleanDigits = String(lead.phone || '').replace(/[^0-9]/g, '');
+              const waPhone = cleanDigits.startsWith('0')
+                ? `20${cleanDigits.slice(1)}`
+                : cleanDigits;
+              return (
+                <div
+                  key={lead.id}
+                  onClick={() => onSelectLead(lead)}
+                  className="p-3.5 rounded-xl bg-[#F8FAFC] hover:bg-blue-50/40 border border-slate-200/80 hover:border-blue-400 transition-all flex flex-col justify-between gap-3 cursor-pointer"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-bold text-slate-900 truncate">
+                          {lead.fullName}
+                        </div>
+                        <div className="text-xs font-mono-tabular text-blue-600 font-semibold mt-0.5" dir="ltr">
+                          {lead.phone}
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[10px] font-bold shrink-0">
+                        {lead.status === 'New'
+                          ? isAr
+                            ? 'جديد'
+                            : 'New'
+                          : lead.status}
+                      </span>
+                    </div>
+
+                    <div className="mt-2 text-[11px] text-slate-600 font-medium truncate">
+                      {lead.projectInterest} {lead.propertyType ? `· ${lead.propertyType}` : ''}
+                    </div>
+
+                    {Array.isArray(lead.formResponses) && lead.formResponses.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-slate-200/70 flex flex-wrap gap-1.5">
+                        {lead.formResponses.slice(0, 3).map((qa, i) => (
+                          <span
+                            key={i}
+                            className="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[10px] text-slate-700 truncate max-w-full"
+                          >
+                            <span className="text-slate-400">{qa.question}: </span>
+                            <strong className="text-slate-900">{qa.answer}</strong>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <a
+                        href={`tel:${lead.phone}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold inline-flex items-center gap-1"
+                      >
+                        <PhoneCall className="w-3 h-3" />
+                        <span>{isAr ? 'اتصال' : 'Call'}</span>
+                      </a>
+                      <a
+                        href={`https://wa.me/${waPhone}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold inline-flex items-center gap-1"
+                      >
+                        <span>{isAr ? 'واتساب' : 'WhatsApp'}</span>
+                      </a>
+                    </div>
+                    <span className="text-[11px] font-bold text-blue-600 hover:underline">
+                      {isAr ? 'فتح ملف العميل ←' : 'Open Client →'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* 2. Two-Column Pipeline & Sales Velocity Row */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         {/* Deals & Leads Pipeline Card */}
         <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-6 flex flex-col justify-between">

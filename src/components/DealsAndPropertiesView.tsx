@@ -45,8 +45,8 @@ const persistedDealsFilterState = {
   searchQuery: '',
   stageFilter: 'ALL',
   projectFilter: 'ALL',
-  dateFrom: getCurrentMonthDateRange().from,
-  dateTo: getCurrentMonthDateRange().to,
+  dateFrom: '',
+  dateTo: '',
 };
 
 export const DealsAndPropertiesView: React.FC<DealsAndPropertiesViewProps> = ({
@@ -196,8 +196,8 @@ export const DealsAndPropertiesView: React.FC<DealsAndPropertiesViewProps> = ({
   const [propForm, setPropForm] = useState({
     code: `PH-${Math.floor(100 + Math.random() * 899)}`,
     titleAr: '',
-    projectName: projects[0] || 'Palm Hills New Cairo',
-    developer: 'Palm Hills Developments',
+    projectName: projects[0] || 'ليدز مغتربين',
+    developer: '',
     location: 'القاهرة الجديدة · التجمع الخامس',
     type: 'Villa',
     areaSqm: 285,
