@@ -34,6 +34,8 @@ export interface Role {
 export interface UserProfile {
   id: string;
   username: string;
+  accessPassword?: string;
+  clientAuthDigest?: string;
   fullName: string;
   roleId: string;
   jobTitle: string;

@@ -1,6 +1,18 @@
 import 'dotenv/config';
 import { initializeApp, getApps, cert, applicationDefault, App } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
+import {
+  initializeApp as initClientApp,
+  getApps as getClientApps,
+  getApp as getClientAppInstance,
+} from 'firebase/app';
+import {
+  getFirestore as getClientFirestoreSdk,
+  doc as clientDoc,
+  setDoc as clientSetDoc,
+  getDoc as clientGetDoc,
+  Firestore as ClientFirestore,
+} from 'firebase/firestore';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -10,6 +22,11 @@ const __dirname = path.dirname(__filename);
 
 interface AppletFirebaseConfig {
   projectId?: string;
+  appId?: string;
+  apiKey?: string;
+  authDomain?: string;
+  storageBucket?: string;
+  messagingSenderId?: string;
   firestoreDatabaseId?: string;
 }
 
@@ -72,26 +89,95 @@ export const adminFirestore: Firestore =
     ? getFirestore(adminApp, FIRESTORE_DATABASE_ID)
     : getFirestore(adminApp);
 
-// Configure ignoreUndefinedProperties on Firestore instance
 try {
   adminFirestore.settings({ ignoreUndefinedProperties: true });
 } catch {
   // settings() may already have been called
 }
 
+let serverClientFirestore: ClientFirestore | null = null;
+
+export function getServerWebFirestore(): ClientFirestore | null {
+  if (serverClientFirestore) return serverClientFirestore;
+  if (!appletConfig.apiKey || !appletConfig.projectId) return null;
+  try {
+    const app =
+      getClientApps().length === 0
+        ? initClientApp({
+            apiKey: appletConfig.apiKey,
+            authDomain: appletConfig.authDomain,
+            projectId: appletConfig.projectId,
+            storageBucket: appletConfig.storageBucket,
+            messagingSenderId: appletConfig.messagingSenderId,
+            appId: appletConfig.appId,
+          })
+        : getClientAppInstance();
+    serverClientFirestore =
+      FIRESTORE_DATABASE_ID && FIRESTORE_DATABASE_ID !== '(default)'
+        ? getClientFirestoreSdk(app, FIRESTORE_DATABASE_ID)
+        : getClientFirestoreSdk(app);
+    return serverClientFirestore;
+  } catch (err) {
+    console.warn('[Firestore] Failed to initialize server Web SDK bridge:', err);
+    return null;
+  }
+}
+
 /**
- * Probes whether the current process has active IAM / Service Account credentials
- * to reach Cloud Firestore via firebase-admin.
+ * Syncs the full CRM workspace and users collection directly to live Google Firebase Cloud Firestore
+ * (`crm_state/workspace` and `users/{id}`) using the provisioned database ID.
  */
+export async function syncStateToLiveCloudFirestore(state: any): Promise<boolean> {
+  const webDb = getServerWebFirestore();
+  if (!webDb || !state) return false;
+  try {
+    const safeUsers = (state.users || []).map(({ passwordHash: _ph, ...u }: any) => u);
+    const workspacePayload = JSON.parse(
+      JSON.stringify({
+        roles: state.roles || [],
+        users: safeUsers,
+        leads: state.leads || [],
+        properties: state.properties || [],
+        deals: state.deals || [],
+        events: state.events || [],
+        sheetConnections: state.sheetConnections || [],
+        syncLogs: (state.syncLogs || []).slice(0, 50),
+        notifications: (state.notifications || []).slice(0, 100),
+        projects: state.projects || [],
+        updatedAt: new Date().toISOString(),
+      })
+    );
+    await clientSetDoc(clientDoc(webDb, 'crm_state', 'workspace'), workspacePayload, {
+      merge: true,
+    });
+    for (const u of safeUsers) {
+      if (u && u.id) {
+        await clientSetDoc(
+          clientDoc(webDb, 'users', u.id),
+          JSON.parse(JSON.stringify(u)),
+          { merge: true }
+        );
+      }
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Firestore] Live workspace sync warning:', err);
+    return false;
+  }
+}
+
 let firestoreConnectivityChecked = false;
-let firestoreDirectAvailable = true;
+let firestoreDirectAvailable = false;
+let firestoreWebBridgeAvailable = false;
 
 export async function verifyFirestoreConnectivity(): Promise<boolean> {
-  if (firestoreConnectivityChecked) return firestoreDirectAvailable;
+  if (firestoreConnectivityChecked) {
+    return firestoreDirectAvailable || firestoreWebBridgeAvailable;
+  }
   firestoreConnectivityChecked = true;
   try {
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('FIRESTORE_PROBE_TIMEOUT')), 3500)
+      setTimeout(() => reject(new Error('FIRESTORE_PROBE_TIMEOUT')), 2500)
     );
     await Promise.race([
       adminFirestore.collection('settings').doc('global').get(),
@@ -101,15 +187,39 @@ export async function verifyFirestoreConnectivity(): Promise<boolean> {
     console.log(
       `[Firestore] Connected to Cloud Firestore via firebase-admin (project=${FIREBASE_PROJECT_ID}, database=${FIRESTORE_DATABASE_ID})`
     );
-  } catch (err: any) {
+    return true;
+  } catch {
     firestoreDirectAvailable = false;
-    console.warn(
-      `[Firestore] Cloud Firestore ADC/ServiceAccount credentials not yet active in this environment (${err?.message || err}). Running with Firestore-compatible transactional store until credentials are provided.`
-    );
   }
-  return firestoreDirectAvailable;
+
+  // Fallback to real Cloud Firestore Web SDK bridge with firebase-applet-config.json
+  try {
+    const webDb = getServerWebFirestore();
+    if (webDb) {
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('WEB_FIRESTORE_PROBE_TIMEOUT')), 4000)
+      );
+      await Promise.race([
+        clientGetDoc(clientDoc(webDb, 'crm_state', 'workspace')),
+        timeoutPromise,
+      ]);
+      firestoreWebBridgeAvailable = true;
+      console.log(
+        `[Firestore] Connected to live Google Firebase Cloud Firestore (project=${FIREBASE_PROJECT_ID}, database=${FIRESTORE_DATABASE_ID})`
+      );
+      return true;
+    }
+  } catch (err: any) {
+    console.warn('[Firestore] Web SDK probe notice:', err?.message || err);
+  }
+
+  return false;
 }
 
 export function isCloudFirestoreActive(): boolean {
   return firestoreDirectAvailable;
+}
+
+export function isLiveFirestoreConnected(): boolean {
+  return firestoreDirectAvailable || firestoreWebBridgeAvailable;
 }

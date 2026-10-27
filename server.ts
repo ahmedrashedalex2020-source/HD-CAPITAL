@@ -27,6 +27,8 @@ import {
 import {
   verifyFirestoreConnectivity,
   isCloudFirestoreActive,
+  isLiveFirestoreConnected,
+  syncStateToLiveCloudFirestore,
 } from './server/db/firestoreClient';
 import { seedOrMigrateDataset } from './server/db/repositories';
 
@@ -253,10 +255,13 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
             .toUpperCase() || 'U';
         u.avatarUrl = createAvatarSvg(initials, '#2563EB', '#60A5FA');
       }
-      if (u.username === 'admin' && !u.clientAuthDigest) {
-        u.clientAuthDigest = computeClientAuthDigest('admin', 'admin123');
-      }
-      if (
+      if (u.id === 'usr_admin' || String(u.username || '').toLowerCase() === 'admin') {
+        u.accessPassword = u.accessPassword || 'admin123';
+        if (!u.passwordHash || !verifyPasswordSecure(u.accessPassword, u.passwordHash).valid) {
+          u.passwordHash = hashPasswordSecure(u.accessPassword);
+        }
+        u.clientAuthDigest = computeClientAuthDigest('admin', u.accessPassword);
+      } else if (
         u.id === 'usr_admin2' ||
         u.username === 'admin2' ||
         String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata'
@@ -265,12 +270,21 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
         u.username = 'Hassan shehata';
         u.fullName = 'حسن شحاتة (Hassan Shehata)';
         u.roleId = 'role_admin';
+        u.accessPassword = 'HD_CAPITAL';
         u.passwordHash = hashPasswordSecure('HD_CAPITAL');
         u.clientAuthDigest = computeClientAuthDigest('hassan shehata', 'HD_CAPITAL');
         u.jobTitle = 'Co-Founder & System Administrator';
         u.jobTitleAr = 'مدير شريك ومدير نظام معتمد';
         u.avatarUrl = createAvatarSvg('HS', '#1E40AF', '#3B82F6');
         u.email = 'hassan.shehata@propsphere.eg';
+      } else {
+        // Ensure omarahmed1 and every employee account has a working passwordHash and clientAuthDigest
+        const targetPass = u.accessPassword || '123456';
+        u.accessPassword = targetPass;
+        if (!u.passwordHash || !verifyPasswordSecure(targetPass, u.passwordHash).valid) {
+          u.passwordHash = hashPasswordSecure(targetPass);
+        }
+        u.clientAuthDigest = computeClientAuthDigest(u.username, targetPass);
       }
     });
 
@@ -283,6 +297,7 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
       parsedDb.users.splice(1, 0, {
         id: 'usr_admin2',
         username: 'Hassan shehata',
+        accessPassword: 'HD_CAPITAL',
         passwordHash: hashPasswordSecure('HD_CAPITAL'),
         clientAuthDigest: computeClientAuthDigest('hassan shehata', 'HD_CAPITAL'),
         fullName: 'حسن شحاتة (Hassan Shehata)',
@@ -459,11 +474,12 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     // Mirror state into unified Firestore / repository layer asynchronously
     if (!isSyncingToFirestore && !options.dbPath) {
       isSyncingToFirestore = true;
-      seedOrMigrateDataset(state)
-        .catch(() => {})
-        .finally(() => {
-          isSyncingToFirestore = false;
-        });
+      Promise.all([
+        seedOrMigrateDataset(state).catch(() => {}),
+        syncStateToLiveCloudFirestore(state).catch(() => {}),
+      ]).finally(() => {
+        isSyncingToFirestore = false;
+      });
     }
   }
 
@@ -668,7 +684,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
   app.get('/api/health', (_req: Request, res: Response) => {
     res.json({
       ok: true,
-      firestoreActive: isCloudFirestoreActive(),
+      firestoreActive: isLiveFirestoreConnected() || isCloudFirestoreActive(),
       leadsCount: db.leads.length,
     });
   });
@@ -790,6 +806,12 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
   app.get('/api/auth/accounts-preview', (_req: Request, res: Response) => {
     const list = db.users.map((u: any) => {
       const role = db.roles.find((r: any) => r.id === u.roleId);
+      const isHassan =
+        u.id === 'usr_admin2' ||
+        String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata';
+      const defaultPasswordHint =
+        u.accessPassword ||
+        (isHassan ? 'HD_CAPITAL' : u.username === 'admin' ? 'admin123' : '123456');
       return {
         id: u.id,
         username: u.username,
@@ -800,6 +822,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
         roleId: u.roleId,
         roleName: role?.name || 'Employee',
         roleNameAr: role?.nameAr || 'موظف',
+        defaultPasswordHint,
       };
     });
     res.json({ accounts: list });
@@ -1114,11 +1137,13 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
         .join('')
         .toUpperCase() || 'U';
 
+    const cleanPass = String(password).trim();
     const newUser = {
       id: req.body.id || `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       username: cleanUsername,
-      passwordHash: hashPasswordSecure(String(password).trim()),
-      clientAuthDigest: computeClientAuthDigest(cleanUsername, String(password).trim()),
+      accessPassword: cleanPass,
+      passwordHash: hashPasswordSecure(cleanPass),
+      clientAuthDigest: computeClientAuthDigest(cleanUsername, cleanPass),
       fullName: String(fullName).trim(),
       roleId: roleId || 'role_employee',
       jobTitle: jobTitle || 'Property Sales Advisor',
@@ -1209,10 +1234,17 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     }
 
     if (password && String(password).trim().length > 0) {
-      existing.passwordHash = hashPasswordSecure(String(password).trim());
+      const cleanNewPass = String(password).trim();
+      existing.accessPassword = cleanNewPass;
+      existing.passwordHash = hashPasswordSecure(cleanNewPass);
       existing.clientAuthDigest = computeClientAuthDigest(
         existing.username,
-        String(password).trim()
+        cleanNewPass
+      );
+    } else if (existing.accessPassword) {
+      existing.clientAuthDigest = computeClientAuthDigest(
+        existing.username,
+        existing.accessPassword
       );
     }
     if (fullName !== undefined) existing.fullName = fullName;
@@ -2899,6 +2931,7 @@ async function startServer() {
   await verifyFirestoreConnectivity();
   const { app, db } = createCrmApp();
   await seedOrMigrateDataset(db);
+  await syncStateToLiveCloudFirestore(db);
 
   const isProd = process.env.NODE_ENV === 'production';
   if (!isProd) {

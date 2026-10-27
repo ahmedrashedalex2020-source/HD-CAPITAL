@@ -506,12 +506,13 @@
       "routingWeight": 1,
       "preferredLang": "ar",
       "createdAt": "2026-01-10T09:00:00.000Z",
-      "clientAuthDigest": "d652c898cd889faef35a152374f008bcbe8fbb7edb157c92e044b1ee7d70c76d"
+      "clientAuthDigest": "d652c898cd889faef35a152374f008bcbe8fbb7edb157c92e044b1ee7d70c76d",
+      "accessPassword": "admin123"
     },
     {
       "id": "usr_1793010490703_1p0c",
       "username": "omarahmed1",
-      "passwordHash": "scrypt$abcb6f49a55f26b921b7f73ebec2771e$360aba43bc3f6cf8c6a895cbba5799bea94cd3693453df82de3834fc568f916a698bd4f2e92cb0cba15c01176bd68396949434db6bf91dcc9299dee0bf205e89",
+      "passwordHash": "scrypt$65bf8559ed1c85c6f34388f6b8c0f738$179044d1117496c638ef9c0bf38f9f7db4f6852a1c8b184b05e76f20674e12f05470ebbbffe6312d42225faa50b5691799ce087b0ebc5962843aa69b8c31e792",
       "fullName": "عمر احمد",
       "roleId": "role_employee",
       "jobTitle": "Property Sales Consultant",
@@ -526,13 +527,16 @@
       "isActiveForRouting": true,
       "routingWeight": 1,
       "preferredLang": "ar",
-      "createdAt": "2026-10-26T10:28:10.763Z"
+      "createdAt": "2026-10-26T10:28:10.763Z",
+      "lastAssignedAt": "2026-10-27T08:35:42.065Z",
+      "accessPassword": "123456",
+      "clientAuthDigest": "4c41844d10f438ad7f46c26d42a557819739e35782f3e05080ba9aad4dd3b263"
     },
     {
       "id": "usr_admin2",
       "username": "Hassan shehata",
-      "passwordHash": "scrypt$460f76f9e583c6d4bd51ab73db193bcf$6b795ba073e712523ed103c914dabf82afcc94f29bc4446f32e33039523f46245dcf0d5a9f25976e9b81954985c911c99a73a40968dd08602a2b0a59312090d3",
-      "clientAuthDigest": "86e6a7db164cba552bc5c5c335e4d3903a621c351e4e48e493af970f51300557",
+      "passwordHash": "scrypt$c92a3bb8f26a9a8107c71cdfc3480930$355fe7998c6c9ad59c3d44e9a86dadb7aa51a4daf53cdb5f2ebfe054534d3555f6dee9baa684143ef2f13710550c7fd2efb9f01606a9106031d6d1c88493026e",
+      "clientAuthDigest": "284bcbb27a5f6f1b546a1e0abbf03972ada083a2f6381735c6c6411960af170d",
       "fullName": "حسن شحاتة (Hassan Shehata)",
       "roleId": "role_admin",
       "jobTitle": "Co-Founder & System Administrator",
@@ -547,10 +551,411 @@
       "isActiveForRouting": false,
       "routingWeight": 1,
       "preferredLang": "ar",
-      "createdAt": "2026-01-15T09:00:00.000Z"
+      "createdAt": "2026-01-15T09:00:00.000Z",
+      "accessPassword": "HD_CAPITAL"
     }
   ],
   "leads": [
+    {
+      "id": "lead_1793090142065_46",
+      "fullName": "Dr-Magdy Abourawash Elhaweet",
+      "phone": "+201118277077",
+      "phoneNormalized": "201118277077",
+      "email": "",
+      "source": "Google Drive - شيت CRM1",
+      "campaignName": "CRM1_GoogleDrive_Form",
+      "projectInterest": "ليدز مغتربين",
+      "propertyType": "245م",
+      "budgetMin": 4800000,
+      "budgetMax": 6000000,
+      "status": "New",
+      "priority": "High",
+      "assignedTo": "usr_1793010490703_1p0c",
+      "assignedBy": "usr_admin",
+      "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 245م | السعر_المناسب: 6_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
+      "formResponses": [
+        {
+          "question": "campaign_name",
+          "answer": "ليدز مغتربين"
+        },
+        {
+          "question": "ما_المساحة_المناسبة_؟",
+          "answer": "245م"
+        },
+        {
+          "question": "السعر_المناسب",
+          "answer": "6_مليون"
+        },
+        {
+          "question": "نظام_السداد",
+          "answer": "تسهيلات_فى_السداد_على_12_شهر"
+        }
+      ],
+      "nextFollowUpAt": "2026-10-27",
+      "createdAt": "2026-10-27T08:35:42.025Z",
+      "updatedAt": "2026-10-27T08:35:42.025Z",
+      "activities": [
+        {
+          "id": "act_1793090142065_46",
+          "leadId": "lead_1793090142065_46",
+          "userId": "usr_admin",
+          "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
+          "type": "sheet_import",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "createdAt": "2026-10-27T08:35:42.025Z"
+        }
+      ]
+    },
+    {
+      "id": "lead_1793090142060_45",
+      "fullName": "Yussra Essam",
+      "phone": "+201090567027",
+      "phoneNormalized": "201090567027",
+      "email": "",
+      "source": "Google Drive - شيت CRM1",
+      "campaignName": "CRM1_GoogleDrive_Form",
+      "projectInterest": "ليدز مغتربين",
+      "propertyType": "215م",
+      "budgetMin": 4800000,
+      "budgetMax": 6000000,
+      "status": "New",
+      "priority": "High",
+      "assignedTo": "usr_1793010490703_1p0c",
+      "assignedBy": "usr_admin",
+      "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 215م | السعر_المناسب: 6_مليون | نظام_السداد: كاش_مع_خصم",
+      "formResponses": [
+        {
+          "question": "campaign_name",
+          "answer": "ليدز مغتربين"
+        },
+        {
+          "question": "ما_المساحة_المناسبة_؟",
+          "answer": "215م"
+        },
+        {
+          "question": "السعر_المناسب",
+          "answer": "6_مليون"
+        },
+        {
+          "question": "نظام_السداد",
+          "answer": "كاش_مع_خصم"
+        }
+      ],
+      "nextFollowUpAt": "2026-10-27",
+      "createdAt": "2026-10-27T08:35:42.025Z",
+      "updatedAt": "2026-10-27T08:35:42.025Z",
+      "activities": [
+        {
+          "id": "act_1793090142060_45",
+          "leadId": "lead_1793090142060_45",
+          "userId": "usr_admin",
+          "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
+          "type": "sheet_import",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "createdAt": "2026-10-27T08:35:42.025Z"
+        }
+      ]
+    },
+    {
+      "id": "lead_1793090142055_44",
+      "fullName": "Mahmoud Saeed Mahmoud",
+      "phone": "+201110059400",
+      "phoneNormalized": "201110059400",
+      "email": "",
+      "source": "Google Drive - شيت CRM1",
+      "campaignName": "CRM1_GoogleDrive_Form",
+      "projectInterest": "ليدز مغتربين",
+      "propertyType": "225م",
+      "budgetMin": 4800000,
+      "budgetMax": 6000000,
+      "status": "New",
+      "priority": "High",
+      "assignedTo": "usr_1793010490703_1p0c",
+      "assignedBy": "usr_admin",
+      "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 225م | السعر_المناسب: 6_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
+      "formResponses": [
+        {
+          "question": "campaign_name",
+          "answer": "ليدز مغتربين"
+        },
+        {
+          "question": "ما_المساحة_المناسبة_؟",
+          "answer": "225م"
+        },
+        {
+          "question": "السعر_المناسب",
+          "answer": "6_مليون"
+        },
+        {
+          "question": "نظام_السداد",
+          "answer": "تسهيلات_فى_السداد_على_12_شهر"
+        }
+      ],
+      "nextFollowUpAt": "2026-10-27",
+      "createdAt": "2026-10-27T08:35:42.025Z",
+      "updatedAt": "2026-10-27T08:35:42.025Z",
+      "activities": [
+        {
+          "id": "act_1793090142055_44",
+          "leadId": "lead_1793090142055_44",
+          "userId": "usr_admin",
+          "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
+          "type": "sheet_import",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "createdAt": "2026-10-27T08:35:42.025Z"
+        }
+      ]
+    },
+    {
+      "id": "lead_1793090142051_43",
+      "fullName": "Walid Kamal",
+      "phone": "+201094443316",
+      "phoneNormalized": "201094443316",
+      "email": "",
+      "source": "Google Drive - شيت CRM1",
+      "campaignName": "CRM1_GoogleDrive_Form",
+      "projectInterest": "ليدز مغتربين",
+      "propertyType": "اقل من 175",
+      "budgetMin": 3600000,
+      "budgetMax": 4500000,
+      "status": "New",
+      "priority": "High",
+      "assignedTo": "usr_1793010490703_1p0c",
+      "assignedBy": "usr_admin",
+      "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
+      "formResponses": [
+        {
+          "question": "campaign_name",
+          "answer": "ليدز مغتربين"
+        },
+        {
+          "question": "ما_المساحة_المناسبة_؟",
+          "answer": "اقل_من_175"
+        },
+        {
+          "question": "السعر_المناسب",
+          "answer": "4.5_مليون"
+        },
+        {
+          "question": "نظام_السداد",
+          "answer": "تسهيلات_فى_السداد_على_12_شهر"
+        }
+      ],
+      "nextFollowUpAt": "2026-10-27",
+      "createdAt": "2026-10-27T08:35:42.025Z",
+      "updatedAt": "2026-10-27T08:35:42.025Z",
+      "activities": [
+        {
+          "id": "act_1793090142051_43",
+          "leadId": "lead_1793090142051_43",
+          "userId": "usr_admin",
+          "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
+          "type": "sheet_import",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "createdAt": "2026-10-27T08:35:42.025Z"
+        }
+      ]
+    },
+    {
+      "id": "lead_1793090142045_42",
+      "fullName": "Mohamed Elgabry",
+      "phone": "+201004066656",
+      "phoneNormalized": "201004066656",
+      "email": "",
+      "source": "Google Drive - شيت CRM1",
+      "campaignName": "CRM1_GoogleDrive_Form",
+      "projectInterest": "ليدز مغتربين",
+      "propertyType": "225م",
+      "budgetMin": 4800000,
+      "budgetMax": 6000000,
+      "status": "New",
+      "priority": "High",
+      "assignedTo": "usr_1793010490703_1p0c",
+      "assignedBy": "usr_admin",
+      "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 225م | السعر_المناسب: 6_مليون | نظام_السداد: كاش_مع_خصم",
+      "formResponses": [
+        {
+          "question": "campaign_name",
+          "answer": "ليدز مغتربين"
+        },
+        {
+          "question": "ما_المساحة_المناسبة_؟",
+          "answer": "225م"
+        },
+        {
+          "question": "السعر_المناسب",
+          "answer": "6_مليون"
+        },
+        {
+          "question": "نظام_السداد",
+          "answer": "كاش_مع_خصم"
+        }
+      ],
+      "nextFollowUpAt": "2026-10-27",
+      "createdAt": "2026-10-27T08:35:42.025Z",
+      "updatedAt": "2026-10-27T08:35:42.025Z",
+      "activities": [
+        {
+          "id": "act_1793090142045_42",
+          "leadId": "lead_1793090142045_42",
+          "userId": "usr_admin",
+          "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
+          "type": "sheet_import",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "createdAt": "2026-10-27T08:35:42.025Z"
+        }
+      ]
+    },
+    {
+      "id": "lead_1793090142040_41",
+      "fullName": "Saif Atef",
+      "phone": "+201003295636",
+      "phoneNormalized": "201003295636",
+      "email": "",
+      "source": "Google Drive - شيت CRM1",
+      "campaignName": "CRM1_GoogleDrive_Form",
+      "projectInterest": "ليدز مغتربين",
+      "propertyType": "اقل من 175",
+      "budgetMin": 4800000,
+      "budgetMax": 6000000,
+      "status": "New",
+      "priority": "High",
+      "assignedTo": "usr_1793010490703_1p0c",
+      "assignedBy": "usr_admin",
+      "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 6_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
+      "formResponses": [
+        {
+          "question": "campaign_name",
+          "answer": "ليدز مغتربين"
+        },
+        {
+          "question": "ما_المساحة_المناسبة_؟",
+          "answer": "اقل_من_175"
+        },
+        {
+          "question": "السعر_المناسب",
+          "answer": "6_مليون"
+        },
+        {
+          "question": "نظام_السداد",
+          "answer": "تسهيلات_فى_السداد_على_12_شهر"
+        }
+      ],
+      "nextFollowUpAt": "2026-10-27",
+      "createdAt": "2026-10-27T08:35:42.025Z",
+      "updatedAt": "2026-10-27T08:35:42.025Z",
+      "activities": [
+        {
+          "id": "act_1793090142040_41",
+          "leadId": "lead_1793090142040_41",
+          "userId": "usr_admin",
+          "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
+          "type": "sheet_import",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "createdAt": "2026-10-27T08:35:42.025Z"
+        }
+      ]
+    },
+    {
+      "id": "lead_1793090142036_40",
+      "fullName": "Dody Ahmed",
+      "phone": "+201068088406",
+      "phoneNormalized": "201068088406",
+      "email": "",
+      "source": "Google Drive - شيت CRM1",
+      "campaignName": "CRM1_GoogleDrive_Form",
+      "projectInterest": "ليدز مغتربين",
+      "propertyType": "اقل من 175",
+      "budgetMin": 3600000,
+      "budgetMax": 4500000,
+      "status": "New",
+      "priority": "High",
+      "assignedTo": "usr_1793010490703_1p0c",
+      "assignedBy": "usr_admin",
+      "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
+      "formResponses": [
+        {
+          "question": "campaign_name",
+          "answer": "ليدز مغتربين"
+        },
+        {
+          "question": "ما_المساحة_المناسبة_؟",
+          "answer": "اقل_من_175"
+        },
+        {
+          "question": "السعر_المناسب",
+          "answer": "4.5_مليون"
+        },
+        {
+          "question": "نظام_السداد",
+          "answer": "تسهيلات_فى_السداد_على_12_شهر"
+        }
+      ],
+      "nextFollowUpAt": "2026-10-27",
+      "createdAt": "2026-10-27T08:35:42.025Z",
+      "updatedAt": "2026-10-27T08:35:42.025Z",
+      "activities": [
+        {
+          "id": "act_1793090142036_40",
+          "leadId": "lead_1793090142036_40",
+          "userId": "usr_admin",
+          "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
+          "type": "sheet_import",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "createdAt": "2026-10-27T08:35:42.025Z"
+        }
+      ]
+    },
+    {
+      "id": "lead_1793090142030_39",
+      "fullName": "Dina Hussien",
+      "phone": "+201220201885",
+      "phoneNormalized": "201220201885",
+      "email": "",
+      "source": "Google Drive - شيت CRM1",
+      "campaignName": "CRM1_GoogleDrive_Form",
+      "projectInterest": "ليدز مغتربين",
+      "propertyType": "215م",
+      "budgetMin": 4800000,
+      "budgetMax": 6000000,
+      "status": "New",
+      "priority": "High",
+      "assignedTo": "usr_1793010490703_1p0c",
+      "assignedBy": "usr_admin",
+      "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 215م | السعر_المناسب: 6_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
+      "formResponses": [
+        {
+          "question": "campaign_name",
+          "answer": "ليدز مغتربين"
+        },
+        {
+          "question": "ما_المساحة_المناسبة_؟",
+          "answer": "215م"
+        },
+        {
+          "question": "السعر_المناسب",
+          "answer": "6_مليون"
+        },
+        {
+          "question": "نظام_السداد",
+          "answer": "تسهيلات_فى_السداد_على_12_شهر"
+        }
+      ],
+      "nextFollowUpAt": "2026-10-27",
+      "createdAt": "2026-10-27T08:35:42.025Z",
+      "updatedAt": "2026-10-27T08:35:42.025Z",
+      "activities": [
+        {
+          "id": "act_1793090142030_39",
+          "leadId": "lead_1793090142030_39",
+          "userId": "usr_admin",
+          "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
+          "type": "sheet_import",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "createdAt": "2026-10-27T08:35:42.025Z"
+        }
+      ]
+    },
     {
       "id": "lead_1793004176296_38",
       "fullName": "أشرف محمد",
@@ -2450,12 +2855,30 @@
         "budgetMax": "ما هي الميزانية التقريبية أو المقدم المتاح؟",
         "notes": "ملاحظات إضافية"
       },
-      "lastSyncedAt": "2026-10-26T12:58:52.749Z",
-      "totalImportedCount": 38,
+      "lastSyncedAt": "2026-10-27T08:35:42.025Z",
+      "totalImportedCount": 46,
       "createdAt": "2026-10-26T08:31:51.096Z"
     }
   ],
   "syncLogs": [
+    {
+      "id": "slog_1793090142069",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-10-27T08:35:42.025Z",
+      "rowsScanned": 47,
+      "newLeadsImported": 8,
+      "duplicatesSkipped": 38,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 47 صفوف، استيراد 8 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 38 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": [
+        {
+          "userId": "usr_1793010490703_1p0c",
+          "userName": "عمر احمد",
+          "count": 8
+        }
+      ]
+    },
     {
       "id": "slog_1793019532751",
       "connectionId": "sheet_conn_1",
@@ -2572,6 +2995,102 @@
     }
   ],
   "notifications": [
+    {
+      "id": "notif_1793090142065_46",
+      "userId": "usr_1793010490703_1p0c",
+      "title": "New Lead Imported from CRM1 Sheet",
+      "titleAr": "ليد جديد من شيت CRM1 (Google Drive)",
+      "message": "Dr-Magdy Abourawash Elhaweet (+201118277077) has been assigned to you with 4 form answers.",
+      "messageAr": "تم تعيين العميل \"Dr-Magdy Abourawash Elhaweet\" (+201118277077) إليك من شيت CRM1 مع إجابات أسئلة الفورم.",
+      "type": "lead_assigned",
+      "relatedLeadId": "lead_1793090142065_46",
+      "isRead": false,
+      "createdAt": "2026-10-27T08:35:42.025Z"
+    },
+    {
+      "id": "notif_1793090142060_45",
+      "userId": "usr_1793010490703_1p0c",
+      "title": "New Lead Imported from CRM1 Sheet",
+      "titleAr": "ليد جديد من شيت CRM1 (Google Drive)",
+      "message": "Yussra Essam (+201090567027) has been assigned to you with 4 form answers.",
+      "messageAr": "تم تعيين العميل \"Yussra Essam\" (+201090567027) إليك من شيت CRM1 مع إجابات أسئلة الفورم.",
+      "type": "lead_assigned",
+      "relatedLeadId": "lead_1793090142060_45",
+      "isRead": false,
+      "createdAt": "2026-10-27T08:35:42.025Z"
+    },
+    {
+      "id": "notif_1793090142055_44",
+      "userId": "usr_1793010490703_1p0c",
+      "title": "New Lead Imported from CRM1 Sheet",
+      "titleAr": "ليد جديد من شيت CRM1 (Google Drive)",
+      "message": "Mahmoud Saeed Mahmoud (+201110059400) has been assigned to you with 4 form answers.",
+      "messageAr": "تم تعيين العميل \"Mahmoud Saeed Mahmoud\" (+201110059400) إليك من شيت CRM1 مع إجابات أسئلة الفورم.",
+      "type": "lead_assigned",
+      "relatedLeadId": "lead_1793090142055_44",
+      "isRead": false,
+      "createdAt": "2026-10-27T08:35:42.025Z"
+    },
+    {
+      "id": "notif_1793090142051_43",
+      "userId": "usr_1793010490703_1p0c",
+      "title": "New Lead Imported from CRM1 Sheet",
+      "titleAr": "ليد جديد من شيت CRM1 (Google Drive)",
+      "message": "Walid Kamal (+201094443316) has been assigned to you with 4 form answers.",
+      "messageAr": "تم تعيين العميل \"Walid Kamal\" (+201094443316) إليك من شيت CRM1 مع إجابات أسئلة الفورم.",
+      "type": "lead_assigned",
+      "relatedLeadId": "lead_1793090142051_43",
+      "isRead": false,
+      "createdAt": "2026-10-27T08:35:42.025Z"
+    },
+    {
+      "id": "notif_1793090142045_42",
+      "userId": "usr_1793010490703_1p0c",
+      "title": "New Lead Imported from CRM1 Sheet",
+      "titleAr": "ليد جديد من شيت CRM1 (Google Drive)",
+      "message": "Mohamed Elgabry (+201004066656) has been assigned to you with 4 form answers.",
+      "messageAr": "تم تعيين العميل \"Mohamed Elgabry\" (+201004066656) إليك من شيت CRM1 مع إجابات أسئلة الفورم.",
+      "type": "lead_assigned",
+      "relatedLeadId": "lead_1793090142045_42",
+      "isRead": false,
+      "createdAt": "2026-10-27T08:35:42.025Z"
+    },
+    {
+      "id": "notif_1793090142040_41",
+      "userId": "usr_1793010490703_1p0c",
+      "title": "New Lead Imported from CRM1 Sheet",
+      "titleAr": "ليد جديد من شيت CRM1 (Google Drive)",
+      "message": "Saif Atef (+201003295636) has been assigned to you with 4 form answers.",
+      "messageAr": "تم تعيين العميل \"Saif Atef\" (+201003295636) إليك من شيت CRM1 مع إجابات أسئلة الفورم.",
+      "type": "lead_assigned",
+      "relatedLeadId": "lead_1793090142040_41",
+      "isRead": false,
+      "createdAt": "2026-10-27T08:35:42.025Z"
+    },
+    {
+      "id": "notif_1793090142036_40",
+      "userId": "usr_1793010490703_1p0c",
+      "title": "New Lead Imported from CRM1 Sheet",
+      "titleAr": "ليد جديد من شيت CRM1 (Google Drive)",
+      "message": "Dody Ahmed (+201068088406) has been assigned to you with 4 form answers.",
+      "messageAr": "تم تعيين العميل \"Dody Ahmed\" (+201068088406) إليك من شيت CRM1 مع إجابات أسئلة الفورم.",
+      "type": "lead_assigned",
+      "relatedLeadId": "lead_1793090142036_40",
+      "isRead": false,
+      "createdAt": "2026-10-27T08:35:42.025Z"
+    },
+    {
+      "id": "notif_1793090142030_39",
+      "userId": "usr_1793010490703_1p0c",
+      "title": "New Lead Imported from CRM1 Sheet",
+      "titleAr": "ليد جديد من شيت CRM1 (Google Drive)",
+      "message": "Dina Hussien (+201220201885) has been assigned to you with 4 form answers.",
+      "messageAr": "تم تعيين العميل \"Dina Hussien\" (+201220201885) إليك من شيت CRM1 مع إجابات أسئلة الفورم.",
+      "type": "lead_assigned",
+      "relatedLeadId": "lead_1793090142030_39",
+      "isRead": false,
+      "createdAt": "2026-10-27T08:35:42.025Z"
+    },
     {
       "id": "notif_1793014151472_tr",
       "userId": "usr_admin",
@@ -3044,5 +3563,5 @@
   "projects": [
     "ليدز مغتربين"
   ],
-  "roundRobinCursor": 39
+  "roundRobinCursor": 47
 }

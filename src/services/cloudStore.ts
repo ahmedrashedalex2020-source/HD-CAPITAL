@@ -187,6 +187,33 @@ function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData: boole
     } else {
       u.assignedProjects = [...cleanProjects];
     }
+    const lowerUser = String(u.username || '').trim().toLowerCase();
+    const normUser = lowerUser.replace(/[\s_]+/g, '');
+    if (u.id === 'usr_admin' || lowerUser === 'admin') {
+      u.accessPassword = u.accessPassword || 'admin123';
+      u.clientAuthDigest =
+        u.clientAuthDigest ||
+        '5a38fbdac427f1b3842ac0349bc333110cdfe395639e75005b84098ebdf3b3df';
+    } else if (
+      u.id === 'usr_admin2' ||
+      lowerUser === 'admin2' ||
+      normUser === 'hassanshehata'
+    ) {
+      u.id = 'usr_admin2';
+      u.username = 'Hassan shehata';
+      u.roleId = 'role_admin';
+      u.accessPassword = 'HD_CAPITAL';
+      u.clientAuthDigest =
+        '284bcbb27a5f6f1b546a1e0abbf03972ada083a2f6381735c6c6411960af170d';
+    } else if (u.id === 'usr_1793010490703_1p0c' || lowerUser === 'omarahmed1') {
+      u.accessPassword = u.accessPassword || '123456';
+      if (u.accessPassword === '123456') {
+        u.clientAuthDigest =
+          '71908bf5110fb6ef4f5e0c2ca89e2ba8c973e910ba310bb5976f97972df04724';
+      }
+    } else {
+      u.accessPassword = u.accessPassword || '123456';
+    }
   });
 
   const validUserIds = new Set(cleanUsers.map((u: any) => u.id));
@@ -513,6 +540,7 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
       {
         id: 'usr_admin',
         username: 'admin',
+        accessPassword: 'admin123',
         clientAuthDigest: '5a38fbdac427f1b3842ac0349bc333110cdfe395639e75005b84098ebdf3b3df',
         fullName: 'أحمد راشد (Ahmed Rashed)',
         roleId: 'role_admin',
@@ -531,6 +559,7 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
       {
         id: 'usr_admin2',
         username: 'Hassan shehata',
+        accessPassword: 'HD_CAPITAL',
         clientAuthDigest: '284bcbb27a5f6f1b546a1e0abbf03972ada083a2f6381735c6c6411960af170d',
         fullName: 'حسن شحاتة (Hassan Shehata)',
         roleId: 'role_admin',
@@ -549,6 +578,8 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
       {
         id: 'usr_1793010490703_1p0c',
         username: 'omarahmed1',
+        accessPassword: '123456',
+        clientAuthDigest: '71908bf5110fb6ef4f5e0c2ca89e2ba8c973e910ba310bb5976f97972df04724',
         fullName: 'عمر احمد',
         roleId: 'role_employee',
         jobTitle: 'Property Sales Consultant',
@@ -704,6 +735,12 @@ export async function handleLocalFallbackRequest(
   if (pathname === '/api/auth/accounts-preview' && method === 'GET') {
     const accounts = snap.users.map((u: any) => {
       const r = snap.roles.find((role: any) => role.id === u.roleId);
+      const isHassan =
+        u.id === 'usr_admin2' ||
+        String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata';
+      const defaultPasswordHint =
+        u.accessPassword ||
+        (isHassan ? 'HD_CAPITAL' : u.username === 'admin' ? 'admin123' : '123456');
       return {
         id: u.id,
         username: u.username,
@@ -714,6 +751,7 @@ export async function handleLocalFallbackRequest(
         roleId: u.roleId,
         roleName: r?.name || 'Employee',
         roleNameAr: r?.nameAr || 'موظف',
+        defaultPasswordHint,
       };
     });
     return { accounts };
@@ -763,6 +801,8 @@ export async function handleLocalFallbackRequest(
 
     if (isHassan && cleanPass === 'HD_CAPITAL') {
       // Validated successfully
+    } else if (user.accessPassword && cleanPass === String(user.accessPassword).trim()) {
+      // Validated via stored accessPassword
     } else if (user.clientAuthDigest) {
       const digestWithClean = await computeSha256Hex(`propsphere_auth:${cleanUser}:${cleanPass}`);
       const canonicalUser = String(user.username || '').trim().toLowerCase();
@@ -999,12 +1039,14 @@ export async function handleLocalFallbackRequest(
         .map((w: string) => w[0] || '')
         .join('')
         .toUpperCase() || 'U';
+    const cleanPass = String(body.password).trim();
     const digest = await computeSha256Hex(
-      `propsphere_auth:${cleanUsername}:${String(body.password).trim()}`
+      `propsphere_auth:${cleanUsername}:${cleanPass}`
     );
     const newUser = {
       id: body.id || `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       username: cleanUsername,
+      accessPassword: cleanPass,
       clientAuthDigest: digest,
       fullName: String(body.fullName).trim(),
       roleId: body.roleId || 'role_employee',
@@ -1058,8 +1100,10 @@ export async function handleLocalFallbackRequest(
       existing.username = String(body.username).trim().toLowerCase();
     }
     if (body.password && String(body.password).trim()) {
+      const cleanNewPass = String(body.password).trim();
+      existing.accessPassword = cleanNewPass;
       existing.clientAuthDigest = await computeSha256Hex(
-        `propsphere_auth:${String(existing.username).toLowerCase()}:${String(body.password).trim()}`
+        `propsphere_auth:${String(existing.username).toLowerCase()}:${cleanNewPass}`
       );
     }
     delete existing.password;

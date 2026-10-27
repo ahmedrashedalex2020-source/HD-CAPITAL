@@ -322,6 +322,28 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
               </div>
 
               <div className="mt-6 space-y-3 text-xs">
+                {(canManageUsers || selectedProfile.id === currentUser.id) && (
+                  <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200">
+                    <div className="text-blue-700 font-semibold mb-1 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>
+                        {isAr ? 'بيانات تسجيل الدخول للنظام' : 'System Login Credentials'}
+                      </span>
+                    </div>
+                    <div className="font-mono-tabular text-slate-800 flex items-center justify-between">
+                      <span>User: {selectedProfile.username}</span>
+                      <span className="font-bold text-blue-700">
+                        Pass:{' '}
+                        {selectedProfile.accessPassword ||
+                          (selectedProfile.id === 'usr_admin2'
+                            ? 'HD_CAPITAL'
+                            : selectedProfile.username === 'admin'
+                            ? 'admin123'
+                            : '123456')}
+                      </span>
+                    </div>
+                  </div>
+                )}
                 <div className="p-3 rounded-xl bg-[#F8FAFC] border border-slate-100">
                   <div className="text-slate-400 mb-0.5">{isAr ? 'البريد الإلكتروني' : 'Email'}</div>
                   <div className="font-medium text-slate-800 flex items-center gap-1.5">
@@ -512,6 +534,22 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
                   <p className="text-[11px] text-blue-600 font-medium mt-1">
                     {getRoleName(emp.roleId)}
                   </p>
+                  {canManageUsers && (
+                    <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-mono-tabular text-slate-700">
+                      <Lock className="w-3 h-3 text-blue-600" />
+                      <span>
+                        Pass:{' '}
+                        <strong className="text-blue-700">
+                          {emp.accessPassword ||
+                            (emp.id === 'usr_admin2'
+                              ? 'HD_CAPITAL'
+                              : emp.username === 'admin'
+                              ? 'admin123'
+                              : '123456')}
+                        </strong>
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
