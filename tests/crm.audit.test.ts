@@ -116,9 +116,14 @@ test('4. Full API Integration: Zero Mock Data, Auth Enforcement, RBAC Scopes, CR
     return { status: res.status, data };
   }
 
-  // A. Unauthenticated request in strictAuth mode must return 401
+  // A. Unauthenticated request must return 401 by default
   const unauthRes = await api('/api/bootstrap');
   assert.equal(unauthRes.status, 401, 'Unauthenticated bootstrap must return 401');
+
+  // A2. Accounts preview must not expose any usernames or passwords
+  const previewRes = await api('/api/auth/accounts-preview');
+  assert.equal(previewRes.status, 200);
+  assert.equal(previewRes.data.accounts.length, 0, 'accounts-preview must not expose accounts');
 
   // B. Login with demo_bypass must be rejected with 401
   const bypassRes = await api('/api/auth/login', {
@@ -127,7 +132,7 @@ test('4. Full API Integration: Zero Mock Data, Auth Enforcement, RBAC Scopes, CR
   });
   assert.equal(bypassRes.status, 401, 'demo_bypass password must be rejected');
 
-  // C. Login as Admin and Sales Employee (omarahmed1)
+  // C. Login as Admin, Partner Admin (Hassan shehata), and Sales Employee (omarahmed1) with flexible username matching
   const adminLogin = await api('/api/auth/login', {
     method: 'POST',
     body: { username: 'admin', password: 'admin123' },
@@ -136,6 +141,19 @@ test('4. Full API Integration: Zero Mock Data, Auth Enforcement, RBAC Scopes, CR
   assert.ok(adminLogin.data.token);
   const adminToken = adminLogin.data.token;
 
+  const hassanLogin = await api('/api/auth/login', {
+    method: 'POST',
+    body: { username: 'Hassan shehata', password: 'HD_CAPITAL' },
+  });
+  assert.equal(hassanLogin.status, 200, 'Hassan shehata login must succeed');
+  assert.equal(hassanLogin.data.user.roleId, 'role_admin');
+
+  const hassanCompactLogin = await api('/api/auth/login', {
+    method: 'POST',
+    body: { username: 'hassanshehata', password: 'HD_CAPITAL' },
+  });
+  assert.equal(hassanCompactLogin.status, 200, 'Compact hassanshehata login must succeed');
+
   const employeeLogin = await api('/api/auth/login', {
     method: 'POST',
     body: { username: 'omarahmed1', password: '123456' },
@@ -143,9 +161,31 @@ test('4. Full API Integration: Zero Mock Data, Auth Enforcement, RBAC Scopes, CR
   assert.equal(employeeLogin.status, 200);
   const employeeToken = employeeLogin.data.token;
 
-  // D. Verify zero mock data on fresh database initialization
+  const employeeArabicNameLogin = await api('/api/auth/login', {
+    method: 'POST',
+    body: { username: 'عمر احمد', password: '123456' },
+  });
+  assert.equal(employeeArabicNameLogin.status, 200, 'Employee login by Arabic fullName must succeed');
+
+  // C2. Quick account switching must be blocked with 403
+  const switchAttempt = await api('/api/auth/switch-account', {
+    method: 'POST',
+    token: employeeToken,
+    body: { targetUserId: 'usr_admin' },
+  });
+  assert.equal(switchAttempt.status, 403, 'Quick account switch must be disabled (403)');
+
+  // C3. Employee bootstrap must only return employee's own profile and 0 sheetConnections
+  const empBoot = await api('/api/bootstrap', { token: employeeToken });
+  assert.equal(empBoot.status, 200);
+  assert.equal(empBoot.data.users.length, 1, 'Employee must only see their own user profile');
+  assert.equal(empBoot.data.users[0].username, 'omarahmed1');
+  assert.equal(empBoot.data.sheetConnections.length, 0, 'Employee must not receive sheetConnections');
+
+  // D. Verify zero mock data and zero fake employees on fresh database initialization
   const bootRes = await api('/api/bootstrap', { token: adminToken });
   assert.equal(bootRes.status, 200);
+  assert.equal(bootRes.data.users.length, 3, 'Only the 3 real accounts should exist');
   assert.equal(bootRes.data.leads.length, 0, 'Initial leads must be 0 (Zero mock data)');
   assert.equal(bootRes.data.deals.length, 0, 'Initial deals must be 0');
   assert.equal(bootRes.data.properties.length, 0, 'Initial properties must be 0');

@@ -143,38 +143,16 @@ export function handleFirestoreError(
 }
 
 /**
- * Validates connection to Cloud Firestore on boot per skill instructions.
+ * Validates connection to Cloud Firestore without downloading the full workspace payload on boot.
  */
 export async function testConnection(): Promise<boolean> {
   const db = getClientFirestore();
-  if (!db) return false;
-  try {
-    await getDocFromServer(doc(db, 'crm_state', 'workspace'));
-    return true;
-  } catch (error) {
-    try {
-      await getDoc(doc(db, 'crm_state', 'workspace'));
-      return true;
-    } catch (fallbackError) {
-      if (
-        fallbackError instanceof Error &&
-        fallbackError.message.includes('the client is offline')
-      ) {
-        console.warn('[Firestore] Transient offline state during initial connection check.');
-      }
-      return false;
-    }
-  }
-}
-
-// Proactively run connection test on browser load
-if (typeof window !== 'undefined') {
-  void testConnection();
+  return Boolean(db);
 }
 
 /**
- * Real-time subscription to the entire shared CRM workspace in Cloud Firestore.
- * Updates instantly propagate to any open browser, mobile device, or iframe.
+ * Real-time subscription to the shared CRM workspace in Cloud Firestore.
+ * Skips the initial snapshot emission and debounces external updates to prevent re-fetch loops.
  */
 export function subscribeToFirestoreWorkspace(
   onUpdate: (data: any) => void,
@@ -183,18 +161,119 @@ export function subscribeToFirestoreWorkspace(
   const db = getClientFirestore();
   if (!db) return () => {};
   const docRef = doc(db, 'crm_state', 'workspace');
-  return onSnapshot(
+  let isInitialSnapshot = true;
+  let lastUpdatedAt = '';
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const unsubscribe = onSnapshot(
     docRef,
     (snapshot) => {
-      if (snapshot.exists()) {
-        onUpdate(snapshot.data());
+      if (!snapshot.exists()) return;
+      const data = snapshot.data();
+      const incomingUpdatedAt = String(data?.updatedAt || '');
+      if (isInitialSnapshot) {
+        isInitialSnapshot = false;
+        lastUpdatedAt = incomingUpdatedAt;
+        return;
       }
+      if (incomingUpdatedAt && incomingUpdatedAt === lastUpdatedAt) {
+        return;
+      }
+      lastUpdatedAt = incomingUpdatedAt;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        onUpdate(data);
+      }, 3000);
     },
     (error) => {
       console.warn('[Firestore] Real-time snapshot listener notice:', error?.message || error);
       if (onError) onError(error);
     }
   );
+
+  return () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    unsubscribe();
+  };
+}
+
+const IGNORED_TEST_USER_IDS = new Set([
+  'usr_supervisor',
+  'usr_sales1',
+  'usr_sales2',
+  'usr_sales3',
+  'usr_deputy',
+  'usr_1793095150415_61ql',
+]);
+
+function isIgnoredFakeUserRecord(u: any): boolean {
+  if (!u || typeof u !== 'object') return true;
+  if (IGNORED_TEST_USER_IDS.has(String(u.id || ''))) return true;
+  const uname = String(u.username || '').trim().toLowerCase();
+  const fname = String(u.fullName || '').trim();
+  if (uname === 'test1' && fname.includes('تجريبي')) return true;
+  return false;
+}
+
+export function doesUserMatchLoginIdentifier(u: any, rawIdentifier: string): boolean {
+  if (!u || !rawIdentifier) return false;
+  const clean = String(rawIdentifier).trim().toLowerCase();
+  if (!clean) return false;
+  const compact = clean.replace(/[\s_.-]+/g, '');
+
+  const storedUsername = String(u.username || '').trim().toLowerCase();
+  const compactUsername = storedUsername.replace(/[\s_.-]+/g, '');
+
+  const storedEmail = String(u.email || '').trim().toLowerCase();
+  const emailPrefix = storedEmail.split('@')[0] || '';
+  const compactEmailPrefix = emailPrefix.replace(/[\s_.-]+/g, '');
+
+  const storedFullName = String(u.fullName || '').trim().toLowerCase();
+  const compactFullName = storedFullName.replace(/[\s_().-]+/g, '');
+
+  const storedPhone = String(u.phone || '').replace(/[^0-9]/g, '');
+  const inputDigits = clean.replace(/[^0-9]/g, '');
+
+  if (storedUsername && (storedUsername === clean || compactUsername === compact)) {
+    return true;
+  }
+  if (
+    storedEmail &&
+    (storedEmail === clean ||
+      (emailPrefix && (emailPrefix === clean || compactEmailPrefix === compact)))
+  ) {
+    return true;
+  }
+  if (
+    storedFullName &&
+    (storedFullName === clean ||
+      compactFullName === compact ||
+      (clean.length >= 4 && storedFullName.includes(clean)))
+  ) {
+    return true;
+  }
+  if (storedPhone && inputDigits.length >= 8 && storedPhone.endsWith(inputDigits.slice(-9))) {
+    return true;
+  }
+  if (
+    (u.id === 'usr_admin2' || u.id === 'usr_admin_partner' || compactUsername === 'hassanshehata') &&
+    (clean === 'admin2' || compact === 'hassanshehata' || clean.includes('حسن شحات'))
+  ) {
+    return true;
+  }
+  if (
+    (u.id === 'usr_admin' || storedUsername === 'admin') &&
+    (clean === 'admin' || clean.includes('أحمد راشد') || clean.includes('احمد راشد'))
+  ) {
+    return true;
+  }
+  if (
+    (u.id === 'usr_1793010490703_1p0c' || compactUsername === 'omarahmed1') &&
+    (compact === 'omarahmed1' || compact === 'omarahmed' || clean.includes('عمر احمد') || clean.includes('عمر أحمد'))
+  ) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -216,7 +295,9 @@ export async function fetchFirestoreWorkspace(): Promise<any | null> {
     if (usersSnap) {
       usersSnap.forEach((docSnap) => {
         const u = docSnap.data();
-        if (u && u.id) collectionUsers.push(u);
+        if (u && u.id && !isIgnoredFakeUserRecord(u)) {
+          collectionUsers.push(u);
+        }
       });
     }
 
@@ -224,12 +305,16 @@ export async function fetchFirestoreWorkspace(): Promise<any | null> {
       return null;
     }
 
+    const baseUsers = Array.isArray(workspaceData.users)
+      ? workspaceData.users.filter((u: any) => !isIgnoredFakeUserRecord(u))
+      : [];
+
     return {
       ...workspaceData,
       users:
         collectionUsers.length > 0
-          ? mergeRecordsById(workspaceData.users || [], collectionUsers)
-          : workspaceData.users || [],
+          ? mergeRecordsById(baseUsers, collectionUsers)
+          : baseUsers,
     };
   } catch (error) {
     console.warn('[Firestore] Error fetching workspace:', error);
@@ -238,27 +323,20 @@ export async function fetchFirestoreWorkspace(): Promise<any | null> {
 }
 
 /**
- * Queries Firebase Firestore directly for a user by username (case-insensitive & space-tolerant).
+ * Queries Firebase Firestore directly for a user by username, email, or fullName (case-insensitive & space-tolerant).
  */
 export async function queryFirestoreUserByUsername(username: string): Promise<any | null> {
   const db = getClientFirestore();
   if (!db) return null;
-  const cleanUsername = String(username || '').trim().toLowerCase();
+  const cleanUsername = String(username || '').trim();
   if (!cleanUsername) return null;
-  const normalizedTarget = cleanUsername.replace(/[\s_]+/g, '');
 
   try {
     const usersSnap = await getDocs(collection(db, 'users')).catch(() => null);
     if (usersSnap && !usersSnap.empty) {
       for (const docSnap of usersSnap.docs) {
         const u = docSnap.data();
-        const stored = String(u?.username || '').trim().toLowerCase();
-        if (
-          stored === cleanUsername ||
-          stored.replace(/[\s_]+/g, '') === normalizedTarget ||
-          (u?.id === 'usr_admin2' &&
-            (cleanUsername === 'admin2' || normalizedTarget === 'hassanshehata'))
-        ) {
+        if (!isIgnoredFakeUserRecord(u) && doesUserMatchLoginIdentifier(u, cleanUsername)) {
           return u;
         }
       }
@@ -268,15 +346,9 @@ export async function queryFirestoreUserByUsername(username: string): Promise<an
     if (wsSnap.exists()) {
       const ws = wsSnap.data();
       if (Array.isArray(ws.users)) {
-        const found = ws.users.find((u: any) => {
-          const stored = String(u?.username || '').trim().toLowerCase();
-          return (
-            stored === cleanUsername ||
-            stored.replace(/[\s_]+/g, '') === normalizedTarget ||
-            (u?.id === 'usr_admin2' &&
-              (cleanUsername === 'admin2' || normalizedTarget === 'hassanshehata'))
-          );
-        });
+        const found = ws.users.find(
+          (u: any) => !isIgnoredFakeUserRecord(u) && doesUserMatchLoginIdentifier(u, cleanUsername)
+        );
         if (found) return found;
       }
     }

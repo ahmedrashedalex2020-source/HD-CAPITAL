@@ -10,7 +10,7 @@ import {
   EyeOff,
   Database,
   CheckCircle2,
-  KeyRound,
+  Clock,
 } from 'lucide-react';
 import { apiRequest, setCurrentApiUser } from '../services/api';
 import { testConnection } from '../services/firebaseClient';
@@ -20,45 +20,29 @@ interface LoginViewProps {
   lang: Lang;
   onToggleLang: () => void;
   onLoginSuccess: (user: any, role: any, token?: string) => void;
+  sessionExpiredMessage?: string | null;
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({
   lang,
   onToggleLang,
   onLoginSuccess,
+  sessionExpiredMessage,
 }) => {
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('admin123');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [accounts, setAccounts] = useState<any[]>([]);
   const [firebaseConnected, setFirebaseConnected] = useState<boolean>(true);
 
   useEffect(() => {
-    apiRequest('/api/auth/accounts-preview')
-      .then((res) => {
-        if (res.accounts) setAccounts(res.accounts);
-      })
-      .catch(() => {});
-
     testConnection()
       .then((ok) => {
         if (ok) setFirebaseConnected(true);
       })
       .catch(() => {});
   }, []);
-
-  const resolveAccountPassword = (acc: any): string => {
-    if (acc?.defaultPasswordHint) return String(acc.defaultPasswordHint);
-    const isHassan =
-      acc?.id === 'usr_admin2' ||
-      String(acc?.username || '').toLowerCase().includes('hassan') ||
-      String(acc?.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata';
-    if (isHassan) return 'HD_CAPITAL';
-    if (String(acc?.username || '').toLowerCase() === 'admin') return 'admin123';
-    return '123456';
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,50 +62,21 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
   };
 
-  const handleQuickAccountSelect = async (acc: any) => {
-    const resolvedPass = resolveAccountPassword(acc);
-    setUsername(acc.username);
-    setPassword(resolvedPass);
-    setError('');
-    setLoading(true);
-    try {
-      const res = await apiRequest('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ username: acc.username, password: resolvedPass }),
-      });
-      setCurrentApiUser(res.user.id, res.token);
-      onLoginSuccess(res.user, res.role, res.token);
-    } catch {
-      try {
-        const switched = await apiRequest('/api/auth/switch-account', {
-          method: 'POST',
-          body: JSON.stringify({ targetUserId: acc.id }),
-        });
-        setCurrentApiUser(switched.user.id, switched.token);
-        onLoginSuccess(switched.user, switched.role, switched.token);
-      } catch (err: any) {
-        setError(err.message || 'يرجى إدخال كلمة المرور الخاصة بهذا الحساب ثم الضغط على دخول');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const isAr = lang === 'ar';
 
   return (
-    <div className="min-h-dvh w-full max-w-[100vw] overflow-x-hidden bg-[#F4F7FE] flex flex-col justify-between p-3 sm:p-6">
+    <div className="min-h-dvh w-full max-w-[100vw] overflow-x-hidden bg-[#090D16] flex flex-col justify-between p-3 sm:p-6">
       {/* Top Bar */}
-      <header className="max-w-6xl w-full mx-auto flex items-center justify-between py-2 gap-2">
+      <header className="max-w-5xl w-full mx-auto flex items-center justify-between py-2 gap-2">
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm shrink-0">
             <Building2 className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 truncate block">
+            <span className="text-lg sm:text-xl font-bold tracking-tight text-white truncate block">
               PropSphere CRM
             </span>
-            <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+            <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" />
               {firebaseConnected
                 ? isAr
@@ -135,35 +90,35 @@ export const LoginView: React.FC<LoginViewProps> = ({
         </div>
         <button
           onClick={onToggleLang}
-          className="flex items-center gap-1.5 sm:gap-2 px-3 py-2 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shrink-0 cursor-pointer"
+          className="flex items-center gap-1.5 sm:gap-2 px-3 py-2 rounded-lg bg-slate-800/80 border border-slate-700 text-xs font-semibold text-slate-200 hover:bg-slate-800 transition-colors shrink-0 cursor-pointer"
         >
-          <Globe className="w-4 h-4 text-blue-600" />
+          <Globe className="w-4 h-4 text-blue-400" />
           <span>{isAr ? 'English (LTR)' : 'العربية (RTL)'}</span>
         </button>
       </header>
 
       {/* Main Split Card */}
-      <main className="max-w-5xl w-full mx-auto my-4 sm:my-auto grid grid-cols-1 lg:grid-cols-12 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        {/* Left / Right Blue Brand Column */}
-        <div className="lg:col-span-5 bg-gradient-to-br from-[#2563EB] via-[#3B82F6] to-[#1D4ED8] text-white p-6 sm:p-8 lg:p-10 flex flex-col justify-between">
+      <main className="max-w-4xl w-full mx-auto my-4 sm:my-auto grid grid-cols-1 lg:grid-cols-12 bg-white rounded-2xl border border-slate-800/20 shadow-2xl overflow-hidden">
+        {/* Brand & Security Column */}
+        <div className="lg:col-span-5 bg-gradient-to-br from-[#1E3A8A] via-[#2563EB] to-[#1D4ED8] text-white p-6 sm:p-8 lg:p-10 flex flex-col justify-between">
           <div>
             <div className="inline-flex items-center gap-2 text-xs font-medium text-blue-100 mb-4 sm:mb-6">
               <ShieldCheck className="w-4 h-4 shrink-0" />
               <span>
                 {isAr
-                  ? 'نظام إدارة علاقات العملاء والتسويق العقاري'
-                  : 'Real Estate CRM & Lead Distribution System'}
+                  ? 'بوابة الدخول الآمن وعزل الصلاحيات'
+                  : 'Secure Access Gate & Role Isolation'}
               </span>
             </div>
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold leading-snug mb-3 sm:mb-4">
+            <h1 className="text-xl sm:text-2xl font-bold leading-snug mb-3 sm:mb-4">
               {isAr
-                ? 'إدارة احترافية لليدز، الصلاحيات، وأداء المبيعات اليومي'
-                : 'Professional Real Estate Leads, RBAC & Daily Sales Analytics'}
+                ? 'إدارة احترافية ومؤمنة لليدز، الصلاحيات، وأداء المبيعات'
+                : 'Secure Real Estate Leads, Strict RBAC & Sales Analytics'}
             </h1>
             <p className="text-xs sm:text-sm text-blue-100 leading-relaxed">
               {isAr
-                ? 'استيراد تلقائي لعملاء شيت CRM1 من Google Drive كل 15 دقيقة بدون تكرار، وتوزيع فوري على السيلز حسب المشروع، مع ربط سحابي مباشر بقاعدة بيانات Google Firebase Firestore.'
-                : 'Automatic CRM1 sheet import from Google Drive every 15 minutes without duplicates, smart project-based routing to sales reps, and live Google Firebase Firestore sync.'}
+                ? 'يتم التحقق من هوية وصلاحيات كل مستخدم عند كل دخول، مع عرض الشاشات والعملاء المخصصين لدوره الوظيفي فقط وتأمين الجلسة تلقائياً بعد 15 دقيقة من عدم النشاط.'
+                : 'Every session is strictly authenticated and isolated by role permissions, with automatic session lock after 15 minutes of inactivity.'}
             </p>
           </div>
 
@@ -178,36 +133,46 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span>{isAr ? 'مزامنة شيت CRM1 تلقائية' : 'CRM1 Google Drive Sync'}</span>
-              <span className="font-mono-tabular font-semibold text-white">Every 15 Mins</span>
+              <span className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-amber-300" />
+                {isAr ? 'تأمين الجلسة التلقائي' : 'Inactivity Auto-Logout'}
+              </span>
+              <span className="font-mono-tabular font-semibold text-white">15 Minutes</span>
             </div>
             <div className="flex items-center justify-between">
-              <span>{isAr ? 'حماية الجلسات وتشفير الكلمات' : 'Session Security'}</span>
-              <span className="font-mono-tabular font-semibold text-white">Scrypt + SHA-256</span>
+              <span>{isAr ? 'عزل الصلاحيات والبيانات' : 'Access Control'}</span>
+              <span className="font-mono-tabular font-semibold text-white">Strict RBAC</span>
             </div>
           </div>
         </div>
 
-        {/* Form & Account Switcher Column */}
+        {/* Manual Login Form Column */}
         <div className="lg:col-span-7 p-6 sm:p-8 lg:p-10 flex flex-col justify-center">
-          <div className="mb-5 sm:mb-6">
+          <div className="mb-6">
             <h2 className="text-lg sm:text-xl font-bold text-slate-900">
               {isAr ? 'تسجيل الدخول إلى النظام' : 'Sign in to your CRM account'}
             </h2>
             <p className="text-xs text-slate-500 mt-1">
               {isAr
-                ? 'ادخل باسم المستخدم وكلمة المرور، أو اضغط على أي حساب بالأسفل للدخول الفوري ومعاينة الصلاحيات من الأدمن حتى السيلز'
-                : 'Enter your username and password, or click any account below for instant login across all roles'}
+                ? 'يرجى إدخال اسم المستخدم وكلمة المرور الخاصة بحسابك للتحقق من الصلاحيات وفتح مساحة العمل'
+                : 'Enter your assigned username and password to verify your permissions and access the workspace'}
             </p>
           </div>
 
+          {sessionExpiredMessage && (
+            <div className="mb-4 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs font-semibold text-amber-800 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>{sessionExpiredMessage}</span>
+            </div>
+          )}
+
           {error && (
-            <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-xs font-medium text-red-700">
+            <div className="mb-4 p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs font-semibold text-red-700">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                 {isAr ? 'اسم المستخدم (Username)' : 'Username'}
@@ -220,10 +185,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   onChange={(e) => setUsername(e.target.value)}
                   autoCapitalize="none"
                   autoCorrect="off"
+                  autoComplete="username"
                   spellCheck={false}
                   dir="ltr"
                   className="w-full ps-10 pe-4 py-2.5 rounded-lg border border-slate-200 text-base sm:text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition-colors"
-                  placeholder="admin / Hassan shehata / omarahmed1..."
+                  placeholder={isAr ? 'أدخل اسم المستخدم...' : 'Enter username...'}
                   required
                 />
               </div>
@@ -241,6 +207,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   onChange={(e) => setPassword(e.target.value)}
                   autoCapitalize="none"
                   autoCorrect="off"
+                  autoComplete="current-password"
                   dir="ltr"
                   className="w-full ps-10 pe-10 py-2.5 rounded-lg border border-slate-200 text-base sm:text-sm text-slate-900 focus:outline-none focus:border-blue-600 transition-colors"
                   placeholder="••••••••"
@@ -260,87 +227,34 @@ export const LoginView: React.FC<LoginViewProps> = ({
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs"
             >
               <span>
                 {loading
                   ? isAr
-                    ? 'جاري التحقق والدخول...'
-                    : 'Signing in...'
+                    ? 'جاري التحقق من بيانات الدخول...'
+                    : 'Verifying credentials...'
                   : isAr
-                  ? 'دخول للنظام'
+                  ? 'تسجيل الدخول للنظام'
                   : 'Sign In'}
               </span>
               <ArrowRight className={`w-4 h-4 ${isAr ? 'rotate-180' : ''}`} />
             </button>
           </form>
 
-          {/* Quick Role Preview Selector */}
-          <div className="mt-6 sm:mt-7 pt-5 sm:pt-6 border-t border-slate-100">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-slate-700">
-                {isAr
-                  ? 'جميع الحسابات المسجلة بالنظام (اضغط للدخول الفوري أو نسخ البيانات):'
-                  : 'All Registered System Accounts (Click for Instant Login):'}
-              </span>
-              <span className="text-[11px] text-slate-400 font-mono-tabular shrink-0">
-                {accounts.length} {isAr ? 'حسابات نشطة' : 'active users'}
-              </span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto pe-1">
-              {accounts.map((acc) => {
-                const accPass = resolveAccountPassword(acc);
-                const isAdmin = acc.roleId === 'role_admin';
-                return (
-                  <button
-                    key={acc.id}
-                    type="button"
-                    onClick={() => handleQuickAccountSelect(acc)}
-                    className={`flex items-center gap-3 p-2.5 rounded-xl border transition-colors text-start cursor-pointer ${
-                      username.toLowerCase() === String(acc.username || '').toLowerCase()
-                        ? 'border-blue-600 bg-blue-50/50'
-                        : 'border-slate-200 hover:border-blue-500 hover:bg-blue-50/30'
-                    }`}
-                  >
-                    <img
-                      src={acc.avatarUrl}
-                      alt={acc.fullName}
-                      referrerPolicy="no-referrer"
-                      className="w-9 h-9 rounded-full object-cover shrink-0 border border-slate-200"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="text-xs font-bold text-slate-900 truncate">
-                          {acc.fullName}
-                        </span>
-                        <span
-                          className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${
-                            isAdmin
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-emerald-100 text-emerald-700'
-                          }`}
-                        >
-                          {isAr ? acc.roleNameAr : acc.roleName}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-600 font-mono-tabular truncate mt-0.5">
-                        User: <span className="font-semibold text-slate-900">{acc.username}</span>
-                      </div>
-                      <div className="text-[11px] text-slate-500 font-mono-tabular flex items-center gap-1 mt-0.5">
-                        <KeyRound className="w-3 h-3 text-blue-600 shrink-0" />
-                        <span>Pass:</span>
-                        <span className="font-semibold text-blue-700">{accPass}</span>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+          <div className="mt-6 pt-5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+            <span className="flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              {isAr
+                ? 'محمي بتشفير الجلسات وعزل الصلاحيات الصارم'
+                : 'Protected by session encryption & strict RBAC'}
+            </span>
+            <span className="font-mono-tabular text-slate-400">15m Timeout</span>
           </div>
         </div>
       </main>
 
-      <footer className="max-w-6xl w-full mx-auto text-center text-xs text-slate-400 py-2">
+      <footer className="max-w-5xl w-full mx-auto text-center text-xs text-slate-500 py-2">
         PropSphere Real Estate CRM · Connected to Google Firebase Cloud Firestore
       </footer>
     </div>

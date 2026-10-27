@@ -9,22 +9,28 @@ import {
   Clock,
   RefreshCw,
 } from 'lucide-react';
-import { DailyAgentStat, Lead, Deal } from '../types/crm';
+import { DailyAgentStat, Lead, Deal, UserProfile, Role } from '../types/crm';
 import { Lang } from '../i18n/translations';
 import { swrFetch } from '../services/api';
 
 interface DailyReportsViewProps {
   lang: Lang;
+  currentUser?: UserProfile;
+  currentRole?: Role;
   leads?: Lead[];
   deals?: Deal[];
 }
 
 export const DailyReportsView: React.FC<DailyReportsViewProps> = ({
   lang,
+  currentUser,
+  currentRole,
   leads = [],
   deals = [],
 }) => {
   const isAr = lang === 'ar';
+  const isOwnReportOnly =
+    currentRole?.id !== 'role_admin' && currentRole?.permissions?.reports?.read === 'own';
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().slice(0, 10)
   );
@@ -60,11 +66,15 @@ export const DailyReportsView: React.FC<DailyReportsViewProps> = ({
     fetchReport(selectedDate);
   }, [selectedDate, leads.length, deals.length]);
 
-  const totalAssigned = stats.reduce((s, a) => s + a.totalAssignedLeads, 0);
-  const totalContactedToday = stats.reduce((s, a) => s + a.contactedToday, 0);
-  const totalCallsToday = stats.reduce((s, a) => s + a.callsToday + a.whatsappToday, 0);
-  const totalVisitsToday = stats.reduce((s, a) => s + a.visitsScheduledToday, 0);
-  const totalWonRevenue = stats.reduce((s, a) => s + a.wonRevenue, 0);
+  const visibleStats = isOwnReportOnly && currentUser
+    ? stats.filter((s) => s.userId === currentUser.id)
+    : stats;
+
+  const totalAssigned = visibleStats.reduce((s, a) => s + a.totalAssignedLeads, 0);
+  const totalContactedToday = visibleStats.reduce((s, a) => s + a.contactedToday, 0);
+  const totalCallsToday = visibleStats.reduce((s, a) => s + a.callsToday + a.whatsappToday, 0);
+  const totalVisitsToday = visibleStats.reduce((s, a) => s + a.visitsScheduledToday, 0);
+  const totalWonRevenue = visibleStats.reduce((s, a) => s + a.wonRevenue, 0);
 
   // Project interest distribution across leads
   const projectBreakdown =
@@ -90,7 +100,7 @@ export const DailyReportsView: React.FC<DailyReportsViewProps> = ({
       'Conversion Rate (%)',
       'Avg Response Time (Min)',
     ];
-    const rows = stats.map((st) => [
+    const rows = visibleStats.map((st) => [
       `"${st.fullName}"`,
       st.totalAssignedLeads,
       st.leadsAssignedToday,
@@ -123,13 +133,21 @@ export const DailyReportsView: React.FC<DailyReportsViewProps> = ({
           <div className="inline-flex items-center gap-2 text-xs font-semibold text-blue-600 mb-1">
             <BarChart3 className="w-4 h-4" />
             <span>
-              {isAr
+              {isOwnReportOnly
+                ? isAr
+                  ? 'تقريري اليومي الشخصي للمكالمات والمتابعات'
+                  : 'My Personal Daily Call & Follow-up Report'
+                : isAr
                 ? 'التقارير التحليلية اليومية لأداء فريق المبيعات'
                 : 'Daily Analytical Sales Team Performance Reports'}
             </span>
           </div>
           <h1 className="text-xl font-bold text-slate-900">
-            {isAr
+            {isOwnReportOnly
+              ? isAr
+                ? 'متابعة أدائي الشخصي، المكالمات المسجلة، والعملاء المعينين لي'
+                : 'My Personal Daily KPIs, Logged Calls & Assigned Leads'
+              : isAr
               ? 'مراقبة أداء الموظفين، المكالمات اليومية، ومعدلات إغلاق الصفقات'
               : 'Sales Team Daily KPIs, Call Activity & Conversion Analytics'}
           </h1>
@@ -252,7 +270,7 @@ export const DailyReportsView: React.FC<DailyReportsViewProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {stats.map((row) => (
+              {visibleStats.map((row) => (
                 <tr key={row.userId} className="hover:bg-blue-50/30 transition-colors">
                   <td className="py-3.5 px-4">
                     <div className="flex items-center gap-3">

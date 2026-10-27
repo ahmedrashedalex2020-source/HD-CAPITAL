@@ -11,6 +11,9 @@ import {
   doc as clientDoc,
   setDoc as clientSetDoc,
   getDoc as clientGetDoc,
+  collection as clientCollection,
+  getDocs as clientGetDocs,
+  deleteDoc as clientDeleteDoc,
   Firestore as ClientFirestore,
 } from 'firebase/firestore';
 import fs from 'fs';
@@ -123,6 +126,81 @@ export function getServerWebFirestore(): ClientFirestore | null {
   }
 }
 
+const FAKE_DEMO_USER_IDS = new Set([
+  'usr_supervisor',
+  'usr_sales1',
+  'usr_sales2',
+  'usr_sales3',
+  'usr_deputy',
+  'usr_1793095150415_61ql',
+]);
+
+function isExplicitFakeDemoUserRecord(u: any): boolean {
+  if (!u || typeof u !== 'object') return true;
+  if (FAKE_DEMO_USER_IDS.has(String(u.id || ''))) return true;
+  const uname = String(u.username || '').trim().toLowerCase();
+  const fname = String(u.fullName || '').trim();
+  if (uname === 'test1' && fname.includes('تجريبي')) return true;
+  return false;
+}
+
+/**
+ * Pulls all real employee/user accounts from live Google Firebase Cloud Firestore (`users` collection and `crm_state/workspace`),
+ * and purges any fake/test accounts (`test1`, `usr_sales1`, etc.) from Firestore.
+ */
+export async function pullUsersFromLiveCloudFirestore(): Promise<any[]> {
+  const webDb = getServerWebFirestore();
+  if (!webDb) return [];
+  try {
+    const [usersSnap, wsSnap] = await Promise.all([
+      clientGetDocs(clientCollection(webDb, 'users')).catch(() => null),
+      clientGetDoc(clientDoc(webDb, 'crm_state', 'workspace')).catch(() => null),
+    ]);
+
+    const mergedMap = new Map<string, any>();
+
+    if (wsSnap && wsSnap.exists()) {
+      const wsData = wsSnap.data();
+      if (Array.isArray(wsData?.users)) {
+        for (const u of wsData.users) {
+          if (u && u.id && !isExplicitFakeDemoUserRecord(u)) {
+            mergedMap.set(u.id, u);
+          }
+        }
+      }
+    }
+
+    if (usersSnap) {
+      for (const d of usersSnap.docs) {
+        const u = d.data();
+        if (isExplicitFakeDemoUserRecord(u) || FAKE_DEMO_USER_IDS.has(d.id)) {
+          await clientDeleteDoc(clientDoc(webDb, 'users', d.id)).catch(() => {});
+          continue;
+        }
+        if (u && u.id) {
+          const prev = mergedMap.get(u.id) || {};
+          mergedMap.set(u.id, { ...prev, ...u });
+        }
+      }
+    }
+
+    return Array.from(mergedMap.values());
+  } catch (err) {
+    console.warn('[Firestore] Failed to pull users from Cloud Firestore:', err);
+    return [];
+  }
+}
+
+export async function removeUserFromLiveCloudFirestore(userId: string): Promise<void> {
+  const webDb = getServerWebFirestore();
+  if (!webDb || !userId) return;
+  try {
+    await clientDeleteDoc(clientDoc(webDb, 'users', userId));
+  } catch {
+    // ignore
+  }
+}
+
 /**
  * Syncs the full CRM workspace and users collection directly to live Google Firebase Cloud Firestore
  * (`crm_state/workspace` and `users/{id}`) using the provisioned database ID.
@@ -131,7 +209,9 @@ export async function syncStateToLiveCloudFirestore(state: any): Promise<boolean
   const webDb = getServerWebFirestore();
   if (!webDb || !state) return false;
   try {
-    const safeUsers = (state.users || []).map(({ passwordHash: _ph, ...u }: any) => u);
+    const safeUsers = (state.users || [])
+      .filter((u: any) => !isExplicitFakeDemoUserRecord(u))
+      .map(({ passwordHash: _ph, ...u }: any) => u);
     const workspacePayload = JSON.parse(
       JSON.stringify({
         roles: state.roles || [],
@@ -158,6 +238,9 @@ export async function syncStateToLiveCloudFirestore(state: any): Promise<boolean
           { merge: true }
         );
       }
+    }
+    for (const fakeId of FAKE_DEMO_USER_IDS) {
+      await clientDeleteDoc(clientDoc(webDb, 'users', fakeId)).catch(() => {});
     }
     return true;
   } catch (err) {

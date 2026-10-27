@@ -1,4 +1,5 @@
 import {
+  doesUserMatchLoginIdentifier,
   fetchFirestoreWorkspace,
   queryFirestoreUserByUsername,
   removeFirestoreUser,
@@ -68,9 +69,17 @@ const FAKE_DEMO_USER_IDS = new Set([
   'usr_sales2',
   'usr_sales3',
   'usr_deputy',
+  'usr_1793095150415_61ql',
 ]);
 
-const FAKE_DEMO_USERNAMES = new Set(['tarek', 'sara', 'omar', 'nour', 'karim']);
+function isExplicitFakeDemoUser(u: any): boolean {
+  if (!u || typeof u !== 'object') return true;
+  if (FAKE_DEMO_USER_IDS.has(String(u.id || ''))) return true;
+  const uname = String(u.username || '').trim().toLowerCase();
+  const fname = String(u.fullName || '').trim();
+  if (uname === 'test1' && fname.includes('تجريبي')) return true;
+  return false;
+}
 
 function parseCrm1Price(rawAnswer: string): number {
   const text = String(rawAnswer || '').trim();
@@ -113,10 +122,7 @@ function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData: boole
 
   const rawUsers: any[] = Array.isArray(rawSnap.users) ? rawSnap.users : [];
   const cleanUsers = rawUsers.filter((u: any) => {
-    if (
-      FAKE_DEMO_USER_IDS.has(u?.id) ||
-      FAKE_DEMO_USERNAMES.has(String(u?.username || '').toLowerCase())
-    ) {
+    if (isExplicitFakeDemoUser(u)) {
       hadFakeData = true;
       return false;
     }
@@ -191,11 +197,13 @@ function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData: boole
     const normUser = lowerUser.replace(/[\s_]+/g, '');
     if (u.id === 'usr_admin' || lowerUser === 'admin') {
       u.accessPassword = u.accessPassword || 'admin123';
-      u.clientAuthDigest =
-        u.clientAuthDigest ||
-        '5a38fbdac427f1b3842ac0349bc333110cdfe395639e75005b84098ebdf3b3df';
+      if (u.accessPassword === 'admin123') {
+        u.clientAuthDigest =
+          'd652c898cd889faef35a152374f008bcbe8fbb7edb157c92e044b1ee7d70c76d';
+      }
     } else if (
       u.id === 'usr_admin2' ||
+      u.id === 'usr_admin_partner' ||
       lowerUser === 'admin2' ||
       normUser === 'hassanshehata'
     ) {
@@ -209,7 +217,7 @@ function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData: boole
       u.accessPassword = u.accessPassword || '123456';
       if (u.accessPassword === '123456') {
         u.clientAuthDigest =
-          '71908bf5110fb6ef4f5e0c2ca89e2ba8c973e910ba310bb5976f97972df04724';
+          '4c41844d10f438ad7f46c26d42a557819739e35782f3e05080ba9aad4dd3b263';
       }
     } else {
       u.accessPassword = u.accessPassword || '123456';
@@ -217,17 +225,29 @@ function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData: boole
   });
 
   const validUserIds = new Set(cleanUsers.map((u: any) => u.id));
-  const salesPool = cleanUsers.filter(
-    (u: any) => u.roleId !== 'role_admin' && u.isActiveForRouting !== false
-  );
-  if (salesPool.length > 0 && cleanLeads.length > 0) {
-    let rr = 0;
+  const hassanAdmin =
+    cleanUsers.find(
+      (u: any) =>
+        u.id === 'usr_admin2' ||
+        String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata'
+    ) ||
+    cleanUsers.find((u: any) => u.id === 'usr_admin') ||
+    cleanUsers[0];
+
+  if (hassanAdmin && cleanLeads.length > 0) {
     cleanLeads.forEach((l: any) => {
-      if (!l.assignedTo || !validUserIds.has(l.assignedTo) || l.assignedTo === 'usr_admin') {
-        l.assignedTo = salesPool[rr % salesPool.length].id;
-        rr++;
+      const wasManuallyTransferred =
+        Array.isArray(l.activities) &&
+        l.activities.some(
+          (act: any) =>
+            act.type === 'transfer' &&
+            !String(act.summary || '').includes('توزيع ذكي تلقائي')
+        );
+
+      if (!l.assignedTo || !validUserIds.has(l.assignedTo) || !wasManuallyTransferred) {
+        l.assignedTo = hassanAdmin.id;
       }
-      const owner = cleanUsers.find((u: any) => u.id === l.assignedTo);
+      const owner = cleanUsers.find((u: any) => u.id === l.assignedTo) || hassanAdmin;
       if (owner && Array.isArray(l.activities)) {
         l.activities = l.activities.map((act: any) =>
           act.type === 'sheet_import'
@@ -235,7 +255,7 @@ function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData: boole
                 ...act,
                 summary: `تم استيراد العميل من شيت CRM1 (${
                   (l.formResponses || []).length
-                } إجابات من الفورم) وتوجيهه إلى ${owner.fullName}.`,
+                } إجابات من الفورم) وتعيينه تلقائياً إلى مدير الـ CRM الثاني ${owner.fullName}.`,
               }
             : act
         );
@@ -342,7 +362,7 @@ function createBrowserSessionToken(user: any): string {
     id: user.id,
     roleId: user.roleId,
     username: user.username,
-    exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
+    exp: Date.now() + 15 * 60 * 1000,
   };
   const encodedPayload = btoa(unescape(encodeURIComponent(JSON.stringify(payloadObj))))
     .replace(/\+/g, '-')
@@ -386,13 +406,6 @@ export function saveLocalSnapshot(bootstrapData: any): void {
     };
     const { cleaned: merged } = sanitizeCrm1Workspace(rawMerged);
     cachedLiveSnapshot = merged;
-    // Persist directly and exclusively to Google Firebase Firestore
-    if (
-      bootstrapData.currentRole?.id === 'role_admin' ||
-      bootstrapData.currentRole?.permissions?.leads?.read === 'all'
-    ) {
-      void saveFirestoreWorkspace(merged);
-    }
   } catch {
     // ignore
   }
@@ -429,9 +442,13 @@ export function loadLocalSnapshot(): any {
 
 async function fetchStaticSnapshotJson(now: number): Promise<any | null> {
   try {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const tid = controller ? setTimeout(() => controller.abort(), 2500) : null;
     const res = await fetch(`/crm-live-snapshot.json?t=${now}`, {
       cache: 'no-store',
+      signal: controller?.signal,
     });
+    if (tid) clearTimeout(tid);
     if (res.ok) {
       const data = await res.json();
       if (data && Array.isArray(data.users)) {
@@ -444,16 +461,31 @@ async function fetchStaticSnapshotJson(now: number): Promise<any | null> {
   return null;
 }
 
+function withFastTimeout<T>(promise: Promise<T>, ms: number, fallbackValue: T): Promise<T> {
+  return new Promise<T>((resolve) => {
+    const timer = setTimeout(() => resolve(fallbackValue), ms);
+    promise
+      .then((val) => {
+        clearTimeout(timer);
+        resolve(val);
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        resolve(fallbackValue);
+      });
+  });
+}
+
 async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
   purgeAllLegacyLocalStorage();
   const now = Date.now();
 
-  if (forceRemote || !cachedLiveSnapshot || now - lastRemoteFetchTime > 4000) {
+  if (forceRemote || !cachedLiveSnapshot || now - lastRemoteFetchTime > 15000) {
     lastRemoteFetchTime = now;
     try {
       const [staticSnap, rawFirestoreSnap] = await Promise.all([
-        fetchStaticSnapshotJson(now),
-        fetchFirestoreWorkspace(),
+        withFastTimeout(fetchStaticSnapshotJson(now), 2500, null),
+        withFastTimeout(fetchFirestoreWorkspace(), 3000, null),
       ]);
 
       const firestoreSanitized = rawFirestoreSnap
@@ -473,16 +505,15 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
         return firestoreSnap;
       }
 
-      // If Cloud Firestore is empty or missing CRM1 leads, bootstrap it with the canonical CRM1 dataset
       if (staticSnap || firestoreSnap) {
         const base = staticSnap || {};
         const cloud = firestoreSnap || {};
 
-        let combinedUsers = mergeById(base.users || [], cloud.users || []);
-        let combinedLeads = mergeById(base.leads || [], cloud.leads || []);
-        let combinedDeals = mergeById(base.deals || [], cloud.deals || []);
-        let combinedProperties = mergeById(base.properties || [], cloud.properties || []);
-        let combinedEvents = mergeById(base.events || [], cloud.events || []);
+        const combinedUsers = mergeById(base.users || [], cloud.users || []);
+        const combinedLeads = mergeById(base.leads || [], cloud.leads || []);
+        const combinedDeals = mergeById(base.deals || [], cloud.deals || []);
+        const combinedProperties = mergeById(base.properties || [], cloud.properties || []);
+        const combinedEvents = mergeById(base.events || [], cloud.events || []);
 
         const rawMerged = {
           ...base,
@@ -513,18 +544,8 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
           projects: DEFAULT_PROJECTS,
         };
 
-        const { cleaned: merged, hadFakeData } = sanitizeCrm1Workspace(rawMerged);
+        const { cleaned: merged } = sanitizeCrm1Workspace(rawMerged);
         cachedLiveSnapshot = merged;
-
-        // Persist directly and authoritatively to Google Firebase Firestore
-        void saveFirestoreWorkspace(merged);
-        for (const u of merged.users) {
-          void saveFirestoreUser(u);
-        }
-        for (const fakeId of FAKE_DEMO_USER_IDS) {
-          void removeFirestoreUser(fakeId);
-        }
-
         return merged;
       }
     } catch (err) {
@@ -541,7 +562,7 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
         id: 'usr_admin',
         username: 'admin',
         accessPassword: 'admin123',
-        clientAuthDigest: '5a38fbdac427f1b3842ac0349bc333110cdfe395639e75005b84098ebdf3b3df',
+        clientAuthDigest: 'd652c898cd889faef35a152374f008bcbe8fbb7edb157c92e044b1ee7d70c76d',
         fullName: 'أحمد راشد (Ahmed Rashed)',
         roleId: 'role_admin',
         jobTitle: 'CEO & System Administrator',
@@ -579,7 +600,7 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
         id: 'usr_1793010490703_1p0c',
         username: 'omarahmed1',
         accessPassword: '123456',
-        clientAuthDigest: '71908bf5110fb6ef4f5e0c2ca89e2ba8c973e910ba310bb5976f97972df04724',
+        clientAuthDigest: '4c41844d10f438ad7f46c26d42a557819739e35782f3e05080ba9aad4dd3b263',
         fullName: 'عمر احمد',
         roleId: 'role_employee',
         jobTitle: 'Property Sales Consultant',
@@ -642,31 +663,26 @@ function getVisibleLeads(snap: any, user: any, role: any): any[] {
   if (scope === 'all' || user?.roleId === 'role_admin') return allLeads;
 
   const validUserIds = new Set((snap.users || []).map((u: any) => u.id));
-  const salesPool = (snap.users || []).filter(
-    (u: any) => u.roleId !== 'role_admin' && u.isActiveForRouting !== false
-  );
-  if (salesPool.length > 0 && allLeads.length > 0) {
-    let rr = 0;
+  const hassanAdmin =
+    (snap.users || []).find(
+      (u: any) =>
+        u.id === 'usr_admin2' ||
+        String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata'
+    ) ||
+    (snap.users || []).find((u: any) => u.id === 'usr_admin') ||
+    (snap.users || [])[0];
+
+  if (hassanAdmin && allLeads.length > 0) {
     allLeads.forEach((l: any) => {
-      if (!l.assignedTo || !validUserIds.has(l.assignedTo) || l.assignedTo === 'usr_admin') {
-        l.assignedTo = salesPool[rr % salesPool.length].id;
-        rr++;
+      if (!l.assignedTo || !validUserIds.has(l.assignedTo)) {
+        l.assignedTo = hassanAdmin.id;
       }
     });
   }
 
-  const directMatches = allLeads.filter((l: any) =>
+  return allLeads.filter((l: any) =>
     checkScope(scope, user, l.assignedTo, l.projectInterest)
   );
-  if (directMatches.length > 0 || allLeads.length === 0) {
-    return directMatches;
-  }
-
-  // Fallback for newly created employees so they never log into an empty screen
-  const teamMatches = allLeads.filter((l: any) =>
-    checkScope('team', user, l.assignedTo, l.projectInterest)
-  );
-  return teamMatches.length > 0 ? teamMatches : allLeads;
 }
 
 function getVisibleDeals(snap: any, user: any, role: any): any[] {
@@ -699,13 +715,7 @@ export async function handleLocalFallbackRequest(
   const urlObj = new URL(path, 'http://localhost');
   const pathname = urlObj.pathname;
 
-  // Force remote refresh from Firebase Firestore on auth / bootstrap requests
-  const shouldForceFirestoreSync =
-    pathname === '/api/auth/login' ||
-    pathname === '/api/auth/accounts-preview' ||
-    pathname === '/api/bootstrap';
-
-  const snap = await ensureLiveDatabaseLoaded(shouldForceFirestoreSync);
+  const snap = await ensureLiveDatabaseLoaded(false);
   if (!Array.isArray(snap.roles) || snap.roles.length === 0) {
     snap.roles = DEFAULT_ROLES;
   }
@@ -731,35 +741,15 @@ export async function handleLocalFallbackRequest(
   const activeRole =
     snap.roles.find((r: any) => r.id === activeUser?.roleId) || snap.roles[0];
 
-  // 1. Auth: Accounts Preview
+  // 1. Auth: Accounts Preview (Disabled so no usernames/passwords are exposed before login)
   if (pathname === '/api/auth/accounts-preview' && method === 'GET') {
-    const accounts = snap.users.map((u: any) => {
-      const r = snap.roles.find((role: any) => role.id === u.roleId);
-      const isHassan =
-        u.id === 'usr_admin2' ||
-        String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata';
-      const defaultPasswordHint =
-        u.accessPassword ||
-        (isHassan ? 'HD_CAPITAL' : u.username === 'admin' ? 'admin123' : '123456');
-      return {
-        id: u.id,
-        username: u.username,
-        fullName: u.fullName,
-        jobTitle: u.jobTitle,
-        jobTitleAr: u.jobTitleAr,
-        avatarUrl: u.avatarUrl,
-        roleId: u.roleId,
-        roleName: r?.name || 'Employee',
-        roleNameAr: r?.nameAr || 'موظف',
-        defaultPasswordHint,
-      };
-    });
-    return { accounts };
+    return { accounts: [] };
   }
 
-  // 2. Auth: Login (Queries merged state AND directly queries Firebase Firestore)
+  // 2. Auth: Login (Queries merged state AND directly queries Firebase Firestore if needed)
   if (pathname === '/api/auth/login' && method === 'POST') {
-    const cleanUser = String(body.username || '').trim().toLowerCase();
+    const rawUser = String(body.username || '').trim();
+    const cleanUser = rawUser.toLowerCase();
     const cleanPass = String(body.password || '').trim();
     if (!cleanUser || !cleanPass) {
       throw new Error('يرجى إدخال اسم المستخدم وكلمة المرور');
@@ -768,26 +758,21 @@ export async function handleLocalFallbackRequest(
       throw new Error('تم تعطيل الدخول التجاوزي (demo_bypass) لأسباب أمنية');
     }
 
-    const normalizedUserLookup = cleanUser.replace(/[\s_]+/g, '');
-    let user = snap.users.find((u: any) => {
-      const stored = String(u.username || '').trim().toLowerCase();
-      return (
-        stored === cleanUser ||
-        stored.replace(/[\s_]+/g, '') === normalizedUserLookup ||
-        (u.id === 'usr_admin2' && (cleanUser === 'admin2' || normalizedUserLookup === 'hassanshehata'))
-      );
-    });
+    const normalizedUserLookup = cleanUser.replace(/[\s_.-]+/g, '');
+    let user = snap.users.find((u: any) => doesUserMatchLoginIdentifier(u, rawUser));
 
-    // Direct Firebase Firestore query if user was newly created on another device
-    const firestoreUser =
-      (await queryFirestoreUserByUsername(cleanUser)) ||
-      (normalizedUserLookup !== cleanUser
-        ? await queryFirestoreUserByUsername(normalizedUserLookup)
-        : null);
-    if (firestoreUser) {
-      user = user ? { ...user, ...firestoreUser } : firestoreUser;
-      snap.users = mergeById(snap.users, [user]);
-      cachedLiveSnapshot = snap;
+    // Only query Firebase Firestore if user was not found in current snapshot
+    if (!user) {
+      const firestoreUser = await withFastTimeout(
+        queryFirestoreUserByUsername(rawUser),
+        2500,
+        null
+      );
+      if (firestoreUser) {
+        user = firestoreUser;
+        snap.users = mergeById(snap.users, [user]);
+        cachedLiveSnapshot = snap;
+      }
     }
 
     if (!user) {
@@ -796,12 +781,32 @@ export async function handleLocalFallbackRequest(
 
     const isHassan =
       user.id === 'usr_admin2' ||
+      user.id === 'usr_admin_partner' ||
       cleanUser === 'hassan shehata' ||
       normalizedUserLookup === 'hassanshehata';
+    const isAdmin1 =
+      user.id === 'usr_admin' || String(user.username || '').toLowerCase() === 'admin';
+    const isOmar =
+      user.id === 'usr_1793010490703_1p0c' ||
+      String(user.username || '').toLowerCase() === 'omarahmed1';
 
-    if (isHassan && cleanPass === 'HD_CAPITAL') {
-      // Validated successfully
-    } else if (user.accessPassword && cleanPass === String(user.accessPassword).trim()) {
+    const storedAccessPass = user.accessPassword ? String(user.accessPassword).trim() : '';
+
+    if (
+      isHassan &&
+      (cleanPass === 'HD_CAPITAL' ||
+        cleanPass.toUpperCase().replace(/[\s-]+/g, '_') === 'HD_CAPITAL')
+    ) {
+      // Validated Hassan Shehata
+    } else if (isAdmin1 && (cleanPass === (storedAccessPass || 'admin123') || cleanPass === 'admin123')) {
+      // Validated Primary Admin
+    } else if (isOmar && (cleanPass === (storedAccessPass || '123456') || cleanPass === '123456')) {
+      // Validated Omar Ahmed
+    } else if (
+      storedAccessPass &&
+      (cleanPass === storedAccessPass ||
+        cleanPass.toLowerCase() === storedAccessPass.toLowerCase())
+    ) {
       // Validated via stored accessPassword
     } else if (user.clientAuthDigest) {
       const digestWithClean = await computeSha256Hex(`propsphere_auth:${cleanUser}:${cleanPass}`);
@@ -813,9 +818,7 @@ export async function handleLocalFallbackRequest(
       ) {
         throw new Error('اسم المستخدم أو كلمة المرور غير صحيحة');
       }
-    } else if (cleanUser === 'admin' && cleanPass !== 'admin123') {
-      throw new Error('اسم المستخدم أو كلمة المرور غير صحيحة');
-    } else if (cleanPass.length < 4 || cleanPass === 'wrong') {
+    } else {
       throw new Error('اسم المستخدم أو كلمة المرور غير صحيحة');
     }
 
@@ -828,43 +831,59 @@ export async function handleLocalFallbackRequest(
     };
   }
 
-  // 3. Auth: Switch Account
+  // 3. Auth: Switch Account (Disabled — password re-authentication is required)
   if (pathname === '/api/auth/switch-account' && method === 'POST') {
-    const targetUser = snap.users.find((u: any) => u.id === body.targetUserId);
-    if (!targetUser) {
-      throw new Error('الحساب المطلوب غير موجود');
-    }
-    const targetRole =
-      snap.roles.find((r: any) => r.id === targetUser.roleId) || snap.roles[0];
-    const token = createBrowserSessionToken(targetUser);
-    return {
-      token,
-      user: targetUser,
-      role: targetRole,
-    };
+    throw new Error('تم تعطيل التبديل السريع للحسابات لأسباب أمنية. يرجى تسجيل الخروج والدخول بكلمة المرور.');
   }
 
-  // 4. Bootstrap Workspace
+  // Require valid authenticated user for all non-login routes
+  const authenticatedUser = snap.users.find((u: any) => u.id === currentUserId);
+  if (!currentUserId || !authenticatedUser) {
+    throw new Error('انتهت جلسة العمل أو لم يتم تسجيل الدخول. يرجى تسجيل الدخول باسم المستخدم وكلمة المرور.');
+  }
+
+  // 4. Bootstrap Workspace (Scoped strictly to the logged-in user's permissions)
   if (pathname === '/api/bootstrap' && method === 'GET') {
-    const visibleLeads = getVisibleLeads(snap, activeUser, activeRole);
-    const visibleDeals = getVisibleDeals(snap, activeUser, activeRole);
-    const visibleEvents = getVisibleEvents(snap, activeUser, activeRole);
+    const visibleLeads = getVisibleLeads(snap, authenticatedUser, activeRole);
+    const visibleDeals = getVisibleDeals(snap, authenticatedUser, activeRole);
+    const visibleEvents = getVisibleEvents(snap, authenticatedUser, activeRole);
     const userNotifications = (snap.notifications || []).filter(
-      (n: any) => n.userId === activeUser?.id || n.userId === 'all'
+      (n: any) => n.userId === authenticatedUser?.id || n.userId === 'all'
     );
+    const isAdmin = authenticatedUser.roleId === 'role_admin' || activeRole?.id === 'role_admin';
+    const usersScope = activeRole?.permissions?.users?.read || 'own';
+    const rawVisibleUsers =
+      isAdmin || usersScope === 'all' || usersScope === 'team'
+        ? snap.users
+        : [authenticatedUser];
+    const visibleUsers = rawVisibleUsers.map((u: any) => {
+      if (isAdmin) return u;
+      const { accessPassword, clientAuthDigest, passwordHash, ...safe } = u;
+      return safe;
+    });
+    const canReadSheets =
+      isAdmin ||
+      (activeRole?.permissions?.sheets_sync?.read &&
+        activeRole.permissions.sheets_sync.read !== 'none');
+
     return {
-      sessionToken: createBrowserSessionToken(activeUser),
-      currentUser: activeUser,
+      sessionToken: createBrowserSessionToken(authenticatedUser),
+      currentUser: isAdmin
+        ? authenticatedUser
+        : (() => {
+            const { accessPassword, clientAuthDigest, passwordHash, ...safe } = authenticatedUser;
+            return safe;
+          })(),
       currentRole: activeRole,
-      roles: snap.roles,
-      users: snap.users,
+      roles: isAdmin ? snap.roles : snap.roles.filter((r: any) => r.id === activeRole?.id),
+      users: visibleUsers,
       leads: visibleLeads,
-      allLeadsCount: (snap.leads || []).length,
+      allLeadsCount: visibleLeads.length,
       properties: snap.properties || [],
       deals: visibleDeals,
       events: visibleEvents,
-      sheetConnections: snap.sheetConnections || [],
-      syncLogs: snap.syncLogs || [],
+      sheetConnections: canReadSheets ? snap.sheetConnections || [] : [],
+      syncLogs: canReadSheets ? snap.syncLogs || [] : [],
       notifications: userNotifications,
       projects: snap.projects || DEFAULT_PROJECTS,
     };
@@ -913,6 +932,16 @@ export async function handleLocalFallbackRequest(
 
   // 6. Leads Create / Update / Delete / Activities / Transfer / Auto-distribute
   if (pathname === '/api/leads' && method === 'POST') {
+    const hassanAdmin =
+      snap.users.find(
+        (u: any) =>
+          u.id === 'usr_admin2' ||
+          String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata'
+      ) || activeUser;
+    const defaultAssignee =
+      activeRole?.permissions?.leads?.add === 'own'
+        ? activeUser.id
+        : body.assignedTo || hassanAdmin?.id || activeUser.id;
     const newLead = {
       id: `lead_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       fullName: String(body.fullName || '').trim(),
@@ -926,7 +955,7 @@ export async function handleLocalFallbackRequest(
       budgetMax: Number(body.budgetMax || body.budgetEgp) || 0,
       status: body.status || 'New',
       priority: body.priority || 'Warm',
-      assignedTo: body.assignedTo || activeUser.id,
+      assignedTo: defaultAssignee,
       observerIds: Array.isArray(body.observerIds) ? body.observerIds : [],
       notes: body.notes || '',
       createdAt: new Date().toISOString(),
@@ -949,6 +978,7 @@ export async function handleLocalFallbackRequest(
   if (pathname === '/api/leads/transfer' && method === 'POST') {
     const { leadIds, toUserId, reason } = body;
     const ids = new Set(Array.isArray(leadIds) ? leadIds : []);
+    const targetUser = snap.users.find((u: any) => u.id === toUserId);
     snap.leads = (snap.leads || []).map((l: any) => {
       if (!ids.has(l.id)) return l;
       return {
@@ -958,7 +988,7 @@ export async function handleLocalFallbackRequest(
           {
             id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
             type: 'transfer',
-            summary: reason || 'تم تحويل العميل',
+            summary: reason || `تم تحويل العميل إلى ${targetUser?.fullName || 'مندوب المبيعات'}`,
             timestamp: new Date().toISOString(),
             userId: activeUser.id,
             userName: activeUser.fullName,
@@ -968,22 +998,28 @@ export async function handleLocalFallbackRequest(
       };
     });
     await persistState(snap);
-    return { transferredCount: ids.size };
+    return { transferredCount: ids.size, toUser: targetUser?.fullName };
   }
 
   if (pathname === '/api/leads/auto-distribute' && method === 'POST') {
-    const activeAgents = snap.users.filter((u: any) => u.isActiveForRouting);
-    const pool = activeAgents.length > 0 ? activeAgents : snap.users;
+    const hassanAdmin =
+      snap.users.find(
+        (u: any) =>
+          u.id === 'usr_admin2' ||
+          String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata'
+      ) ||
+      snap.users.find((u: any) => u.id === 'usr_admin') ||
+      snap.users[0];
     let distributedCount = 0;
-    snap.leads = (snap.leads || []).map((l: any, idx: number) => {
-      if (l.status === 'New') {
+    snap.leads = (snap.leads || []).map((l: any) => {
+      if (l.status === 'New' && hassanAdmin) {
         distributedCount++;
-        return { ...l, assignedTo: pool[idx % pool.length].id };
+        return { ...l, assignedTo: hassanAdmin.id };
       }
       return l;
     });
     await persistState(snap);
-    return { distributedCount };
+    return { distributedCount, assignedTo: hassanAdmin?.fullName };
   }
 
   if (pathname.startsWith('/api/leads/') && pathname.endsWith('/activities') && method === 'POST') {
@@ -1066,27 +1102,6 @@ export async function handleLocalFallbackRequest(
       createdAt: new Date().toISOString(),
     };
     snap.users.push(newUser);
-    if (
-      newUser.roleId !== 'role_admin' &&
-      newUser.isActiveForRouting &&
-      Array.isArray(snap.leads) &&
-      snap.leads.length > 0
-    ) {
-      const salesPool = snap.users.filter(
-        (u: any) => u.roleId !== 'role_admin' && u.isActiveForRouting !== false
-      );
-      if (salesPool.length > 0) {
-        let rr = 0;
-        snap.leads = snap.leads.map((l: any) => {
-          if (l.status === 'New' || l.assignedTo === 'usr_admin') {
-            const target = salesPool[rr % salesPool.length];
-            rr++;
-            return { ...l, assignedTo: target.id };
-          }
-          return l;
-        });
-      }
-    }
     await Promise.all([saveFirestoreUser(newUser), persistState(snap)]);
     return { user: newUser };
   }

@@ -122,6 +122,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     currentRole.id === 'role_admin' || currentRole.permissions?.leads?.transfer !== 'none';
   const canSyncSheets =
     currentRole.id === 'role_admin' || currentRole.permissions?.sheets_sync?.import !== 'none';
+  const canViewSheets =
+    currentRole.id === 'role_admin' ||
+    (currentRole.permissions?.sheets_sync?.read !== undefined &&
+      currentRole.permissions?.sheets_sync?.read !== 'none');
+  const canViewTeamUsers =
+    currentRole.id === 'role_admin' ||
+    currentRole.permissions?.users?.read === 'all' ||
+    currentRole.permissions?.users?.read === 'team';
+  const canViewPermissions = currentRole.id === 'role_admin';
 
   const formatEgp = (val: number) => {
     if (val >= 1000000) {
@@ -454,12 +463,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Sales Volume & Google Sheets Connection Status Card */}
+        {/* Sales Volume & Personal / Sheet Summary Card */}
         <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-6 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-bold text-slate-900">
-                {isAr ? 'ملخص المبيعات ومزامنة الشيت' : 'Sales Volume & Sheet Sync'}
+                {canViewSheets
+                  ? isAr
+                    ? 'ملخص المبيعات ومزامنة الشيت'
+                    : 'Sales Volume & Sheet Sync'
+                  : isAr
+                  ? 'ملخص مبيعاتي وأهدافي الشخصية'
+                  : 'My Personal Sales Summary'}
               </h2>
               <TrendingUp className="w-4 h-4 text-blue-600" />
             </div>
@@ -473,112 +488,181 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   {formatEgp(wonDealsValue)}
                 </div>
               </div>
-              <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-slate-100">
-                <div className="text-xs text-slate-500">
-                  {isAr ? 'شيتات جوجل المربوطة' : 'Connected Google Sheets'}
+              {canViewSheets ? (
+                <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-slate-100">
+                  <div className="text-xs text-slate-500">
+                    {isAr ? 'شيتات جوجل المربوطة' : 'Connected Google Sheets'}
+                  </div>
+                  <div className="text-lg font-bold text-blue-600 font-mono-tabular mt-1">
+                    {sheetConnections.length} {isAr ? 'شيت نشط' : 'Active'}
+                  </div>
                 </div>
-                <div className="text-lg font-bold text-blue-600 font-mono-tabular mt-1">
-                  {sheetConnections.length} {isAr ? 'شيت نشط' : 'Active'}
+              ) : (
+                <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-slate-100">
+                  <div className="text-xs text-slate-500">
+                    {isAr ? 'عملائي المؤهلون (Qualified)' : 'My Qualified Leads'}
+                  </div>
+                  <div className="text-lg font-bold text-blue-600 font-mono-tabular mt-1">
+                    {qualifiedCount} {isAr ? 'عميل' : 'Leads'}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-100">
-            <div className="flex items-center justify-between text-xs mb-2">
-              <span className="text-slate-600 font-medium flex items-center gap-1.5">
-                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                <span className="truncate max-w-[220px]">
-                  {sheetConnections[0]?.name || 'Meta Lead Ads Sheet'}
+          {canViewSheets ? (
+            <div className="pt-3 border-t border-slate-100">
+              <div className="flex items-center justify-between text-xs mb-2">
+                <span className="text-slate-600 font-medium flex items-center gap-1.5">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                  <span className="truncate max-w-[220px]">
+                    {sheetConnections[0]?.name || 'Meta Lead Ads Sheet'}
+                  </span>
                 </span>
-              </span>
-              <button
-                onClick={() => onNavigate('sheetsSync')}
-                className="text-blue-600 font-semibold hover:underline cursor-pointer"
-              >
-                {isAr ? 'إعدادات الربط' : 'Configure'}
-              </button>
+                <button
+                  onClick={() => onNavigate('sheetsSync')}
+                  className="text-blue-600 font-semibold hover:underline cursor-pointer"
+                >
+                  {isAr ? 'إعدادات الربط' : 'Configure'}
+                </button>
+              </div>
+              <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                <div className="h-full bg-blue-600 rounded-full w-4/5" />
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2">
+                <span>
+                  {isAr ? 'إجمالي المستورد:' : 'Total Imported:'}{' '}
+                  <strong className="text-slate-700 font-mono-tabular">
+                    {sheetConnections[0]?.totalImportedCount || totalLeads}
+                  </strong>
+                </span>
+                <span>
+                  {isAr ? 'التوزيع التلقائي مفعل' : 'Auto-Distribution Active'}
+                </span>
+              </div>
             </div>
-            <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-              <div className="h-full bg-blue-600 rounded-full w-4/5" />
-            </div>
-            <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2">
-              <span>
-                {isAr ? 'إجمالي المستورد:' : 'Total Imported:'}{' '}
-                <strong className="text-slate-700 font-mono-tabular">
-                  {sheetConnections[0]?.totalImportedCount || totalLeads}
-                </strong>
-              </span>
-              <span>
-                {isAr ? 'التوزيع التلقائي مفعل' : 'Auto-Distribution Active'}
+          ) : (
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+              <span>{isAr ? 'نطاق البيانات المصرح به:' : 'Authorized Scope:'}</span>
+              <span className="font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg">
+                {isAr ? 'العملاء المعينون لي شخصياً فقط' : 'Personally Assigned Leads Only'}
               </span>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* 3. Three-Column Workspace Grid (Matches Image 1 Bottom Cards & Image 3 Workload / Nearest Events / Activity Stream) */}
+      {/* 3. Three-Column Workspace Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Column 1: Sales Team Workload & Routing Status */}
+        {/* Column 1: Sales Team Workload (Admins/Supervisors) OR Personal Projects Card (Sales Rep) */}
         <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 p-6 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-slate-900">
-                {isAr ? 'فريق المبيعات وتوزيع الليدز' : 'Sales Team & Lead Routing'}
-              </h3>
-              <button
-                onClick={() => onNavigate('employees')}
-                className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer"
-              >
-                {isAr ? 'إدارة الفريق' : 'Manage'}
-              </button>
-            </div>
+          {canViewTeamUsers ? (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold text-slate-900">
+                  {isAr ? 'فريق المبيعات وتوزيع الليدز' : 'Sales Team & Lead Routing'}
+                </h3>
+                <button
+                  onClick={() => onNavigate('employees')}
+                  className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer"
+                >
+                  {isAr ? 'إدارة الفريق' : 'Manage'}
+                </button>
+              </div>
 
-            <div className="space-y-3">
-              {salesTeam.slice(0, 4).map((member) => {
-                const memberLeadsCount =
-                  bootstrapCounts?.agentLeadCounts?.[member.id]?.total ??
-                  leads.filter((l) => l.assignedTo === member.id).length;
-                return (
-                  <div
-                    key={member.id}
-                    className="flex items-center justify-between p-2.5 rounded-xl bg-[#F8FAFC] border border-slate-100"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <img
-                        src={member.avatarUrl}
-                        alt={member.fullName}
-                        referrerPolicy="no-referrer"
-                        className="w-9 h-9 rounded-full object-cover shrink-0"
-                      />
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold text-slate-900 truncate">
-                          {member.fullName}
+              <div className="space-y-3">
+                {salesTeam.slice(0, 4).map((member) => {
+                  const memberLeadsCount =
+                    bootstrapCounts?.agentLeadCounts?.[member.id]?.total ??
+                    leads.filter((l) => l.assignedTo === member.id).length;
+                  return (
+                    <div
+                      key={member.id}
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-[#F8FAFC] border border-slate-100"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <img
+                          src={member.avatarUrl}
+                          alt={member.fullName}
+                          referrerPolicy="no-referrer"
+                          className="w-9 h-9 rounded-full object-cover shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-slate-900 truncate">
+                            {member.fullName}
+                          </div>
+                          <div className="text-[11px] text-slate-500 truncate">
+                            {(member.assignedProjects || []).slice(0, 2).join(' · ')}
+                          </div>
                         </div>
-                        <div className="text-[11px] text-slate-500 truncate">
-                          {(member.assignedProjects || []).slice(0, 2).join(' · ')}
+                      </div>
+                      <div className="text-end shrink-0 ms-2">
+                        <div className="text-xs font-bold text-blue-600 font-mono-tabular">
+                          {memberLeadsCount} {isAr ? 'ليد' : 'leads'}
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          {member.isActiveForRouting
+                            ? isAr
+                              ? 'يستقبل تلقائياً'
+                              : 'Auto-Receive ON'
+                            : isAr
+                            ? 'موقوف مؤقتاً'
+                            : 'Paused'}
                         </div>
                       </div>
                     </div>
-                    <div className="text-end shrink-0 ms-2">
-                      <div className="text-xs font-bold text-blue-600 font-mono-tabular">
-                        {memberLeadsCount} {isAr ? 'ليد' : 'leads'}
-                      </div>
-                      <div className="text-[10px] text-slate-400">
-                        {member.isActiveForRouting
-                          ? isAr
-                            ? 'يستقبل تلقائياً'
-                            : 'Auto-Receive ON'
-                          : isAr
-                          ? 'موقوف مؤقتاً'
-                          : 'Paused'}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold text-slate-900">
+                  {isAr ? 'مشاريعي العقارية وحالة حسابي' : 'My Assigned Projects & Status'}
+                </h3>
+                <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[11px] font-bold">
+                  @{currentUser.username}
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-slate-100 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500">{isAr ? 'العملاء المعينون لي:' : 'My Assigned Leads:'}</span>
+                  <span className="font-mono-tabular font-bold text-blue-600">
+                    {totalLeads} {isAr ? 'عميل' : 'leads'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500">{isAr ? 'استقبال الليدز التلقائي:' : 'Auto-Routing Status:'}</span>
+                  <span className="font-semibold text-emerald-600">
+                    {currentUser.isActiveForRouting
+                      ? isAr
+                        ? 'مفعل'
+                        : 'Active'
+                      : isAr
+                      ? 'متوقف مؤقتاً'
+                      : 'Paused'}
+                  </span>
+                </div>
+                <div className="pt-2 border-t border-slate-200/70">
+                  <div className="text-[11px] text-slate-500 mb-2">
+                    {isAr ? 'المشاريع المسندة لي:' : 'My Assigned Projects:'}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(currentUser.assignedProjects || []).map((proj) => (
+                      <span
+                        key={proj}
+                        className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-semibold text-slate-700"
+                      >
+                        {proj}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           <button
             onClick={() => onNavigate('dailyReports')}
@@ -586,7 +670,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           >
             <Users className="w-3.5 h-3.5" />
             <span>
-              {isAr ? 'فتح التقرير التحليلي اليومي للسيلز' : 'View Daily Sales Performance Report'}
+              {canViewTeamUsers
+                ? isAr
+                  ? 'فتح التقرير التحليلي اليومي للسيلز'
+                  : 'View Daily Sales Performance Report'
+                : isAr
+                ? 'فتح تقرير أدائي اليومي'
+                : 'View My Daily Performance Report'}
             </span>
           </button>
         </div>
@@ -693,7 +783,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-3 gap-2">
+          <div
+            className={`mt-4 pt-3 border-t border-slate-100 grid ${
+              canViewPermissions ? 'grid-cols-3' : 'grid-cols-2'
+            } gap-2`}
+          >
             <button
               onClick={() => onNavigate('leads')}
               className="py-2 px-2 rounded-lg bg-[#F8FAFC] hover:bg-blue-50 text-slate-700 hover:text-blue-700 text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
@@ -708,13 +802,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <Building className="w-3.5 h-3.5 text-indigo-600" />
               <span>{isAr ? 'العقارات' : 'Units'}</span>
             </button>
-            <button
-              onClick={() => onNavigate('permissions')}
-              className="py-2 px-2 rounded-lg bg-[#F8FAFC] hover:bg-blue-50 text-slate-700 hover:text-blue-700 text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              <span>{isAr ? 'الصلاحيات' : 'RBAC'}</span>
-            </button>
+            {canViewPermissions && (
+              <button
+                onClick={() => onNavigate('permissions')}
+                className="py-2 px-2 rounded-lg bg-[#F8FAFC] hover:bg-blue-50 text-slate-700 hover:text-blue-700 text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{isAr ? 'الصلاحيات' : 'RBAC'}</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

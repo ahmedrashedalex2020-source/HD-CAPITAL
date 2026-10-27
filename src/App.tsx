@@ -18,7 +18,6 @@ import {
   LogOut,
   CheckCheck,
   X,
-  ChevronDown,
   Menu,
   RefreshCw,
 } from 'lucide-react';
@@ -41,6 +40,9 @@ import {
   setSessionToken,
   clearSessionAuth,
   isServerlessMode,
+  hasValidActiveSession,
+  isSessionExpiredByInactivity,
+  touchSessionActivity,
 } from './services/api';
 import { subscribeToFirestoreWorkspace } from './services/firebaseClient';
 import { LoginView } from './components/LoginView';
@@ -55,7 +57,8 @@ import { CalendarView } from './components/CalendarView';
 
 export default function App() {
   const [lang, setLang] = useState<Lang>('ar');
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => hasValidActiveSession());
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -77,7 +80,6 @@ export default function App() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showNotificationsDrawer, setShowNotificationsDrawer] = useState(false);
-  const [showAccountSwitcher, setShowAccountSwitcher] = useState(false);
   const [isSyncingSheets, setIsSyncingSheets] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [globalSearch, setGlobalSearch] = useState<string>('');
@@ -86,10 +88,83 @@ export default function App() {
   const isAr = lang === 'ar';
   const t = translations[lang];
 
+  const handleLogout = useCallback((expiredReason?: string) => {
+    clearSessionAuth();
+    setCurrentUser(null);
+    setCurrentRole(null);
+    setLeads([]);
+    setUsers([]);
+    setDeals([]);
+    setEvents([]);
+    setSelectedLead(null);
+    setSessionExpiredMessage(expiredReason || null);
+    setIsAuthenticated(false);
+  }, []);
+
   useEffect(() => {
     document.documentElement.dir = isAr ? 'rtl' : 'ltr';
     document.documentElement.lang = lang;
   }, [lang, isAr]);
+
+  // 15-Minute Inactivity & Tab-Absence Auto-Logout Guard
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const timeoutMsg = isAr
+      ? 'تم تسجيل الخروج تلقائياً بعد غياب 15 دقيقة حفاظاً على أمان البيانات. يرجى إعادة تسجيل الدخول.'
+      : 'Automatically logged out after 15 minutes of inactivity. Please sign in again.';
+
+    let lastTouch = Date.now();
+
+    const checkAndHandleExpiry = (): boolean => {
+      if (isSessionExpiredByInactivity()) {
+        handleLogout(timeoutMsg);
+        return true;
+      }
+      return false;
+    };
+
+    const onUserActivity = () => {
+      if (checkAndHandleExpiry()) return;
+      const now = Date.now();
+      if (now - lastTouch > 4000) {
+        lastTouch = now;
+        touchSessionActivity();
+      }
+    };
+
+    const onVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        checkAndHandleExpiry();
+      }
+    };
+
+    const activityEvents: (keyof WindowEventMap)[] = [
+      'mousemove',
+      'mousedown',
+      'keydown',
+      'touchstart',
+      'scroll',
+      'click',
+    ];
+
+    activityEvents.forEach((evt) =>
+      window.addEventListener(evt, onUserActivity, { passive: true })
+    );
+    window.addEventListener('focus', onVisibilityOrFocus);
+    document.addEventListener('visibilitychange', onVisibilityOrFocus);
+
+    const timer = setInterval(() => {
+      checkAndHandleExpiry();
+    }, 10_000);
+
+    return () => {
+      activityEvents.forEach((evt) => window.removeEventListener(evt, onUserActivity));
+      window.removeEventListener('focus', onVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', onVisibilityOrFocus);
+      clearInterval(timer);
+    };
+  }, [isAuthenticated, isAr, handleLogout]);
 
   const triggerToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -99,11 +174,13 @@ export default function App() {
   }, []);
 
   const loadBootstrapData = useCallback(async () => {
+    if (isSessionExpiredByInactivity()) {
+      handleLogout();
+      return;
+    }
     try {
       const data = await apiRequest('/api/bootstrap');
       if (!data || !data.currentUser || !data.currentRole) {
-        clearSessionAuth();
-        setIsAuthenticated(false);
         return;
       }
       if (data.sessionToken) {
@@ -130,10 +207,8 @@ export default function App() {
       setProjects(data.projects || []);
     } catch (err) {
       console.error('Failed to bootstrap CRM:', err);
-      clearSessionAuth();
-      setIsAuthenticated(false);
     }
-  }, []);
+  }, [handleLogout]);
 
   const handleManualRefresh = useCallback(async () => {
     setIsManualRefreshing(true);
@@ -151,7 +226,7 @@ export default function App() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      loadBootstrapData();
+      void loadBootstrapData();
     }
   }, [isAuthenticated, loadBootstrapData]);
 
@@ -159,7 +234,7 @@ export default function App() {
   useEffect(() => {
     if (!isAuthenticated) return;
     const unsubscribe = subscribeToFirestoreWorkspace(() => {
-      // Instantly refresh CRM view whenever Cloud Firestore data changes
+      // Refresh CRM view when Cloud Firestore data changes externally
       void loadBootstrapData();
     });
     return () => {
@@ -205,26 +280,15 @@ export default function App() {
     setLang((prev) => (prev === 'ar' ? 'en' : 'ar'));
   };
 
-  const handleSwitchUser = async (userId: string) => {
-    try {
-      const switched = await apiRequest('/api/auth/switch-account', {
-        method: 'POST',
-        body: JSON.stringify({ targetUserId: userId }),
-      });
-      setCurrentApiUser(switched.user.id, switched.token);
-      setShowAccountSwitcher(false);
-      await loadBootstrapData();
-      triggerToast(
-        isAr
-          ? 'تم تبديل الحساب وتحديث الشاشات حسب صلاحيات الدور الوظيفي'
-          : 'Switched user account and applied role permissions'
-      );
-    } catch (err: any) {
-      triggerToast(err.message);
-    }
-  };
-
   const handleQuickSyncSheets = useCallback(async () => {
+    if (
+      !currentRole ||
+      (currentRole.id !== 'role_admin' &&
+        (!currentRole.permissions?.sheets_sync?.import ||
+          currentRole.permissions.sheets_sync.import === 'none'))
+    ) {
+      return;
+    }
     setIsSyncingSheets(true);
     try {
       const connId = sheetConnections[0]?.id;
@@ -243,16 +307,24 @@ export default function App() {
     } finally {
       setIsSyncingSheets(false);
     }
-  }, [sheetConnections, isAr, triggerToast, loadBootstrapData]);
+  }, [currentRole, sheetConnections, isAr, triggerToast, loadBootstrapData]);
 
-  // Global 15-Minute Automatic Sync Interval for Google Drive Sheet (CRM1)
+  // Global 15-Minute Automatic Sync Interval for Google Drive Sheet (CRM1) - Only for roles permitted to sync
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (
+      !isAuthenticated ||
+      !currentRole ||
+      (currentRole.id !== 'role_admin' &&
+        (!currentRole.permissions?.sheets_sync?.import ||
+          currentRole.permissions.sheets_sync.import === 'none'))
+    ) {
+      return;
+    }
     const interval = setInterval(() => {
       handleQuickSyncSheets();
     }, 15 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [isAuthenticated, handleQuickSyncSheets]);
+  }, [isAuthenticated, currentRole, handleQuickSyncSheets]);
 
   const handleMarkAllNotificationsRead = async () => {
     try {
@@ -263,9 +335,11 @@ export default function App() {
     }
   };
 
-  // Permission-filtered Sidebar Navigation Items (Route Guard Contract)
+  // Permission-filtered Sidebar Navigation Items (Strict Route Guard Contract)
   const navItems = React.useMemo(() => {
     if (!currentRole) return [];
+    const perms = currentRole.permissions;
+    const isAdmin = currentRole.id === 'role_admin';
     return [
       {
         id: 'dashboard',
@@ -277,7 +351,7 @@ export default function App() {
         id: 'leads',
         label: t.nav.leads,
         icon: Users,
-        visible: currentRole.permissions?.leads?.read !== 'none',
+        visible: isAdmin || (Boolean(perms?.leads?.read) && perms.leads.read !== 'none'),
         badge: leads.filter((l) => l.status === 'New').length,
       },
       {
@@ -285,48 +359,49 @@ export default function App() {
         label: t.nav.sheetsSync,
         icon: FileSpreadsheet,
         visible:
-          currentRole.id === 'role_admin' ||
-          currentRole.permissions?.sheets_sync?.read !== 'none',
+          isAdmin || (Boolean(perms?.sheets_sync?.read) && perms.sheets_sync.read !== 'none'),
       },
       {
         id: 'dealsAndProperties',
         label: t.nav.dealsAndProperties,
         icon: Building2,
         visible:
-          currentRole.permissions?.deals?.read !== 'none' ||
-          currentRole.permissions?.properties?.read !== 'none',
+          isAdmin ||
+          (Boolean(perms?.deals?.read) && perms.deals.read !== 'none') ||
+          (Boolean(perms?.properties?.read) && perms.properties.read !== 'none'),
       },
       {
         id: 'calendar',
         label: t.nav.calendar,
         icon: Calendar,
-        visible: currentRole.permissions?.calendar?.read !== 'none',
+        visible: isAdmin || (Boolean(perms?.calendar?.read) && perms.calendar.read !== 'none'),
       },
       {
         id: 'dailyReports',
         label: t.nav.dailyReports,
         icon: BarChart3,
-        visible: currentRole.permissions?.reports?.read !== 'none',
+        visible: isAdmin || (Boolean(perms?.reports?.read) && perms.reports.read !== 'none'),
       },
       {
         id: 'employees',
         label: t.nav.employees,
         icon: UserCheck,
-        visible: currentRole.permissions?.users?.read !== 'none',
+        visible:
+          isAdmin || perms?.users?.read === 'all' || perms?.users?.read === 'team',
       },
       {
         id: 'permissions',
         label: t.nav.permissions,
         icon: ShieldCheck,
-        visible: currentRole.id === 'role_admin' || currentRole.id === 'role_supervisor',
+        visible: isAdmin,
       },
     ].filter((item) => item.visible);
   }, [currentRole, t.nav, leads]);
 
-  // Route Guard: Redirect to dashboard if current role loses access to activeTab
+  // Route Guard: Redirect to first permitted tab if current role does not have access to activeTab
   useEffect(() => {
     if (navItems.length > 0 && !navItems.some((item) => item.id === activeTab)) {
-      setActiveTab('dashboard');
+      setActiveTab(navItems[0].id);
     }
   }, [navItems, activeTab]);
 
@@ -335,8 +410,16 @@ export default function App() {
       <LoginView
         lang={lang}
         onToggleLang={handleToggleLang}
-        onLoginSuccess={(u, _r, token) => {
+        sessionExpiredMessage={sessionExpiredMessage}
+        onLoginSuccess={(u, r, token) => {
+          setSessionExpiredMessage(null);
           setCurrentApiUser(u.id, token);
+          touchSessionActivity();
+          setCurrentUser(u);
+          setCurrentRole(r);
+          setRoles((prev) => (prev.length > 0 ? prev : [r]));
+          setUsers((prev) => (prev.length > 0 ? prev : [u]));
+          setActiveTab('dashboard');
           setIsAuthenticated(true);
         }}
       />
@@ -351,7 +434,7 @@ export default function App() {
             <Building2 className="w-5 h-5" />
           </div>
           <div className="text-sm font-bold text-slate-900">
-            {isAr ? 'جاري تحميل مساحة العمل والصلاحيات...' : 'Loading CRM Workspace...'}
+            {isAr ? 'جاري التحقق من الجلسة وتحميل الصلاحيات...' : 'Verifying session & loading permissions...'}
           </div>
           <div className="pt-2 flex items-center justify-center gap-2">
             <button
@@ -361,11 +444,7 @@ export default function App() {
               {isAr ? 'تحديث الآن' : 'Reload Now'}
             </button>
             <button
-              onClick={() => {
-                clearSessionAuth();
-                setCurrentApiUser('usr_admin');
-                setIsAuthenticated(false);
-              }}
+              onClick={() => handleLogout()}
               className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 cursor-pointer"
             >
               {isAr ? 'صفحة تسجيل الدخول' : 'Sign In Page'}
@@ -476,10 +555,7 @@ export default function App() {
           </div>
 
           <button
-            onClick={() => {
-              clearSessionAuth();
-              setIsAuthenticated(false);
-            }}
+            onClick={() => handleLogout()}
             className="w-full flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-blue-100 hover:bg-white/15 hover:text-white transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
@@ -505,19 +581,21 @@ export default function App() {
               <span className="text-xs sm:text-sm font-bold text-slate-900 truncate">
                 {navItems.find((n) => n.id === activeTab)?.label || t.nav.dashboard}
               </span>
-              <button
-                onClick={() => setActiveTab('leads')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
-                  activeTab === 'leads'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-                }`}
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>
-                  {isAr ? `العملاء (${leads.length})` : `Leads (${leads.length})`}
-                </span>
-              </button>
+              {navItems.some((n) => n.id === 'leads') && (
+                <button
+                  onClick={() => setActiveTab('leads')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
+                    activeTab === 'leads'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>
+                    {isAr ? `العملاء (${leads.length})` : `Leads (${leads.length})`}
+                  </span>
+                </button>
+              )}
 
               {/* Real-time Firebase Cloud Database Sync Indicator */}
               <div
@@ -538,102 +616,64 @@ export default function App() {
             </div>
 
             {/* Zone 1.5: Global Instant Lead Search Bar */}
-            <div className="relative order-3 md:order-2 w-full md:w-auto md:flex-1 md:max-w-md">
-              <input
-                type="text"
-                value={globalSearch}
-                onChange={(e) => setGlobalSearch(e.target.value)}
-                placeholder={
-                  isAr
-                    ? 'بحث فوري عن عميل بالاسم، رقم الهاتف، أو المشروع...'
-                    : 'Quick search lead by name, phone, or project...'
-                }
-                className="w-full px-3.5 py-2 rounded-xl bg-[#F4F7FE] border border-slate-200/80 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
-              />
-              {quickSearchMatches.length > 0 && (
-                <div className="absolute start-0 end-0 mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-xl p-2 z-50 divide-y divide-slate-50">
-                  {quickSearchMatches.map((match) => (
-                    <button
-                      key={match.id}
-                      onClick={() => {
-                        setGlobalSearch('');
-                        setSelectedLead(match);
-                        setActiveTab('leads');
-                      }}
-                      className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-blue-50/60 text-start text-xs transition-colors cursor-pointer"
-                    >
-                      <div className="min-w-0 pe-2">
-                        <div className="font-bold text-slate-900 truncate">{match.fullName}</div>
-                        <div className="text-[11px] text-slate-500 font-mono-tabular truncate">
-                          {match.phone} · {match.projectInterest}
+            {navItems.some((n) => n.id === 'leads') && (
+              <div className="relative order-3 md:order-2 w-full md:w-auto md:flex-1 md:max-w-md">
+                <input
+                  type="text"
+                  value={globalSearch}
+                  onChange={(e) => setGlobalSearch(e.target.value)}
+                  placeholder={
+                    isAr
+                      ? 'بحث فوري عن عميل بالاسم، رقم الهاتف، أو المشروع...'
+                      : 'Quick search lead by name, phone, or project...'
+                  }
+                  className="w-full px-3.5 py-2 rounded-xl bg-[#F4F7FE] border border-slate-200/80 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-600"
+                />
+                {quickSearchMatches.length > 0 && (
+                  <div className="absolute start-0 end-0 mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-xl p-2 z-50 divide-y divide-slate-50">
+                    {quickSearchMatches.map((match) => (
+                      <button
+                        key={match.id}
+                        onClick={() => {
+                          setGlobalSearch('');
+                          setSelectedLead(match);
+                          setActiveTab('leads');
+                        }}
+                        className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-blue-50/60 text-start text-xs transition-colors cursor-pointer"
+                      >
+                        <div className="min-w-0 pe-2">
+                          <div className="font-bold text-slate-900 truncate">{match.fullName}</div>
+                          <div className="text-[11px] text-slate-500 font-mono-tabular truncate">
+                            {match.phone} · {match.projectInterest}
+                          </div>
                         </div>
-                      </div>
-                      <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-bold shrink-0">
-                        {t.status[match.status]}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Zone 2: Quick Actions & Role Switcher */}
-            <div className="flex items-center gap-1.5 sm:gap-2.5 order-2 md:order-3 shrink-0">
-              {/* Quick Role/Account Switcher to test RBAC permissions */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowAccountSwitcher(!showAccountSwitcher)}
-                  className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-[#F4F7FE] hover:bg-blue-50 border border-slate-200 text-xs font-semibold text-slate-800 transition-colors cursor-pointer"
-                >
-                  <img
-                    src={currentUser.avatarUrl}
-                    alt={currentUser.fullName}
-                    referrerPolicy="no-referrer"
-                    className="w-6 h-6 rounded-full object-cover shrink-0"
-                  />
-                  <span className="max-w-[100px] sm:max-w-[140px] truncate">
-                    {currentUser.fullName}
-                  </span>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                </button>
-
-                {showAccountSwitcher && (
-                  <div className="absolute end-0 mt-2 w-72 max-w-[90vw] bg-white rounded-2xl border border-slate-200 shadow-xl p-2 z-50">
-                    <div className="px-3 py-2 border-b border-slate-100 text-[11px] font-bold text-slate-500">
-                      {isAr
-                        ? 'تبديل سريع للمستخدم (لمعاينة الصلاحيات):'
-                        : 'Switch User (Preview Role Views):'}
-                    </div>
-                    <div className="max-h-64 overflow-y-auto divide-y divide-slate-50">
-                      {users.map((u) => {
-                        const r = roles.find((roleObj) => roleObj.id === u.roleId);
-                        const isCurrent = u.id === currentUser.id;
-                        return (
-                          <button
-                            key={u.id}
-                            onClick={() => handleSwitchUser(u.id)}
-                            className={`w-full flex items-center gap-2.5 p-2.5 rounded-xl text-start text-xs transition-colors cursor-pointer ${
-                              isCurrent ? 'bg-blue-50/80 font-bold' : 'hover:bg-slate-50'
-                            }`}
-                          >
-                            <img
-                              src={u.avatarUrl}
-                              alt={u.fullName}
-                              referrerPolicy="no-referrer"
-                              className="w-8 h-8 rounded-full object-cover shrink-0"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="text-slate-900 truncate">{u.fullName}</div>
-                              <div className="text-[11px] text-slate-500 truncate">
-                                @{u.username} · {isAr ? r?.nameAr : r?.name}
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
+                        <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-bold shrink-0">
+                          {t.status[match.status]}
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Zone 2: Authenticated User Identity & Quick Actions (No Account Switcher) */}
+            <div className="flex items-center gap-1.5 sm:gap-2.5 order-2 md:order-3 shrink-0">
+              <div className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-[#F4F7FE] border border-slate-200 text-xs font-semibold text-slate-800">
+                <img
+                  src={currentUser.avatarUrl}
+                  alt={currentUser.fullName}
+                  referrerPolicy="no-referrer"
+                  className="w-6 h-6 rounded-full object-cover shrink-0"
+                />
+                <div className="min-w-0">
+                  <div className="max-w-[100px] sm:max-w-[140px] truncate text-slate-900 font-bold">
+                    {currentUser.fullName}
+                  </div>
+                  <div className="text-[10px] text-blue-600 font-semibold truncate hidden sm:block">
+                    {isAr ? currentRole.nameAr : currentRole.name}
+                  </div>
+                </div>
               </div>
 
               {/* Bilingual Language Toggle */}
@@ -659,12 +699,9 @@ export default function App() {
                 )}
               </button>
 
-              {/* Quick Logout Button on Header for easy access */}
+              {/* Quick Logout Button on Header */}
               <button
-                onClick={() => {
-                  clearSessionAuth();
-                  setIsAuthenticated(false);
-                }}
+                onClick={() => handleLogout()}
                 className="p-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 transition-colors cursor-pointer"
                 title={t.common.logout}
               >
@@ -673,7 +710,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Mobile & Tablet Horizontal Quick-Navigation Bar (Always visible below header on < lg screens) */}
+          {/* Mobile & Tablet Horizontal Quick-Navigation Bar (Strictly filtered by navItems) */}
           <div className="lg:hidden flex items-center gap-1.5 overflow-x-auto pt-1 pb-0.5 no-scrollbar">
             {navItems.map((item) => {
               const Icon = item.icon;
@@ -706,9 +743,9 @@ export default function App() {
           </div>
         </header>
 
-        {/* Active View Container (Responsive padding with mobile bottom nav clearance) */}
+        {/* Active View Container (Strictly guarded by navItems permissions) */}
         <main className="flex-1 p-3 sm:p-5 lg:p-7 pb-24 lg:pb-7 max-w-[1440px] w-full mx-auto">
-          {activeTab === 'dashboard' && (
+          {activeTab === 'dashboard' && navItems.some((n) => n.id === 'dashboard') && (
             <DashboardView
               lang={lang}
               currentUser={currentUser}
@@ -718,21 +755,29 @@ export default function App() {
               deals={deals}
               events={events}
               sheetConnections={sheetConnections}
-              onNavigate={(tab) => setActiveTab(tab)}
+              onNavigate={(tab) => {
+                if (navItems.some((n) => n.id === tab)) {
+                  setActiveTab(tab);
+                }
+              }}
               onSelectLead={(lead) => {
-                setSelectedLead(lead);
-                setActiveTab('leads');
+                if (navItems.some((n) => n.id === 'leads')) {
+                  setSelectedLead(lead);
+                  setActiveTab('leads');
+                }
               }}
               onOpenTransferModal={() => {
-                setShowTransferModal(true);
-                setActiveTab('leads');
+                if (navItems.some((n) => n.id === 'leads')) {
+                  setShowTransferModal(true);
+                  setActiveTab('leads');
+                }
               }}
               onQuickSyncSheets={handleQuickSyncSheets}
               isSyncingSheets={isSyncingSheets}
             />
           )}
 
-          {activeTab === 'leads' && (
+          {activeTab === 'leads' && navItems.some((n) => n.id === 'leads') && (
             <LeadsView
               lang={lang}
               currentUser={currentUser}
@@ -752,7 +797,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'sheetsSync' && (
+          {activeTab === 'sheetsSync' && navItems.some((n) => n.id === 'sheetsSync') && (
             <GoogleSheetsView
               lang={lang}
               currentRole={currentRole}
@@ -765,22 +810,23 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'dealsAndProperties' && (
-            <DealsAndPropertiesView
-              lang={lang}
-              currentUser={currentUser}
-              currentRole={currentRole}
-              users={users}
-              leads={leads}
-              properties={properties}
-              deals={deals}
-              projects={projects}
-              onRefresh={loadBootstrapData}
-              onToast={triggerToast}
-            />
-          )}
+          {activeTab === 'dealsAndProperties' &&
+            navItems.some((n) => n.id === 'dealsAndProperties') && (
+              <DealsAndPropertiesView
+                lang={lang}
+                currentUser={currentUser}
+                currentRole={currentRole}
+                users={users}
+                leads={leads}
+                properties={properties}
+                deals={deals}
+                projects={projects}
+                onRefresh={loadBootstrapData}
+                onToast={triggerToast}
+              />
+            )}
 
-          {activeTab === 'calendar' && (
+          {activeTab === 'calendar' && navItems.some((n) => n.id === 'calendar') && (
             <CalendarView
               lang={lang}
               currentUser={currentUser}
@@ -793,11 +839,17 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'dailyReports' && (
-            <DailyReportsView lang={lang} leads={leads} deals={deals} />
+          {activeTab === 'dailyReports' && navItems.some((n) => n.id === 'dailyReports') && (
+            <DailyReportsView
+              lang={lang}
+              currentUser={currentUser}
+              currentRole={currentRole}
+              leads={leads}
+              deals={deals}
+            />
           )}
 
-          {activeTab === 'employees' && (
+          {activeTab === 'employees' && navItems.some((n) => n.id === 'employees') && (
             <EmployeesView
               lang={lang}
               currentUser={currentUser}
@@ -815,7 +867,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'permissions' && (
+          {activeTab === 'permissions' && navItems.some((n) => n.id === 'permissions') && (
             <PermissionsMatrixView
               lang={lang}
               currentRole={currentRole}
@@ -828,7 +880,7 @@ export default function App() {
         </main>
       </div>
 
-      {/* Notifications Drawer (Matches Reference Image 3 Notifications panel) */}
+      {/* Notifications Drawer */}
       {showNotificationsDrawer && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex justify-end">
           <div className="w-full max-w-md bg-white h-full shadow-2xl border-s border-slate-200 flex flex-col justify-between">
@@ -903,78 +955,38 @@ export default function App() {
         </div>
       )}
 
-      {/* Unified Mobile & Iframe Bottom Navigation Bar (Persistent Native-App Experience) */}
+      {/* Unified Mobile & Iframe Bottom Navigation Bar (Strictly filtered by navItems) */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-2xl px-2 py-1.5 flex items-center justify-around safe-bottom">
-        <button
-          onClick={() => setActiveTab('dashboard')}
-          className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer min-w-[56px] ${
-            activeTab === 'dashboard'
-              ? 'text-blue-600 scale-105'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <LayoutDashboard className={`w-5 h-5 mb-0.5 ${activeTab === 'dashboard' ? 'text-blue-600' : 'text-slate-400'}`} />
-          <span className="truncate">{t.nav.dashboard}</span>
-        </button>
+        {navItems.slice(0, 4).map((item) => {
+          const Icon = item.icon;
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`relative flex flex-col items-center justify-center py-1 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer min-w-[56px] ${
+                isActive
+                  ? 'text-blue-600 scale-105'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Icon className={`w-5 h-5 mb-0.5 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+              <span className="truncate max-w-[64px]">{item.label}</span>
+              {item.id === 'leads' && leads.length > 0 && (
+                <span className="absolute -top-1 end-1 px-1.5 py-0.2 rounded-full bg-blue-600 text-white text-[9px] font-mono-tabular font-bold">
+                  {leads.length}
+                </span>
+              )}
+            </button>
+          );
+        })}
 
         <button
-          onClick={() => setActiveTab('leads')}
-          className={`relative flex flex-col items-center justify-center py-1 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer min-w-[56px] ${
-            activeTab === 'leads'
-              ? 'text-blue-600 scale-105'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
+          onClick={() => handleLogout()}
+          className="flex flex-col items-center justify-center py-1 px-2 rounded-xl text-[10px] font-bold text-red-600 hover:bg-red-50 transition-all cursor-pointer min-w-[56px]"
         >
-          <Users className={`w-5 h-5 mb-0.5 ${activeTab === 'leads' ? 'text-blue-600' : 'text-slate-400'}`} />
-          <span className="truncate">{t.nav.leads}</span>
-          {leads.length > 0 && (
-            <span className="absolute -top-1 end-1 px-1.5 py-0.2 rounded-full bg-blue-600 text-white text-[9px] font-mono-tabular font-bold">
-              {leads.length}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('dealsAndProperties')}
-          className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer min-w-[56px] ${
-            activeTab === 'dealsAndProperties'
-              ? 'text-blue-600 scale-105'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Building2 className={`w-5 h-5 mb-0.5 ${activeTab === 'dealsAndProperties' ? 'text-blue-600' : 'text-slate-400'}`} />
-          <span className="truncate">{isAr ? 'المبيعات' : 'Deals'}</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('dailyReports')}
-          className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer min-w-[56px] ${
-            activeTab === 'dailyReports'
-              ? 'text-blue-600 scale-105'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <BarChart3 className={`w-5 h-5 mb-0.5 ${activeTab === 'dailyReports' ? 'text-blue-600' : 'text-slate-400'}`} />
-          <span className="truncate">{isAr ? 'التقارير' : 'Reports'}</span>
-        </button>
-
-        <button
-          onClick={() => setShowAccountSwitcher(!showAccountSwitcher)}
-          className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer min-w-[56px] ${
-            showAccountSwitcher
-              ? 'text-blue-600'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <img
-            src={currentUser.avatarUrl}
-            alt={currentUser.fullName}
-            referrerPolicy="no-referrer"
-            className="w-5 h-5 rounded-full object-cover mb-0.5 border border-slate-300"
-          />
-          <span className="truncate max-w-[52px]">
-            {currentUser.fullName.split(' ')[0]}
-          </span>
+          <LogOut className="w-5 h-5 mb-0.5 text-red-600" />
+          <span className="truncate">{t.common.logout}</span>
         </button>
       </nav>
 

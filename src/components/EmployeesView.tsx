@@ -108,8 +108,17 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
 
   const canManageUsers =
     currentRole.id === 'role_admin' || currentRole.permissions?.users?.add !== 'none';
+  const canTransfer =
+    currentRole.id === 'role_admin' || currentRole.permissions?.leads?.transfer !== 'none';
 
-  const selectedProfile = users.find((u) => u.id === selectedProfileId) || null;
+  const visibleUsers =
+    currentRole.id === 'role_admin' ||
+    currentRole.permissions?.users?.read === 'all' ||
+    currentRole.permissions?.users?.read === 'team'
+      ? users
+      : users.filter((u) => u.id === currentUser.id);
+
+  const selectedProfile = visibleUsers.find((u) => u.id === selectedProfileId) || null;
 
   const openAddEmployeeModal = () => {
     setEditingUser(null);
@@ -249,8 +258,8 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
         <div>
           <h1 className="text-xl font-bold text-slate-900">
             {isAr
-              ? `فريق العمل والبروفايلات (${users.length})`
-              : `Employees & Profiles (${users.length})`}
+              ? `فريق العمل والبروفايلات (${visibleUsers.length})`
+              : `Employees & Profiles (${visibleUsers.length})`}
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
             {isAr
@@ -369,15 +378,17 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
             </div>
 
             <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
-              <button
-                onClick={() => onOpenTransferForAgent(selectedProfile.id)}
-                className="flex-1 py-2 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <ArrowLeftRight className="w-3.5 h-3.5" />
-                <span>
-                  {isAr ? 'نقل ليدز هذا المندوب لسيلز آخر' : 'Transfer Agent Leads'}
-                </span>
-              </button>
+              {canTransfer && (
+                <button
+                  onClick={() => onOpenTransferForAgent(selectedProfile.id)}
+                  className="flex-1 py-2 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <ArrowLeftRight className="w-3.5 h-3.5" />
+                  <span>
+                    {isAr ? 'نقل ليدز هذا المندوب لسيلز آخر' : 'Transfer Agent Leads'}
+                  </span>
+                </button>
+              )}
               <button
                 onClick={() => setSelectedProfileId(null)}
                 className="py-2 px-3 rounded-xl bg-slate-100 text-slate-600 text-xs font-semibold cursor-pointer"
@@ -466,7 +477,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
 
       {/* Employee Cards Grid matching Reference Image 3 ("Employees (28)" 4-column card layout) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-        {users.map((emp) => {
+        {visibleUsers.map((emp) => {
           const agentStats = agentLeadCounts[emp.id];
           const empLeads = leads.filter((l) => l.assignedTo === emp.id);
           const backlogCount = agentStats

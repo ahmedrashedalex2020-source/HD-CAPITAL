@@ -539,8 +539,13 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  // Apply optimistic status overrides for instant drag-and-drop response
-  const effectiveLeads = leads.map((l) =>
+  // Apply strict RBAC scope + optimistic status overrides
+  const scopedLeads =
+    currentRole.id !== 'role_admin' && currentRole.permissions?.leads?.read === 'own'
+      ? leads.filter((l) => l.assignedTo === currentUser.id)
+      : leads;
+
+  const effectiveLeads = scopedLeads.map((l) =>
     optimisticStatuses[l.id] ? { ...l, status: optimisticStatuses[l.id] } : l
   );
 
@@ -871,8 +876,8 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
       });
       onToast(
         isAr
-          ? `تمت إعادة توزيع ${res.distributedCount} ليدز جديدة على المناديب حسب المشروع بالتساوي!`
-          : `Auto-rebalanced ${res.distributedCount} new leads across project specialists!`
+          ? `تم تعيين ${res.distributedCount} ليدز جديدة تلقائياً إلى مدير الـ CRM الثاني: حسن شحاتة (Hassan shehata)!`
+          : `Assigned ${res.distributedCount} new leads automatically to 2nd CRM Manager (Hassan shehata)!`
       );
       onRefresh();
     } catch (err: any) {
@@ -884,6 +889,14 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
 
   const openCreateModal = (initialStatus: LeadStatus = 'New') => {
     setEditingLead(null);
+    const hassanAdmin =
+      users.find(
+        (u) =>
+          u.id === 'usr_admin2' ||
+          String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata'
+      ) || currentUser;
+    const defaultAssigneeId =
+      currentRole.permissions?.leads?.add === 'own' ? currentUser.id : hassanAdmin.id;
     setFormData({
       fullName: '',
       phone: '',
@@ -897,7 +910,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
       budgetMax: 0,
       status: initialStatus,
       priority: 'High',
-      assignedTo: currentUser.id,
+      assignedTo: defaultAssigneeId,
       notes: '',
       nextFollowUpAt: new Date().toISOString().slice(0, 10),
     });
@@ -1160,11 +1173,11 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                     <span>
                       {isRebalancing
                         ? isAr
-                          ? 'جاري التوزيع...'
-                          : 'Rebalancing...'
+                          ? 'جاري التعيين...'
+                          : 'Assigning...'
                         : isAr
-                        ? 'توزيع ذكي بالتساوي'
-                        : 'Smart Rebalance'}
+                        ? 'تعيين أوتوماتيك إلى Hassan shehata'
+                        : 'Auto-Assign to Hassan shehata'}
                     </span>
                   </button>
 
@@ -1340,12 +1353,12 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
               statusFilter === 'ALL' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
             }`}
           >
-            {leads.length}
+            {effectiveLeads.length}
           </span>
         </button>
 
         {ALL_LEAD_STATUSES.map((st) => {
-          const count = leads.filter((l) => l.status === st).length;
+          const count = effectiveLeads.filter((l) => l.status === st).length;
           const meta = STAGE_META[st];
           const isSelected = statusFilter === st;
           return (

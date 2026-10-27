@@ -338,7 +338,17 @@ export const GoogleSheetsView: React.FC<GoogleSheetsViewProps> = ({
     }
   };
 
-  const activeSalesAgents = users.filter((u) => u.isActiveForRouting);
+  const hassanCrmAdmin =
+    users.find(
+      (u) =>
+        u.id === 'usr_admin2' ||
+        String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata'
+    ) ||
+    users.find((u) => u.id === 'usr_admin') ||
+    users[0];
+  const activeSalesAgents = hassanCrmAdmin
+    ? [hassanCrmAdmin]
+    : users.filter((u) => u.isActiveForRouting);
   const minsRemaining = String(Math.floor(secondsToNextSync / 60)).padStart(2, '0');
   const secsRemaining = String(secondsToNextSync % 60).padStart(2, '0');
 
@@ -725,8 +735,8 @@ export const GoogleSheetsView: React.FC<GoogleSheetsViewProps> = ({
             <div className="sm:col-span-2">
               <label className="block font-semibold text-slate-700 mb-1.5">
                 {isAr
-                  ? 'خوارزمية التوزيع التلقائي على فريق المبيعات:'
-                  : 'Automatic Lead Routing Algorithm:'}
+                  ? 'التعيين التلقائي لليدز المستوردة:'
+                  : 'Automatic Lead Assignment Target:'}
               </label>
               <select
                 value={routingMode}
@@ -735,13 +745,8 @@ export const GoogleSheetsView: React.FC<GoogleSheetsViewProps> = ({
               >
                 <option value="project_then_round_robin">
                   {isAr
-                    ? 'توزيع دائري بالتساوي مع التخصيص حسب المشروع العقاري (Recommended)'
-                    : 'Round-Robin Equal Distribution + Real Estate Project Specialization'}
-                </option>
-                <option value="round_robin_only">
-                  {isAr
-                    ? 'توزيع دائري بالتساوي بين جميع المناديب النشطين فقط'
-                    : 'Pure Round-Robin Across All Active Sales Agents'}
+                    ? 'تعيين أوتوماتيك مباشر إلى مدير الـ CRM الثاني: حسن شحاتة (Hassan shehata) — بدون توزيع تلقائي'
+                    : 'Direct Auto-Assignment to 2nd CRM Manager: Hassan shehata (No Auto-Distribution)'}
                 </option>
               </select>
             </div>
@@ -879,7 +884,7 @@ export const GoogleSheetsView: React.FC<GoogleSheetsViewProps> = ({
           </div>
         </div>
 
-        {/* Right: Active Sales Team Routing Pool & Project Matrix */}
+        {/* Right: Automatic Lead Receiver (2nd CRM Manager: Hassan Shehata) */}
         <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-6 flex flex-col justify-between space-y-5">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
@@ -887,43 +892,40 @@ export const GoogleSheetsView: React.FC<GoogleSheetsViewProps> = ({
                 <Users className="w-4 h-4 text-blue-600" />
                 <h2 className="text-sm font-bold text-slate-900">
                   {isAr
-                    ? 'قائمة المناديب المستلمين لليدز تلقائياً'
-                    : 'Active Sales Agents in Auto-Routing Pool'}
+                    ? 'المستلم التلقائي لليدز (مدير الـ CRM الثاني)'
+                    : 'Automatic Lead Receiver (2nd CRM Manager)'}
                 </h2>
               </div>
               <span className="text-xs font-mono-tabular font-semibold text-blue-600">
-                {activeSalesAgents.length} {isAr ? 'نشط' : 'Active'}
+                {isAr ? 'تعيين مباشر' : 'Direct Assignment'}
               </span>
             </div>
 
             <div className="space-y-3">
-              {activeSalesAgents.map((agent, idx) => (
+              {activeSalesAgents.map((agent) => (
                 <div
                   key={agent.id}
-                  className="p-3 rounded-xl bg-[#F8FAFC] border border-slate-100 flex items-center justify-between gap-3"
+                  className="p-3 rounded-xl bg-[#F8FAFC] border border-blue-200 flex items-center justify-between gap-3"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 font-mono-tabular text-xs font-bold flex items-center justify-center shrink-0">
-                      {idx + 1}
-                    </div>
                     <img
                       src={agent.avatarUrl}
                       alt={agent.fullName}
                       referrerPolicy="no-referrer"
-                      className="w-9 h-9 rounded-full object-cover shrink-0"
+                      className="w-10 h-10 rounded-full object-cover shrink-0"
                     />
                     <div className="min-w-0">
                       <div className="text-xs font-bold text-slate-900 truncate">
                         {agent.fullName}
                       </div>
-                      <div className="text-[11px] text-slate-500 truncate">
-                        {(agent.assignedProjects || []).join(' · ')}
+                      <div className="text-[11px] text-blue-600 font-semibold truncate">
+                        {agent.username} · {isAr ? 'مدير الـ CRM الثاني' : '2nd CRM Manager'}
                       </div>
                     </div>
                   </div>
                   <div className="text-end shrink-0">
                     <span className="text-[11px] font-semibold text-emerald-600">
-                      {isAr ? 'جاهز للاستلام' : 'Ready'}
+                      {isAr ? 'المستلم الأساسي لليدز' : 'Primary Receiver'}
                     </span>
                   </div>
                 </div>
@@ -935,13 +937,13 @@ export const GoogleSheetsView: React.FC<GoogleSheetsViewProps> = ({
             <div className="font-bold text-blue-900 flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-blue-600" />
               <span>
-                {isAr ? 'كيف يعمل التوزيع الذكي؟' : 'How Smart Auto-Distribution Works:'}
+                {isAr ? 'قاعدة تعيين الليدز التلقائية:' : 'Automatic Lead Assignment Policy:'}
               </span>
             </div>
             <p className="text-[11px] leading-relaxed text-slate-600">
               {isAr
-                ? 'عند وصول ليد جديد من شيت جوجل، يفحص النظام اسم المشروع العقاري (مثل Palm Hills أو Solare) ويقوم بتعيينه للمندوب المختص بهذا المشروع بالدور الدائري المتساوي، مع إرسال إشعار لحظي للمندوب.'
-                : 'When a new row arrives from Google Sheets, the router matches the project name to specialized sales agents and assigns it in strict Round-Robin order with an instant notification.'}
+                ? 'تم إيقاف التوزيع التلقائي العشوائي على السيلز؛ يتم تعيين جميع الليدز القادمة من شيت CRM1 أوتوماتيكياً إلى مدير الـ CRM الثاني: حسن شحاتة (Hassan shehata)، ليقوم بتوزيعها أو تحويلها يدوياً حسب الحاجة.'
+                : 'Automatic round-robin distribution is disabled. All leads imported from CRM1 are automatically assigned directly to the second CRM Manager (Hassan shehata) for manual dispatching.'}
             </p>
           </div>
         </div>
