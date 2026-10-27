@@ -74,7 +74,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
           </div>
           <div>
             <span className="text-lg sm:text-xl font-bold tracking-tight text-white truncate block">
-              PropSphere CRM
+              HD CAPITAL CRM
             </span>
             <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" />

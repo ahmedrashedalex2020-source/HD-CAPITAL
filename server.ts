@@ -889,7 +889,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       dbUpdated = true;
     }
     if (dbUpdated) {
-      saveDb(db, true);
+      saveDb(db);
     }
 
     const role = db.roles.find((r: any) => r.id === user.roleId) || db.roles[0];
@@ -2912,6 +2912,11 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       );
     }
 
+    const now = new Date(dateFilter || Date.now());
+    const weekStartDate = new Date(now);
+    weekStartDate.setDate(now.getDate() - 6);
+    const weekStartStr = weekStartDate.toISOString().slice(0, 10);
+
     const agentStats = salesAgents.map((agent: any) => {
       const agentLeads = db.leads.filter((l: any) => l.assignedTo === agent.id);
       const leadsAssignedToday = agentLeads.filter((l: any) =>
@@ -2945,6 +2950,13 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
         ['Qualified', 'Site Visit Scheduled', 'Negotiation', 'Won'].includes(l.status)
       ).length;
 
+      const interestedToday = agentLeads.filter(
+        (l: any) =>
+          ['Qualified', 'Site Visit Scheduled', 'Negotiation', 'Won'].includes(l.status) &&
+          (String(l.createdAt).startsWith(dateFilter) ||
+            (l.lastContactedAt && String(l.lastContactedAt).startsWith(dateFilter)))
+      ).length;
+
       const agentWonDeals = db.deals.filter(
         (d: any) => d.assignedTo === agent.id && d.stage === 'Closed Won'
       );
@@ -2956,6 +2968,11 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
 
       const conversionRate =
         agentLeads.length > 0 ? Math.round((qualifiedCount / agentLeads.length) * 100) : 0;
+
+      const dailyConversionRate =
+        leadsAssignedToday > 0
+          ? Math.round((interestedToday / leadsAssignedToday) * 100)
+          : Math.min(100, Math.round((interestedToday / Math.max(1, contactedToday)) * 100));
 
       const contactedLeadsWithTiming = agentLeads.filter(
         (l: any) => l.lastContactedAt && l.createdAt
@@ -2976,6 +2993,20 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
             )
           : 0;
 
+      // Corporate Performance League Daily Points Formula:
+      // Calls = 2 pts, WhatsApp = 1 pt, Interested Conversion = 10 pts, Site Visit = 15 pts, Won Deal = 50 pts, Conversion Efficiency bonus = 20 pts
+      const conversionBonus =
+        (leadsAssignedToday > 0 && dailyConversionRate >= 25) || (contactedToday >= 3 && dailyConversionRate >= 40)
+          ? 20
+          : 0;
+      const dailyPoints =
+        callsToday * 2 +
+        whatsappToday * 1 +
+        interestedToday * 10 +
+        visitsScheduledToday * 15 +
+        wonDealsCount * 50 +
+        conversionBonus;
+
       return {
         userId: agent.id,
         fullName: agent.fullName,
@@ -2991,16 +3022,130 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
         whatsappToday,
         visitsScheduledToday,
         qualifiedCount,
+        interestedCount: interestedToday,
         wonDealsCount,
         wonRevenue,
         conversionRate,
+        dailyConversionRate,
         avgResponseMinutes,
+        dailyPoints,
+      };
+    });
+
+    // Weekly League Standings Calculation (Weekly Points & Football-style Table)
+    const rawWeeklyStats = salesAgents.map((agent: any) => {
+      const agentLeads = db.leads.filter((l: any) => l.assignedTo === agent.id);
+      const weeklyAssignedLeads = agentLeads.filter(
+        (l: any) => String(l.createdAt).slice(0, 10) >= weekStartStr && String(l.createdAt).slice(0, 10) <= dateFilter
+      ).length;
+
+      let weeklyCalls = 0;
+      let weeklyWhatsapp = 0;
+      let weeklyVisits = 0;
+
+      db.leads.forEach((l: any) => {
+        (l.activities || []).forEach((act: any) => {
+          const actDate = String(act.createdAt).slice(0, 10);
+          if (act.userId === agent.id && actDate >= weekStartStr && actDate <= dateFilter) {
+            if (act.type === 'call') weeklyCalls++;
+            if (act.type === 'whatsapp') weeklyWhatsapp++;
+            if (act.type === 'visit') weeklyVisits++;
+          }
+        });
+      });
+
+      const agentWeeklyEvents = db.events.filter(
+        (e: any) =>
+          e.assignedTo === agent.id &&
+          e.date >= weekStartStr &&
+          e.date <= dateFilter &&
+          e.category === 'Site Visit'
+      ).length;
+      weeklyVisits = Math.max(weeklyVisits, agentWeeklyEvents);
+
+      const weeklyInterested = agentLeads.filter(
+        (l: any) =>
+          ['Qualified', 'Site Visit Scheduled', 'Negotiation', 'Won'].includes(l.status) &&
+          ((String(l.createdAt).slice(0, 10) >= weekStartStr && String(l.createdAt).slice(0, 10) <= dateFilter) ||
+            (l.lastContactedAt &&
+              String(l.lastContactedAt).slice(0, 10) >= weekStartStr &&
+              String(l.lastContactedAt).slice(0, 10) <= dateFilter))
+      ).length;
+
+      const weeklyWonDealsList = db.deals.filter(
+        (d: any) =>
+          d.assignedTo === agent.id &&
+          d.stage === 'Closed Won' &&
+          String(d.createdAt).slice(0, 10) >= weekStartStr &&
+          String(d.createdAt).slice(0, 10) <= dateFilter
+      );
+      const weeklyWonDeals = weeklyWonDealsList.length;
+      const weeklyWonRevenue = weeklyWonDealsList.reduce(
+        (sum: number, d: any) => sum + (Number(d.dealValue) || 0),
+        0
+      );
+
+      const weeklyConversionRate =
+        weeklyAssignedLeads > 0
+          ? Math.round((weeklyInterested / weeklyAssignedLeads) * 100)
+          : agentLeads.length > 0
+          ? Math.round((agentLeads.filter((l: any) => ['Qualified', 'Site Visit Scheduled', 'Negotiation', 'Won'].includes(l.status)).length / agentLeads.length) * 100)
+          : 0;
+
+      const weeklyEfficiencyBonus = weeklyConversionRate >= 25 ? 30 : 0;
+      const weeklyPoints =
+        weeklyCalls * 2 +
+        weeklyWhatsapp * 1 +
+        weeklyInterested * 10 +
+        weeklyVisits * 15 +
+        weeklyWonDeals * 50 +
+        weeklyEfficiencyBonus;
+
+      return {
+        userId: agent.id,
+        fullName: agent.fullName,
+        avatarUrl: agent.avatarUrl,
+        jobTitle: agent.jobTitle,
+        jobTitleAr: agent.jobTitleAr,
+        weeklyPoints,
+        weeklyCalls,
+        weeklyWhatsapp,
+        weeklyAssignedLeads,
+        weeklyInterested,
+        weeklyVisits,
+        weeklyWonDeals,
+        weeklyWonRevenue,
+        weeklyConversionRate,
+      };
+    });
+
+    // Sort descending by weekly points to determine ranks
+    rawWeeklyStats.sort((a: any, b: any) => b.weeklyPoints - a.weeklyPoints);
+
+    const weeklyLeague = rawWeeklyStats.map((item: any, index: number) => {
+      let badge: 'gold' | 'silver' | 'bronze' | 'top_converter' | 'call_master' | undefined;
+      if (index === 0) badge = 'gold';
+      else if (index === 1) badge = 'silver';
+      else if (index === 2) badge = 'bronze';
+
+      let trend: 'up' | 'stable' | 'down' = 'stable';
+      if (index === 0 || index === 1) trend = 'up';
+      else if (index === rawWeeklyStats.length - 1 && rawWeeklyStats.length > 2) trend = 'down';
+
+      return {
+        ...item,
+        rank: index + 1,
+        badge,
+        trend,
       };
     });
 
     res.json({
       date: dateFilter,
+      weekStart: weekStartStr,
+      weekEnd: dateFilter,
       agentStats,
+      weeklyLeague,
     });
   });
 
@@ -3035,7 +3180,7 @@ async function startServer() {
 
   const PORT = 3000;
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`PropSphere Real Estate CRM running on http://0.0.0.0:${PORT}`);
+    console.log(`HD CAPITAL CRM running on http://0.0.0.0:${PORT}`);
   });
 }
 

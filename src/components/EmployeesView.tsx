@@ -258,13 +258,13 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
         <div>
           <h1 className="text-xl font-bold text-slate-900">
             {isAr
-              ? `فريق العمل والبروفايلات (${visibleUsers.length})`
-              : `Employees & Profiles (${visibleUsers.length})`}
+              ? `فريق المبيعات وحسابات المستشارين (${visibleUsers.length})`
+              : `Sales Team & Advisors (${visibleUsers.length})`}
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
             {isAr
-              ? 'إنشاء حسابات الموظفين (Username & Password)، تخصيص الصور الشخصية، الأدوار، والمشاريع العقارية المسندة لكل سيلز'
-              : 'Manage employee credentials (username & password), profile photos, roles, and assigned real estate projects'}
+              ? 'إدارة حسابات مستشاري المبيعات، الصلاحيات، والمشروعات العقارية المعينة لكل موظف'
+              : 'Manage sales advisor accounts, permissions, and assigned real estate projects'}
           </p>
         </div>
 

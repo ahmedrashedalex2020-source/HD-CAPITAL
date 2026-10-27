@@ -225,10 +225,33 @@ export interface DailyAgentStat {
   whatsappToday: number;
   visitsScheduledToday: number;
   qualifiedCount: number;
+  interestedCount: number;
   wonDealsCount: number;
   wonRevenue: number;
   conversionRate: number;
+  dailyConversionRate: number;
   avgResponseMinutes: number;
+  dailyPoints: number;
+}
+
+export interface WeeklyLeagueAgentStat {
+  userId: string;
+  fullName: string;
+  avatarUrl: string;
+  jobTitle: string;
+  jobTitleAr: string;
+  rank: number;
+  weeklyPoints: number;
+  weeklyCalls: number;
+  weeklyWhatsapp: number;
+  weeklyAssignedLeads: number;
+  weeklyInterested: number;
+  weeklyVisits: number;
+  weeklyWonDeals: number;
+  weeklyWonRevenue: number;
+  weeklyConversionRate: number;
+  badge?: 'gold' | 'silver' | 'bronze' | 'top_converter' | 'call_master';
+  trend: 'up' | 'stable' | 'down';
 }
 
 export interface AgentLeadCountBreakdown {

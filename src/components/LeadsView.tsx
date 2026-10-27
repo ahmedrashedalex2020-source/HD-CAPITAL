@@ -50,6 +50,8 @@ interface LeadsViewProps {
   onToast: (msg: string) => void;
   onQuickSyncSheets?: () => void;
   isSyncingSheets?: boolean;
+  openAddModalTrigger?: boolean;
+  onResetAddModalTrigger?: () => void;
 }
 
 export const ALL_LEAD_STATUSES: LeadStatus[] = [
@@ -401,6 +403,8 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
   onToast,
   onQuickSyncSheets,
   isSyncingSheets = false,
+  openAddModalTrigger = false,
+  onResetAddModalTrigger,
 }) => {
   const isAr = lang === 'ar';
   const t = translations[lang];
@@ -427,6 +431,13 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
+
+  useEffect(() => {
+    if (openAddModalTrigger) {
+      setShowAddModal(true);
+      onResetAddModalTrigger?.();
+    }
+  }, [openAddModalTrigger, onResetAddModalTrigger]);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [deleteConfirmLead, setDeleteConfirmLead] = useState<Lead | null>(null);
   const [lastChangedLeadId, setLastChangedLeadId] = useState<string | null>(null);

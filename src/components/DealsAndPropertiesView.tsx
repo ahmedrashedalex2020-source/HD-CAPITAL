@@ -36,6 +36,7 @@ interface DealsAndPropertiesViewProps {
   properties: PropertyUnit[];
   deals?: Deal[];
   projects: string[];
+  forcedSubTab?: 'deals' | 'properties';
   onRefresh: () => void;
   onToast: (msg: string) => void;
 }
@@ -57,13 +58,20 @@ export const DealsAndPropertiesView: React.FC<DealsAndPropertiesViewProps> = ({
   leads = [],
   properties,
   projects,
+  forcedSubTab,
   onRefresh,
   onToast,
 }) => {
   const isAr = lang === 'ar';
   const [activeSubTab, setActiveSubTab] = useState<'deals' | 'properties'>(
-    persistedDealsFilterState.activeSubTab
+    forcedSubTab || persistedDealsFilterState.activeSubTab
   );
+
+  useEffect(() => {
+    if (forcedSubTab) {
+      setActiveSubTab(forcedSubTab);
+    }
+  }, [forcedSubTab]);
   const [searchQuery, setSearchQuery] = useState(persistedDealsFilterState.searchQuery);
   const [stageFilter, setStageFilter] = useState(persistedDealsFilterState.stageFilter);
   const [projectFilter, setProjectFilter] = useState(persistedDealsFilterState.projectFilter);
@@ -277,38 +285,56 @@ export const DealsAndPropertiesView: React.FC<DealsAndPropertiesViewProps> = ({
     <div className="space-y-6">
       {/* Header & Sub-Navigation */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl w-fit">
-          <button
-            onClick={() => setActiveSubTab('deals')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer ${
-              activeSubTab === 'deals'
-                ? 'bg-white text-blue-600 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Briefcase className="w-4 h-4" />
-            <span>
-              {isAr
-                ? `إدارة الصفقات والتعاقدات (${totalMatchingDeals})`
-                : `Deals Pipeline (${totalMatchingDeals})`}
-            </span>
-          </button>
-          <button
-            onClick={() => setActiveSubTab('properties')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer ${
-              activeSubTab === 'properties'
-                ? 'bg-white text-blue-600 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Building2 className="w-4 h-4" />
-            <span>
-              {isAr
-                ? `كتالوج الوحدات والمشاريع (${properties.length})`
-                : `Property Units Catalog (${properties.length})`}
-            </span>
-          </button>
-        </div>
+        {forcedSubTab ? (
+          <div>
+            <div className="inline-flex items-center gap-2 text-xs font-semibold text-blue-600 mb-0.5">
+              {forcedSubTab === 'properties' ? <Building2 className="w-4 h-4" /> : <Briefcase className="w-4 h-4" />}
+              <span>
+                {forcedSubTab === 'properties'
+                  ? (isAr ? 'المشروعات والوحدات العقارية' : 'Projects & Units')
+                  : (isAr ? 'مراحل البيع والصفقات' : 'Sales Deals')}
+              </span>
+            </div>
+            <h1 className="text-lg font-bold text-slate-900">
+              {forcedSubTab === 'properties'
+                ? (isAr ? `كتالوج الوحدات والمشاريع (${properties.length})` : `Property Units Catalog (${properties.length})`)
+                : (isAr ? `إدارة الصفقات والتعاقدات (${totalMatchingDeals})` : `Deals Pipeline (${totalMatchingDeals})`)}
+            </h1>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl w-fit">
+            <button
+              onClick={() => setActiveSubTab('deals')}
+              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer ${
+                activeSubTab === 'deals'
+                  ? 'bg-white text-blue-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Briefcase className="w-4 h-4" />
+              <span>
+                {isAr
+                  ? `إدارة الصفقات والتعاقدات (${totalMatchingDeals})`
+                  : `Deals Pipeline (${totalMatchingDeals})`}
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveSubTab('properties')}
+              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer ${
+                activeSubTab === 'properties'
+                  ? 'bg-white text-blue-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Building2 className="w-4 h-4" />
+              <span>
+                {isAr
+                  ? `كتالوج الوحدات والمشاريع (${properties.length})`
+                  : `Property Units Catalog (${properties.length})`}
+              </span>
+            </button>
+          </div>
+        )}
 
         <div>
           {activeSubTab === 'deals' ? (
