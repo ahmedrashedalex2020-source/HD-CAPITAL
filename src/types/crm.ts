@@ -53,14 +53,74 @@ export interface UserProfile {
 }
 
 export type LeadStatus =
-  | 'New'
-  | 'Contacted'
-  | 'Qualified'
-  | 'Site Visit Scheduled'
-  | 'Negotiation'
-  | 'Won'
-  | 'Lost'
-  | 'Unqualified';
+  | 'Fresh Lead'
+  | 'No Answer'
+  | 'Follow Up'
+  | 'Interested'
+  | 'Inspection'
+  | 'Visit'
+  | 'Contracted'
+  | 'Reservation'
+  | 'Not Interested';
+
+export const ALL_LEAD_STATUS_LIST: LeadStatus[] = [
+  'Fresh Lead',
+  'No Answer',
+  'Follow Up',
+  'Interested',
+  'Inspection',
+  'Visit',
+  'Contracted',
+  'Reservation',
+  'Not Interested',
+];
+
+export const LEAD_STATUS_ORDER = ALL_LEAD_STATUS_LIST;
+
+export const LEAD_SOURCES = ['حملة اعلانية', 'اورجانيك', 'بروكر'] as const;
+export type LeadSource = (typeof LEAD_SOURCES)[number];
+
+export function normalizeLeadStatus(rawStatus?: string | null): LeadStatus {
+  const s = String(rawStatus || '').trim();
+  if (!s) return 'Fresh Lead';
+  if ((ALL_LEAD_STATUS_LIST as string[]).includes(s)) {
+    return s as LeadStatus;
+  }
+  switch (s) {
+    case 'New':
+    case 'فريش ليدز':
+      return 'Fresh Lead';
+    case 'No Answer':
+    case 'لم يرد':
+      return 'No Answer';
+    case 'Contacted':
+    case 'متابعة':
+      return 'Follow Up';
+    case 'Qualified':
+    case 'مهتم':
+      return 'Interested';
+    case 'Site Visit Scheduled':
+    case 'معاينه':
+    case 'معاينة':
+      return 'Inspection';
+    case 'Visit':
+    case 'زيارة':
+      return 'Visit';
+    case 'Won':
+    case 'Closed Won':
+    case 'تعاقد':
+      return 'Contracted';
+    case 'Negotiation':
+    case 'حجز':
+      return 'Reservation';
+    case 'Lost':
+    case 'Unqualified':
+    case 'غير مهتم':
+      return 'Not Interested';
+    default:
+      return 'Fresh Lead';
+  }
+}
 
 export interface LeadActivity {
   id: string;
@@ -98,9 +158,39 @@ export interface Lead {
   formResponses?: FormQuestionResponse[];
   lastContactedAt?: string;
   nextFollowUpAt?: string;
+  reminderDateTime?: string; // ISO string or 'YYYY-MM-DDTHH:mm'
+  reminderNote?: string;
+  reminderNotified?: boolean;
   createdAt: string;
   updatedAt: string;
   activities: LeadActivity[];
+}
+
+export interface RealEstateProject {
+  id: string;
+  name: string; // الحقل الوحيد المطلوب (أو حتى يتم توليده تلقائياً إذا ترك فارغاً)
+  developer?: string; // اسم شركة التطوير العقاري
+  location?: string; // المدينة / المنطقة (التجمع، العاصمة، الساحل، الشيخ زايد...)
+  projectType?: 'Residential' | 'Commercial' | 'Administrative' | 'Medical' | 'Coastal' | 'Mixed Use' | string; // تصنيف المشروع
+  unitTypes?: string[]; // أنواع الوحدات المتاحة (شقق، فيلات، تاون هاوس، مكاتب، عيادات، محلات...)
+  areaMinSqm?: number; // المساحات تبدأ من (م²)
+  areaMaxSqm?: number; // المساحات تصل إلى (م²)
+  priceMin?: number; // الأسعار تبدأ من (ج.م)
+  priceMax?: number; // الأسعار تصل إلى (ج.م)
+  pricePerSqm?: number; // متوسط سعر المتر (ج.م)
+  downPaymentPercent?: number; // أقل مقدم تعاقد (%)
+  installmentYears?: number; // أطول فترة سداد (سنوات)
+  deliveryDate?: string; // موعد الاستلام (فوري / 2026 / 2027 / 2028...)
+  finishingType?: string; // نوع التشطيب (كامل بالتكييفات، نصف تشطيب، طوب أحمر...)
+  commissionPercent?: number; // نسبة عمولة المبيعات / البروكر (%)
+  maintenancePercent?: number; // وديعة الصيانة (%)
+  brochureUrl?: string; // رابط البروشور أو Google Drive للمشروع
+  masterPlanImageUrl?: string; // رابط صورة المشروع / الماستر بلان
+  facilities?: string; // الخدمات والمميزات الرئيسية
+  sellingPoints?: string; // نقاط البيع القوية (USP) لمساعدة السيلز في الإقناع
+  notes?: string; // ملاحظات إضافية عامة
+  status?: 'Active' | 'Launching Soon' | 'Sold Out'; // حالة الطرح
+  createdAt: string;
 }
 
 export interface PropertyUnit {
@@ -177,6 +267,8 @@ export interface SheetConnection {
   campaignTag: string;
   autoSyncEnabled: boolean;
   syncIntervalMinutes: number;
+  autoDistributionEnabled?: boolean;
+  selectedSalesUserIds?: string[];
   ignoreIdColumns?: boolean;
   columnMapping: ColumnMapping;
   lastSyncedAt?: string;

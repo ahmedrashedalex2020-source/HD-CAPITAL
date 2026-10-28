@@ -118,6 +118,24 @@ export const GoogleSheetsView: React.FC<GoogleSheetsViewProps> = ({
   const [secondsToNextSync, setSecondsToNextSync] = useState<number>(15 * 60);
   const [showAddConnModal, setShowAddConnModal] = useState(false);
 
+  const salesTeam = users.filter(
+    (u) =>
+      u.roleId === 'role_employee' ||
+      u.roleId === 'role_supervisor' ||
+      u.roleId === 'role_deputy'
+  );
+  const distributableSalesUsers = salesTeam.length > 0 ? salesTeam : users;
+
+  const [autoDistributionEnabled, setAutoDistributionEnabled] = useState<boolean>(
+    Boolean(activeConn?.autoDistributionEnabled)
+  );
+  const [selectedSalesUserIds, setSelectedSalesUserIds] = useState<string[]>(
+    Array.isArray(activeConn?.selectedSalesUserIds) && activeConn.selectedSalesUserIds.length > 0
+      ? activeConn.selectedSalesUserIds
+      : distributableSalesUsers.filter((u) => u.isActiveForRouting !== false).map((u) => u.id)
+  );
+  const [isSavingRouting, setIsSavingRouting] = useState(false);
+
   useEffect(() => {
     if (activeConn) {
       setConnName(activeConn.name);
@@ -125,6 +143,13 @@ export const GoogleSheetsView: React.FC<GoogleSheetsViewProps> = ({
       setSheetTabName(activeConn.sheetTabName);
       setRoutingMode(activeConn.routingMode);
       setDriveFileName(activeConn.driveFileName || 'CRM1');
+      setAutoDistributionEnabled(Boolean(activeConn.autoDistributionEnabled));
+      if (
+        Array.isArray(activeConn.selectedSalesUserIds) &&
+        activeConn.selectedSalesUserIds.length > 0
+      ) {
+        setSelectedSalesUserIds(activeConn.selectedSalesUserIds);
+      }
       if (activeConn.columnMapping) {
         setColumnMapping(activeConn.columnMapping);
       }
@@ -250,15 +275,48 @@ export const GoogleSheetsView: React.FC<GoogleSheetsViewProps> = ({
           sheetTabName,
           routingMode,
           columnMapping,
+          autoDistributionEnabled,
+          selectedSalesUserIds,
           syncIntervalMinutes: 15,
           autoSyncEnabled: true,
           ignoreIdColumns: true,
         }),
       });
-      onToast(isAr ? 'تم حفظ إعدادات الشيت بنجاح' : 'Settings saved');
+      onToast(isAr ? 'تم حفظ إعدادات الشيت والتوزيع بنجاح' : 'Settings saved');
       onRefresh();
     } catch (err: any) {
       onToast(err.message);
+    }
+  };
+
+  const handleSaveRoutingPolicy = async (
+    nextEnabled: boolean,
+    nextUserIds: string[]
+  ) => {
+    if (!activeConn) return;
+    setIsSavingRouting(true);
+    try {
+      await apiRequest(`/api/sheets/connections/${activeConn.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          autoDistributionEnabled: nextEnabled,
+          selectedSalesUserIds: nextUserIds,
+        }),
+      });
+      onToast(
+        nextEnabled
+          ? isAr
+            ? `تم تفعيل التوزيع الأوتوماتيكي بالتساوي (Round-Robin) على (${nextUserIds.length}) سيلز عند سحب الشيت!`
+            : `Enabled Round-Robin auto-distribution across ${nextUserIds.length} sales reps!`
+          : isAr
+          ? `تم إيقاف التوزيع التلقائي؛ سيتم توجيه عملاء الشيت الجدد إلى الأدمن (${hassanCrmAdmin?.fullName || 'Hassan Shehata'})`
+          : `Auto-distribution paused; new sheet leads will route to Admin`
+      );
+      onRefresh();
+    } catch (err: any) {
+      onToast(err.message);
+    } finally {
+      setIsSavingRouting(false);
     }
   };
 
@@ -465,49 +523,155 @@ export const GoogleSheetsView: React.FC<GoogleSheetsViewProps> = ({
           </div>
         </div>
 
-        {/* Lead Routing Policy Box */}
-        <div className="p-4 rounded-xl bg-blue-50/50 border border-blue-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold shrink-0">
-              <Users className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-xs font-bold text-slate-900">
-                {isAr
-                  ? 'التعيين التلقائي المباشر للعملاء:'
-                  : 'Automatic Lead Assignment:'}
+        {/* Lead Routing & Round-Robin Auto-Distribution Policy Box */}
+        <div className="p-4 rounded-xl bg-blue-50/50 border border-blue-200/80 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold shrink-0">
+                <Users className="w-5 h-5" />
               </div>
-              <div className="text-[11px] text-blue-800 font-semibold mt-0.5">
-                {isAr
-                  ? `يتم تعيين كافة العملاء تلقائياً لمدير الـ CRM الثاني: ${hassanCrmAdmin?.fullName || 'حسن شحاتة'}`
-                  : `All leads are automatically assigned to 2nd CRM Manager: ${hassanCrmAdmin?.fullName || 'Hassan Shehata'}`}
+              <div>
+                <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                  <span>
+                    {isAr
+                      ? 'نظام التوزيع الأوتوماتيكي لعملاء الشيت (Round-Robin):'
+                      : 'Sheet Leads Auto-Distribution (Round-Robin):'}
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      autoDistributionEnabled
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                        : 'bg-amber-100 text-amber-800 border border-amber-300'
+                    }`}
+                  >
+                    {autoDistributionEnabled
+                      ? isAr
+                        ? 'مفعّل — توزيع بالتساوي على السيلز'
+                        : 'Enabled — Round-Robin'
+                      : isAr
+                      ? 'متوقف — التوجيه للأدمن فقط'
+                      : 'Paused — Admin Only'}
+                  </span>
+                </div>
+                <div className="text-[11px] text-blue-800 font-semibold mt-0.5">
+                  {autoDistributionEnabled
+                    ? isAr
+                      ? `يتم توزيع كل عميل جديد قادم من الشيت بالتساوي (Round-Robin) على (${selectedSalesUserIds.length}) من مسؤولي المبيعات المحددين أدناه.`
+                      : `New sheet leads are distributed equally via Round-Robin across (${selectedSalesUserIds.length}) selected sales reps.`
+                    : isAr
+                    ? `يتم توجيه العملاء الجدد القادمين من الشيت إلى الأدمن (${hassanCrmAdmin?.fullName || 'حسن شحاتة'}) لحين توزيعهم.`
+                    : `New sheet leads are assigned to Admin (${hassanCrmAdmin?.fullName || 'Hassan Shehata'}) until distributed.`}
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => handleFindCrm1InDrive(driveFileName || 'CRM1')}
-              disabled={isSearchingDrive}
-              className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
-            >
-              <Sparkles className={`w-3.5 h-3.5 text-blue-600 ${isSearchingDrive ? 'animate-spin' : ''}`} />
-              <span>{isAr ? 'تحديث الرابط من Drive' : 'Relink from Drive'}</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {isAdmin && (
+                <button
+                  type="button"
+                  disabled={isSavingRouting}
+                  onClick={() => {
+                    const nextVal = !autoDistributionEnabled;
+                    setAutoDistributionEnabled(nextVal);
+                    handleSaveRoutingPolicy(nextVal, selectedSalesUserIds);
+                  }}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
+                    autoDistributionEnabled
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      : 'bg-white border border-blue-300 hover:bg-blue-50 text-blue-700'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>
+                    {autoDistributionEnabled
+                      ? isAr
+                        ? 'التوزيع التلقائي مفعّل ✓'
+                        : 'Auto-Distribution ON ✓'
+                      : isAr
+                      ? 'تفعيل التوزيع التلقائي على السيلز'
+                      : 'Enable Auto-Distribution'}
+                  </span>
+                </button>
+              )}
 
-            {/* Admin Advanced Settings Modal Trigger */}
-            {isAdmin && (
               <button
                 type="button"
-                onClick={() => setShowAdvancedModal(true)}
-                className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                onClick={() => handleFindCrm1InDrive(driveFileName || 'CRM1')}
+                disabled={isSearchingDrive}
+                className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
               >
-                <Settings2 className="w-3.5 h-3.5 text-amber-400" />
-                <span>{isAr ? 'الإعدادات المتقدمة والسجلات' : 'Advanced Settings & Logs'}</span>
+                <Sparkles className={`w-3.5 h-3.5 text-blue-600 ${isSearchingDrive ? 'animate-spin' : ''}`} />
+                <span>{isAr ? 'تحديث الرابط من Drive' : 'Relink from Drive'}</span>
               </button>
-            )}
+
+              {/* Admin Advanced Settings Modal Trigger */}
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedModal(true)}
+                  className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Settings2 className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{isAr ? 'الإعدادات المتقدمة والسجلات' : 'Advanced Settings & Logs'}</span>
+                </button>
+              )}
+            </div>
           </div>
+
+          {isAdmin && (
+            <div className="pt-3 border-t border-blue-200/60 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-700">
+                  {isAr
+                    ? 'اختر مسؤولي المبيعات المعتمدين لاستقبال ليدز الشيت بالتساوي:'
+                    : 'Select Sales Reps for Sheet Round-Robin Distribution:'}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allIds = distributableSalesUsers.map((u) => u.id);
+                      setSelectedSalesUserIds(allIds);
+                      handleSaveRoutingPolicy(autoDistributionEnabled, allIds);
+                    }}
+                    className="text-[11px] font-bold text-blue-700 hover:underline cursor-pointer"
+                  >
+                    {isAr ? 'تحديد الكل' : 'Select All'}
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {distributableSalesUsers.map((u) => {
+                  const checked = selectedSalesUserIds.includes(u.id);
+                  return (
+                    <label
+                      key={u.id}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold cursor-pointer transition-all ${
+                        checked
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          const nextIds = checked
+                            ? selectedSalesUserIds.filter((id) => id !== u.id)
+                            : [...selectedSalesUserIds, u.id];
+                          setSelectedSalesUserIds(nextIds);
+                          handleSaveRoutingPolicy(autoDistributionEnabled, nextIds);
+                        }}
+                        className="sr-only"
+                      />
+                      <span>{u.fullName}</span>
+                      {checked && <span className="text-[10px]">✓</span>}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

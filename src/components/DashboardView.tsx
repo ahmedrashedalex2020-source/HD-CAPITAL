@@ -20,8 +20,9 @@ import {
   CalendarEvent,
   SheetConnection,
   BootstrapCounts,
+  normalizeLeadStatus,
 } from '../types/crm';
-import { Lang } from '../i18n/translations';
+import { Lang, translations } from '../i18n/translations';
 
 interface DashboardViewProps {
   lang: Lang;
@@ -57,26 +58,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   isSyncingSheets,
 }) => {
   const isAr = lang === 'ar';
+  const t = translations[lang];
 
   // Calculate live metrics from lightweight bootstrapCounts (with fallback to arrays)
-  const statusCounts = bootstrapCounts?.statusCounts || {};
+  const statusCounts: Record<string, number | undefined> = bootstrapCounts?.statusCounts || {};
   const totalLeads = bootstrapCounts ? bootstrapCounts.totalLeadsCount : leads.length;
   const newLeadsCount = bootstrapCounts
-    ? statusCounts.New || 0
-    : leads.filter((l) => l.status === 'New').length;
+    ? (statusCounts['Fresh Lead'] || 0) + (statusCounts['New'] || 0)
+    : leads.filter((l) => normalizeLeadStatus(l.status) === 'Fresh Lead').length;
   const contactedCount = bootstrapCounts
-    ? statusCounts.Contacted || 0
-    : leads.filter((l) => l.status === 'Contacted').length;
-  const qualifiedCount = bootstrapCounts
-    ? (statusCounts.Qualified || 0) +
-      (statusCounts['Site Visit Scheduled'] || 0) +
-      (statusCounts.Negotiation || 0)
+    ? (statusCounts['Follow Up'] || 0) +
+      (statusCounts['No Answer'] || 0) +
+      (statusCounts['Contacted'] || 0)
     : leads.filter((l) =>
-        ['Qualified', 'Site Visit Scheduled', 'Negotiation'].includes(l.status)
+        ['Follow Up', 'No Answer'].includes(normalizeLeadStatus(l.status))
+      ).length;
+  const qualifiedCount = bootstrapCounts
+    ? (statusCounts['Interested'] || 0) +
+      (statusCounts['Inspection'] || 0) +
+      (statusCounts['Visit'] || 0) +
+      (statusCounts['Reservation'] || 0) +
+      (statusCounts['Qualified'] || 0) +
+      (statusCounts['Site Visit Scheduled'] || 0) +
+      (statusCounts['Negotiation'] || 0)
+    : leads.filter((l) =>
+        ['Interested', 'Inspection', 'Visit', 'Reservation'].includes(
+          normalizeLeadStatus(l.status)
+        )
       ).length;
   const wonCount = bootstrapCounts
-    ? statusCounts.Won || 0
-    : leads.filter((l) => l.status === 'Won').length;
+    ? (statusCounts['Contracted'] || 0) + (statusCounts['Won'] || 0)
+    : leads.filter((l) => normalizeLeadStatus(l.status) === 'Contracted').length;
   const conversionRate =
     totalLeads > 0 ? Math.round(((qualifiedCount + wonCount) / totalLeads) * 100) : 0;
 
@@ -297,11 +309,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         </div>
                       </div>
                       <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[10px] font-bold shrink-0">
-                        {lead.status === 'New'
-                          ? isAr
-                            ? 'جديد'
-                            : 'New'
-                          : lead.status}
+                        {t.status[normalizeLeadStatus(lead.status)]}
                       </span>
                     </div>
 
@@ -383,7 +391,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div>
               <div className="flex items-center justify-between text-xs mb-1.5">
                 <span className="font-medium text-slate-700">
-                  {isAr ? 'ليدز جديدة (New Leads)' : 'New Inbound Leads'}
+                  {isAr ? 'فريش ليدز (Fresh Leads)' : 'Fresh Leads'}
                 </span>
                 <span className="font-mono-tabular font-semibold text-blue-600">
                   {newLeadsCount} ({totalLeads ? Math.round((newLeadsCount / totalLeads) * 100) : 0}%)
@@ -400,7 +408,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div>
               <div className="flex items-center justify-between text-xs mb-1.5">
                 <span className="font-medium text-slate-700">
-                  {isAr ? 'تم التواصل (Contacted)' : 'Contacted'}
+                  {isAr ? 'متابعة / لم يرد (Follow Up & No Answer)' : 'Follow Up & No Answer'}
                 </span>
                 <span className="font-mono-tabular font-semibold text-amber-600">
                   {contactedCount} ({totalLeads ? Math.round((contactedCount / totalLeads) * 100) : 0}%)
@@ -417,7 +425,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div>
               <div className="flex items-center justify-between text-xs mb-1.5">
                 <span className="font-medium text-slate-700">
-                  {isAr ? 'مؤهل / معاينة مجدولة (Qualified & Visits)' : 'Qualified & Site Visits'}
+                  {isAr ? 'مهتم / معاينه / زيارة / حجز (Interested & Visits)' : 'Interested, Inspection, Visit & Reservation'}
                 </span>
                 <span className="font-mono-tabular font-semibold text-indigo-600">
                   {qualifiedCount} ({totalLeads ? Math.round((qualifiedCount / totalLeads) * 100) : 0}%)
@@ -434,7 +442,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div>
               <div className="flex items-center justify-between text-xs mb-1.5">
                 <span className="font-medium text-slate-700">
-                  {isAr ? 'تعاقد ناجح (Closed Won)' : 'Closed Won Deals'}
+                  {isAr ? 'تعاقد (Contracted)' : 'Contracted'}
                 </span>
                 <span className="font-mono-tabular font-semibold text-emerald-600">
                   {wonCount} ({totalLeads ? Math.round((wonCount / totalLeads) * 100) : 0}%)

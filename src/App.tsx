@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   LayoutDashboard,
   Users,
@@ -24,13 +24,19 @@ import {
   Briefcase,
   Plus,
   Trophy,
+  AlarmClock,
+  Phone,
+  Clock,
+  MessageSquare,
 } from 'lucide-react';
 import {
   AppNotification,
   CalendarEvent,
   Deal,
   Lead,
+  normalizeLeadStatus,
   PropertyUnit,
+  RealEstateProject,
   Role,
   SheetConnection,
   SyncLog,
@@ -80,15 +86,20 @@ export default function App() {
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [projects, setProjects] = useState<string[]>([]);
+  const [projectsCatalog, setProjectsCatalog] = useState<RealEstateProject[]>([]);
 
   // Interactive UI Modals & Drawers
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferInitialFromUser, setTransferInitialFromUser] = useState<string>('');
+  const [transferInitialToUser, setTransferInitialToUser] = useState<string>('');
   const [showNotificationsDrawer, setShowNotificationsDrawer] = useState(false);
   const [isSyncingSheets, setIsSyncingSheets] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [globalSearch, setGlobalSearch] = useState<string>('');
   const [isManualRefreshing, setIsManualRefreshing] = useState<boolean>(false);
+  const [dueReminderLeads, setDueReminderLeads] = useState<Lead[]>([]);
+  const notifiedReminderKeysRef = useRef<Set<string>>(new Set());
 
   const isAr = lang === 'ar';
   const t = translations[lang];
@@ -210,6 +221,7 @@ export default function App() {
       setSyncLogs(data.syncLogs || []);
       setNotifications(data.notifications || []);
       setProjects(data.projects || []);
+      setProjectsCatalog(data.projectsCatalog || []);
     } catch (err) {
       console.error('Failed to bootstrap CRM:', err);
     }
@@ -280,6 +292,137 @@ export default function App() {
       evtSource.close();
     };
   }, [isAuthenticated, currentUser?.id, isAr, triggerToast, loadBootstrapData]);
+
+  // Pleasant Web Audio API Bell Chime for Due Call Reminders (no external audio files)
+  const playReminderChime = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+
+      const playTone = (freq: number, startOffset: number, duration: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + startOffset);
+        gain.gain.setValueAtTime(0.001, now + startOffset);
+        gain.gain.exponentialRampToValueAtTime(0.18, now + startOffset + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + startOffset + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + startOffset);
+        osc.stop(now + startOffset + duration);
+      };
+
+      playTone(587.33, 0, 0.28); // D5
+      playTone(880.0, 0.18, 0.45); // A5
+    } catch {
+      // ignore if browser blocks autoplay before user interaction
+    }
+  }, []);
+
+  // Live Call & Follow-up Reminder Monitor (runs immediately + every 30 seconds)
+  useEffect(() => {
+    if (!isAuthenticated || !currentUser || !currentRole) {
+      setDueReminderLeads([]);
+      return;
+    }
+
+    const evaluateDueReminders = () => {
+      const nowMs = Date.now();
+      const isAdmin = currentRole.id === 'role_admin';
+      const dueList = leads.filter((l) => {
+        if (!l.reminderDateTime || l.reminderNotified) return false;
+        if (!isAdmin && l.assignedTo !== currentUser.id) return false;
+        const ts = new Date(l.reminderDateTime).getTime();
+        return !Number.isNaN(ts) && ts <= nowMs;
+      });
+
+      setDueReminderLeads(dueList);
+
+      let shouldPlaySound = false;
+      dueList.forEach((lead) => {
+        const key = `${lead.id}::${lead.reminderDateTime}`;
+        if (!notifiedReminderKeysRef.current.has(key)) {
+          notifiedReminderKeysRef.current.add(key);
+          shouldPlaySound = true;
+
+          if (
+            typeof window !== 'undefined' &&
+            'Notification' in window &&
+            Notification.permission === 'granted'
+          ) {
+            try {
+              new Notification(
+                isAr
+                  ? `⏰ حان موعد مكالمة العميل: ${lead.fullName}`
+                  : `⏰ Call Reminder Due: ${lead.fullName}`,
+                {
+                  body:
+                    lead.reminderNote ||
+                    `${lead.phone} · ${lead.projectInterest}`,
+                }
+              );
+            } catch {
+              // ignore notification error
+            }
+          }
+        }
+      });
+
+      if (shouldPlaySound) {
+        playReminderChime();
+      }
+    };
+
+    evaluateDueReminders();
+    const intervalId = setInterval(evaluateDueReminders, 30_000);
+    return () => clearInterval(intervalId);
+  }, [isAuthenticated, currentUser, currentRole, leads, isAr, playReminderChime]);
+
+  const handleSnoozeReminder = async (lead: Lead) => {
+    try {
+      const snoozedIso = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      await apiRequest(`/api/leads/${lead.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          reminderDateTime: snoozedIso,
+          reminderNotified: false,
+        }),
+      });
+      setDueReminderLeads((prev) => prev.filter((item) => item.id !== lead.id));
+      triggerToast(
+        isAr
+          ? `⏳ تم تأجيل تذكير مكالمة "${lead.fullName}" لمدة 15 دقيقة`
+          : `⏳ Snoozed reminder for "${lead.fullName}" by 15 minutes`
+      );
+      await loadBootstrapData();
+    } catch (err: any) {
+      triggerToast(err.message);
+    }
+  };
+
+  const handleCompleteReminder = async (lead: Lead) => {
+    try {
+      await apiRequest(`/api/leads/${lead.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          reminderNotified: true,
+        }),
+      });
+      setDueReminderLeads((prev) => prev.filter((item) => item.id !== lead.id));
+      triggerToast(
+        isAr
+          ? `✓ تم إنهاء تذكير المكالمة للعميل "${lead.fullName}"`
+          : `✓ Marked reminder completed for "${lead.fullName}"`
+      );
+      await loadBootstrapData();
+    } catch (err: any) {
+      triggerToast(err.message);
+    }
+  };
 
   const handleToggleLang = () => {
     setLang((prev) => (prev === 'ar' ? 'en' : 'ar'));
@@ -361,7 +504,7 @@ export default function App() {
         label: t.nav.leads,
         icon: Users,
         visible: isAdmin || (Boolean(perms?.leads?.read) && perms.leads.read !== 'none'),
-        badge: leads.filter((l) => l.status === 'New').length,
+        badge: leads.filter((l) => normalizeLeadStatus(l.status) === 'Fresh Lead').length,
       },
       {
         id: 'calendar',
@@ -566,6 +709,10 @@ export default function App() {
             <LogOut className="w-4 h-4" />
             <span>{t.common.logout}</span>
           </button>
+
+          <div className="text-[10px] text-blue-200/60 text-center pt-2 font-medium tracking-wide">
+            By a2z marketing & software
+          </div>
         </div>
       </aside>
 
@@ -731,6 +878,102 @@ export default function App() {
           </div>
         </header>
 
+        {/* Sticky Call Reminder Alert Banner (`شريط تنبيه حي في أعلى الشاشة عند حلول موعد المكالمة`) */}
+        {dueReminderLeads.length > 0 && (
+          <div className="sticky top-[68px] z-30 px-3 sm:px-5 lg:px-7 pt-3 max-w-[1440px] w-full mx-auto space-y-2">
+            {dueReminderLeads.slice(0, 3).map((remLead) => {
+              const cleanPhone = String(remLead.phone || '').replace(/[^\d+]/g, '');
+              const dueTimeStr = remLead.reminderDateTime
+                ? new Date(remLead.reminderDateTime).toLocaleTimeString(
+                    isAr ? 'ar-EG' : 'en-US',
+                    { hour: '2-digit', minute: '2-digit' }
+                  )
+                : '';
+
+              return (
+                <div
+                  key={remLead.id}
+                  className="bg-gradient-to-l from-amber-500 via-orange-500 to-rose-600 text-white rounded-2xl p-3.5 shadow-xl border border-white/25 flex flex-col lg:flex-row lg:items-center justify-between gap-3"
+                >
+                  <div className="flex items-start sm:items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center shrink-0 animate-bounce">
+                      <AlarmClock className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="px-2 py-0.5 rounded-md bg-white text-rose-700 text-[10px] font-extrabold uppercase tracking-wide">
+                          {isAr ? `⏰ منبه مكالمة مستحق الآن (${dueTimeStr})` : `⏰ Call Reminder Due (${dueTimeStr})`}
+                        </span>
+                        <span className="text-sm font-extrabold truncate">
+                          {remLead.fullName}
+                        </span>
+                        <span
+                          className="text-xs font-mono-tabular font-bold bg-black/20 px-2 py-0.5 rounded-md"
+                          dir="ltr"
+                        >
+                          {remLead.phone}
+                        </span>
+                        <span className="text-xs font-semibold text-white/90">
+                          · {remLead.projectInterest}
+                        </span>
+                      </div>
+                      {remLead.reminderNote && (
+                        <p className="text-xs text-white/95 font-medium mt-1 truncate">
+                          {isAr ? 'ملاحظة التذكير: ' : 'Note: '}
+                          <strong className="underline decoration-white/60">
+                            {remLead.reminderNote}
+                          </strong>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 3 Immediate Action Buttons: Call Now, Open Lead Profile, Snooze 15m / Done */}
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <a
+                      href={`tel:${cleanPhone}`}
+                      className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-900 text-xs font-extrabold flex items-center gap-1.5 shadow-xs transition-colors"
+                    >
+                      <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>{isAr ? '📞 اتصال الآن' : '📞 Call Now'}</span>
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedLead(remLead);
+                        setActiveTab('leads');
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-slate-900/85 hover:bg-slate-900 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 text-amber-300" />
+                      <span>{isAr ? '💬 فتح ملف العميل' : '💬 Open Client Profile'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSnoozeReminder(remLead)}
+                      className="px-3 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>{isAr ? '⏳ غفوة 15 دقيقة' : '⏳ Snooze 15m'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleCompleteReminder(remLead)}
+                      className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 cursor-pointer shadow-xs transition-colors"
+                    >
+                      <CheckCheck className="w-3.5 h-3.5" />
+                      <span>{isAr ? '✓ تم التنفيذ' : '✓ Done'}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* Active View Container (Strictly guarded by navItems permissions) */}
         <main className="flex-1 p-3 sm:p-5 lg:p-7 pb-24 lg:pb-7 max-w-[1440px] w-full mx-auto">
           {activeTab === 'dashboard' && navItems.some((n) => n.id === 'dashboard') && (
@@ -779,6 +1022,12 @@ export default function App() {
               onRefresh={loadBootstrapData}
               showTransferModal={showTransferModal}
               setShowTransferModal={setShowTransferModal}
+              initialTransferFromUser={transferInitialFromUser}
+              initialTransferToUser={transferInitialToUser}
+              onResetTransferInitialUsers={() => {
+                setTransferInitialFromUser('');
+                setTransferInitialToUser('');
+              }}
               onToast={triggerToast}
               onQuickSyncSheets={handleQuickSyncSheets}
               isSyncingSheets={isSyncingSheets}
@@ -811,6 +1060,7 @@ export default function App() {
               properties={properties}
               deals={deals}
               projects={projects}
+              projectsCatalog={projectsCatalog}
               onRefresh={loadBootstrapData}
               onToast={triggerToast}
             />
@@ -827,6 +1077,7 @@ export default function App() {
               properties={properties}
               deals={deals}
               projects={projects}
+              projectsCatalog={projectsCatalog}
               onRefresh={loadBootstrapData}
               onToast={triggerToast}
             />
@@ -843,7 +1094,9 @@ export default function App() {
               projects={projects}
               onRefresh={loadBootstrapData}
               onToast={triggerToast}
-              onOpenTransferForAgent={() => {
+              onOpenTransferForAgent={(fromUserId?: string, toUserId?: string) => {
+                if (fromUserId) setTransferInitialFromUser(fromUserId);
+                if (toUserId) setTransferInitialToUser(toUserId);
                 setShowTransferModal(true);
                 setActiveTab('leads');
               }}

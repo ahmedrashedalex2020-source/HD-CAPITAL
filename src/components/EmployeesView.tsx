@@ -18,11 +18,12 @@ import {
 import {
   AgentLeadCountBreakdown,
   Lead,
+  normalizeLeadStatus,
   PaginatedLeadsResponse,
   Role,
   UserProfile,
 } from '../types/crm';
-import { Lang } from '../i18n/translations';
+import { Lang, translations } from '../i18n/translations';
 import { apiRequest, swrFetch } from '../services/api';
 
 interface EmployeesViewProps {
@@ -36,7 +37,7 @@ interface EmployeesViewProps {
   projects: string[];
   onRefresh: () => void;
   onToast: (msg: string) => void;
-  onOpenTransferForAgent: (fromUserId: string) => void;
+  onOpenTransferForAgent: (fromUserId?: string, toUserId?: string) => void;
 }
 
 export const EmployeesView: React.FC<EmployeesViewProps> = ({
@@ -53,6 +54,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
   onOpenTransferForAgent,
 }) => {
   const isAr = lang === 'ar';
+  const t = translations[lang];
 
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [selectedProfileLeads, setSelectedProfileLeads] = useState<Lead[]>([]);
@@ -464,7 +466,9 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
                         <div className="font-bold text-blue-600">
                           {(l.budgetMax / 1000000).toFixed(1)}M EGP
                         </div>
-                        <div className="text-[11px] text-slate-500">{l.status}</div>
+                        <div className="text-[11px] text-slate-500">
+                          {t.status[normalizeLeadStatus(l.status)]}
+                        </div>
                       </div>
                     </div>
                   ))
@@ -482,17 +486,22 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
           const empLeads = leads.filter((l) => l.assignedTo === emp.id);
           const backlogCount = agentStats
             ? agentStats.newCount
-            : empLeads.filter((l) => l.status === 'New').length;
+            : empLeads.filter((l) => normalizeLeadStatus(l.status) === 'Fresh Lead').length;
           const inProgressCount = agentStats
             ? agentStats.inProgressCount
             : empLeads.filter((l) =>
-                ['Contacted', 'Qualified', 'Site Visit Scheduled', 'Negotiation'].includes(
-                  l.status
-                )
+                [
+                  'No Answer',
+                  'Follow Up',
+                  'Interested',
+                  'Inspection',
+                  'Visit',
+                  'Reservation',
+                ].includes(normalizeLeadStatus(l.status))
               ).length;
           const wonCount = agentStats
             ? agentStats.wonCount
-            : empLeads.filter((l) => l.status === 'Won').length;
+            : empLeads.filter((l) => normalizeLeadStatus(l.status) === 'Contracted').length;
 
           return (
             <div
@@ -591,6 +600,26 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
                   </div>
                 </div>
               </div>
+
+              {canTransfer && (
+                <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center gap-1.5">
+                  <button
+                    onClick={() => onOpenTransferForAgent(undefined, emp.id)}
+                    className="flex-1 py-1.5 px-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                    title={isAr ? `إسناد ليدز إلى ${emp.fullName}` : `Assign leads to ${emp.fullName}`}
+                  >
+                    <ArrowLeftRight className="w-3 h-3 text-blue-600" />
+                    <span>{isAr ? 'إسناد ليدز له' : 'Assign Leads'}</span>
+                  </button>
+                  <button
+                    onClick={() => onOpenTransferForAgent(emp.id, undefined)}
+                    className="py-1.5 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                    title={isAr ? `نقل ليدز من ${emp.fullName} لسيلز آخر` : `Transfer leads from ${emp.fullName}`}
+                  >
+                    <span>{isAr ? 'نقل منه' : 'Transfer Out'}</span>
+                  </button>
+                </div>
+              )}
             </div>
           );
         })}

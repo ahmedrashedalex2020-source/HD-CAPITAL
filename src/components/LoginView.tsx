@@ -3,14 +3,17 @@ import {
   Lock,
   User,
   Building2,
+  CheckCircle2,
   ArrowRight,
   Globe,
   ShieldCheck,
   Eye,
   EyeOff,
-  Database,
-  CheckCircle2,
   Clock,
+  Trophy,
+  Zap,
+  Target,
+  Flame,
 } from 'lucide-react';
 import { apiRequest, setCurrentApiUser } from '../services/api';
 import { testConnection } from '../services/firebaseClient';
@@ -99,49 +102,56 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
       {/* Main Split Card */}
       <main className="max-w-4xl w-full mx-auto my-4 sm:my-auto grid grid-cols-1 lg:grid-cols-12 bg-white rounded-2xl border border-slate-800/20 shadow-2xl overflow-hidden">
-        {/* Brand & Security Column */}
+        {/* Brand & Sales Superpowers Column */}
         <div className="lg:col-span-5 bg-gradient-to-br from-[#1E3A8A] via-[#2563EB] to-[#1D4ED8] text-white p-6 sm:p-8 lg:p-10 flex flex-col justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 text-xs font-medium text-blue-100 mb-4 sm:mb-6">
-              <ShieldCheck className="w-4 h-4 shrink-0" />
+            <div className="inline-flex items-center gap-2 text-xs font-semibold px-2.5 py-1 rounded-full bg-white/15 backdrop-blur-sm text-blue-100 mb-4 sm:mb-6">
+              <Flame className="w-4 h-4 text-amber-300 shrink-0" />
               <span>
                 {isAr
-                  ? 'بوابة الدخول الآمن وعزل الصلاحيات'
-                  : 'Secure Access Gate & Role Isolation'}
+                  ? 'منصة المبيعات العقارية الأكثر سرعة وفاعلية'
+                  : 'High-Velocity Real Estate Sales Platform'}
               </span>
             </div>
             <h1 className="text-xl sm:text-2xl font-bold leading-snug mb-3 sm:mb-4">
               {isAr
-                ? 'إدارة احترافية ومؤمنة لليدز، الصلاحيات، وأداء المبيعات'
-                : 'Secure Real Estate Leads, Strict RBAC & Sales Analytics'}
+                ? 'سلاحك الذكي لتسريع المبيعات ومضاعفة إغلاق الصفقات'
+                : 'Accelerate Outreach & Close Deals Faster Than Ever'}
             </h1>
             <p className="text-xs sm:text-sm text-blue-100 leading-relaxed">
               {isAr
-                ? 'يتم التحقق من هوية وصلاحيات كل مستخدم عند كل دخول، مع عرض الشاشات والعملاء المخصصين لدوره الوظيفي فقط وتأمين الجلسة تلقائياً بعد 15 دقيقة من عدم النشاط.'
-                : 'Every session is strictly authenticated and isolated by role permissions, with automatic session lock after 15 minutes of inactivity.'}
+                ? 'صُمم HD CAPITAL CRM ليمنح مستشاري المبيعات أسبقية تنافسية مطلقة: استلام فوري للعملاء من الحملات، تنظيم المكالمات وجدولة المعاينات بضغطة زر، مع دوري نقاط أسبوعي تفاعلي يشعل الحماس ويكافئ أداءك اليومي.'
+                : 'Engineered to give sales teams a winning edge: instant lead intake, 1-click calls and site visit scheduling, plus a weekly gamified league rewarding your daily deal conversions.'}
             </p>
           </div>
 
           <div className="mt-6 sm:mt-8 pt-5 border-t border-white/15 space-y-2.5 text-xs text-blue-100">
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-1.5">
-                <Database className="w-3.5 h-3.5 text-emerald-300" />
-                {isAr ? 'قاعدة بيانات سحابية مباشرة' : 'Cloud Database'}
+                <Trophy className="w-4 h-4 text-amber-300" />
+                {isAr ? 'دوري النقاط الأسبوعي' : 'Weekly Sales League'}
               </span>
-              <span className="font-mono-tabular font-semibold text-emerald-300">
-                Google Firebase Live
+              <span className="font-semibold text-amber-300">
+                {isAr ? 'نقاط ومكافآت يومية' : 'Points & Podium'}
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-amber-300" />
-                {isAr ? 'تأمين الجلسة التلقائي' : 'Inactivity Auto-Logout'}
+                <Zap className="w-4 h-4 text-emerald-300" />
+                {isAr ? 'سرعة الاستجابة والمتابعة' : 'Instant Outreach'}
               </span>
-              <span className="font-mono-tabular font-semibold text-white">15 Minutes</span>
+              <span className="font-semibold text-emerald-300">
+                {isAr ? 'تحويل فوري لمهتم' : 'Zero Lead Latency'}
+              </span>
             </div>
             <div className="flex items-center justify-between">
-              <span>{isAr ? 'عزل الصلاحيات والبيانات' : 'Access Control'}</span>
-              <span className="font-mono-tabular font-semibold text-white">Strict RBAC</span>
+              <span className="flex items-center gap-1.5">
+                <Target className="w-4 h-4 text-cyan-300" />
+                {isAr ? 'إدارة المعاينات والصفقات' : 'Pipeline & Site Visits'}
+              </span>
+              <span className="font-semibold text-white">
+                {isAr ? 'أعلى معدل إغلاق' : 'Maximum Win Rate'}
+              </span>
             </div>
           </div>
         </div>
@@ -254,8 +264,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
         </div>
       </main>
 
-      <footer className="max-w-5xl w-full mx-auto text-center text-xs text-slate-500 py-2">
-        PropSphere Real Estate CRM · Connected to Google Firebase Cloud Firestore
+      <footer className="max-w-5xl w-full mx-auto text-center text-xs text-slate-500 py-2 font-medium">
+        By a2z marketing & software
       </footer>
     </div>
   );

@@ -2,6 +2,7 @@ import { adminFirestore, isCloudFirestoreActive } from './firestoreClient';
 import { FirestoreRepository, getFallbackCollection } from './baseRepository';
 import { normalizePhone } from './phoneUtils';
 import { DEFAULT_PROJECTS, getInitialDatabase } from './seedData';
+import { normalizeLeadStatus } from '../../src/types/crm';
 
 export interface SystemSettings {
   id: 'global';
@@ -434,14 +435,15 @@ function pickCandidatePool(users: any[], projectInterest: string, routingMode: s
 }
 
 const ALL_STATUS_KEYS = [
-  'New',
-  'Contacted',
-  'Qualified',
-  'Site Visit Scheduled',
-  'Negotiation',
-  'Won',
-  'Lost',
-  'Unqualified',
+  'Fresh Lead',
+  'No Answer',
+  'Follow Up',
+  'Interested',
+  'Inspection',
+  'Visit',
+  'Contracted',
+  'Reservation',
+  'Not Interested',
 ];
 
 /**
@@ -482,6 +484,7 @@ export class LeadsRepository extends FirestoreRepository<any> {
     const activities = await this.getActivities(leadDoc.id);
     return {
       ...leadDoc,
+      status: normalizeLeadStatus(leadDoc.status),
       phoneNormalized: leadDoc.phoneNormalized || normalizePhone(leadDoc.phone || ''),
       activities,
     };
@@ -529,7 +532,7 @@ export class LeadsRepository extends FirestoreRepository<any> {
     let totalBudgetVolume = 0;
 
     for (const l of leadsList) {
-      const st = l.status || 'New';
+      const st = normalizeLeadStatus(l.status || 'Fresh Lead');
       statusCounts[st] = (statusCounts[st] || 0) + 1;
       if (l.assignedTo) {
         agentLeadCounts[l.assignedTo] = (agentLeadCounts[l.assignedTo] || 0) + 1;
@@ -537,13 +540,13 @@ export class LeadsRepository extends FirestoreRepository<any> {
       if (l.source) {
         sourcesSet.add(String(l.source));
       }
-      if (st === 'New' && !l.lastContactedAt) {
+      if (st === 'Fresh Lead' && !l.lastContactedAt) {
         urgentNew++;
       }
       if (
         l.nextFollowUpAt &&
         String(l.nextFollowUpAt) <= todayStr &&
-        !['Won', 'Lost', 'Unqualified'].includes(st)
+        !['Contracted', 'Not Interested'].includes(st)
       ) {
         todayFollowUp++;
       }
@@ -656,9 +659,10 @@ export class LeadsRepository extends FirestoreRepository<any> {
     const qNormPhone = qTrim ? normalizePhone(qTrim) : '';
 
     const filteredRaw = visibleRaw.filter((l) => {
+      const normStatus = normalizeLeadStatus(l.status);
       if (status && status !== 'ALL') {
-        const allowedStatuses = status.split(',').map((s) => s.trim());
-        if (!allowedStatuses.includes(l.status)) return false;
+        const allowedStatuses = status.split(',').map((s) => normalizeLeadStatus(s.trim()));
+        if (!allowedStatuses.includes(normStatus)) return false;
       }
       if (assignedTo && assignedTo !== 'ALL' && l.assignedTo !== assignedTo) {
         return false;
@@ -678,7 +682,7 @@ export class LeadsRepository extends FirestoreRepository<any> {
         if (createdDate && createdDate > to) return false;
       }
       if (queue && queue !== 'ALL') {
-        if (queue === 'URGENT_NEW' && !(l.status === 'New' && !l.lastContactedAt)) {
+        if (queue === 'URGENT_NEW' && !(normStatus === 'Fresh Lead' && !l.lastContactedAt)) {
           return false;
         }
         if (
@@ -686,7 +690,7 @@ export class LeadsRepository extends FirestoreRepository<any> {
           !(
             l.nextFollowUpAt &&
             String(l.nextFollowUpAt) <= todayStr &&
-            !['Won', 'Lost', 'Unqualified'].includes(l.status)
+            !['Contracted', 'Not Interested'].includes(normStatus)
           )
         ) {
           return false;
@@ -1154,7 +1158,7 @@ export class LeadsRepository extends FirestoreRepository<any> {
   }): Promise<number> {
     const { performedByUser, allUsers, nowIso } = params;
     const allRawLeads = await super.getAll();
-    const newLeads = allRawLeads.filter((l) => l.status === 'New');
+    const newLeads = allRawLeads.filter((l) => normalizeLeadStatus(l.status) === 'Fresh Lead');
     if (newLeads.length === 0) return 0;
 
     if (isCloudFirestoreActive()) {
@@ -1338,7 +1342,7 @@ export class LeadsRepository extends FirestoreRepository<any> {
             propertyType: cand.propertyType,
             budgetMin: Math.round(cand.budgetMax * 0.8),
             budgetMax: cand.budgetMax,
-            status: 'New',
+            status: 'Fresh Lead',
             priority: 'High',
             assignedTo: agent.id,
             assignedBy: performedByUser.id,
@@ -1460,7 +1464,7 @@ export class LeadsRepository extends FirestoreRepository<any> {
           propertyType: cand.propertyType,
           budgetMin: Math.round(cand.budgetMax * 0.8),
           budgetMax: cand.budgetMax,
-          status: 'New',
+          status: 'Fresh Lead',
           priority: 'High',
           assignedTo: agent.id,
           assignedBy: performedByUser.id,
@@ -1643,7 +1647,11 @@ export async function seedOrMigrateDataset(dataset: ReturnType<typeof getInitial
     for (const rawLead of dataset.leads || []) {
       const { activities = [], ...leadDoc } = rawLead;
       const phoneNormalized = normalizePhone(leadDoc.phone || '');
-      const cleanLead = { ...leadDoc, phoneNormalized };
+      const cleanLead = {
+        ...leadDoc,
+        status: normalizeLeadStatus(leadDoc.status),
+        phoneNormalized,
+      };
 
       const leadRef = adminFirestore.collection('leads').doc(cleanLead.id);
       operations.push((b) => b.set(leadRef, cleanLead, { merge: true }));
@@ -1714,7 +1722,11 @@ export async function seedOrMigrateDataset(dataset: ReturnType<typeof getInitial
     for (const rawLead of dataset.leads || []) {
       const { activities = [], ...leadDoc } = rawLead;
       const phoneNormalized = normalizePhone(leadDoc.phone || '');
-      const cleanLead = { ...leadDoc, phoneNormalized };
+      const cleanLead = {
+        ...leadDoc,
+        status: normalizeLeadStatus(leadDoc.status),
+        phoneNormalized,
+      };
 
       getFallbackCollection('leads').set(cleanLead.id, cleanLead);
       if (phoneNormalized) {

@@ -11,7 +11,8 @@ import {
   verifySessionToken,
   checkScopeAccess,
 } from './server/security';
-import { normalizePhone } from './server/db/phoneUtils';
+import { normalizePhone, getPhoneMatchKey } from './server/db/phoneUtils';
+import { normalizeLeadStatus } from './src/types/crm';
 
 function computeClientAuthDigest(username: string, password: string): string {
   return crypto
@@ -74,7 +75,7 @@ export function isDummyOrFakeLead(leadOrName: string, phoneStr: string, notesStr
   ) {
     return true;
   }
-  const digits = String(phoneStr || '').replace(/[^0-9]/g, '');
+  const digits = normalizePhone(String(phoneStr || ''));
   if (digits.length < 8) return true;
   return false;
 }
@@ -181,6 +182,7 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
   // Enrich all CRM1 leads directly from their actual CRM1 formResponses and remove fake project names
   const discoveredSheetProjects = new Set<string>();
   parsedDb.leads.forEach((l: any) => {
+    l.status = normalizeLeadStatus(l.status);
     if (Array.isArray(l.formResponses)) {
       l.formResponses = l.formResponses.filter((fr: any) => {
         const q = String(fr?.question || '').trim().toLowerCase();
@@ -217,6 +219,39 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
     }
     discoveredSheetProjects.add(l.projectInterest);
   });
+
+  if (Array.isArray(parsedDb.projectsCatalog)) {
+    parsedDb.projectsCatalog = parsedDb.projectsCatalog.filter(
+      (p: any) => p && typeof p === 'object' && !FAKE_PROJECT_NAMES.has(String(p.name || '').trim())
+    );
+  } else {
+    parsedDb.projectsCatalog = [];
+  }
+
+  if (Array.isArray(parsedDb.projects)) {
+    parsedDb.projects.forEach((p: any) => {
+      const name = String(p || '').trim();
+      if (name && !FAKE_PROJECT_NAMES.has(name)) {
+        discoveredSheetProjects.add(name);
+      }
+    });
+  }
+
+  parsedDb.projectsCatalog.forEach((p: any) => {
+    const name = String(p?.name || '').trim();
+    if (name && !FAKE_PROJECT_NAMES.has(name)) {
+      discoveredSheetProjects.add(name);
+    }
+  });
+
+  if (Array.isArray(parsedDb.properties)) {
+    parsedDb.properties.forEach((prop: any) => {
+      const name = String(prop?.projectName || '').trim();
+      if (name && !FAKE_PROJECT_NAMES.has(name)) {
+        discoveredSheetProjects.add(name);
+      }
+    });
+  }
 
   const cleanProjectsList =
     discoveredSheetProjects.size > 0 ? Array.from(discoveredSheetProjects) : ['ليدز مغتربين'];
@@ -338,24 +373,18 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
 
     if (Array.isArray(parsedDb.leads) && hassanAdmin) {
       parsedDb.leads.forEach((l: any) => {
-        const wasManuallyTransferred =
-          Array.isArray(l.activities) &&
-          l.activities.some(
-            (act: any) =>
-              act.type === 'transfer' &&
-              !String(act.summary || '').includes('توزيع ذكي تلقائي')
-          );
-
-        if (!l.assignedTo || !validUserIds.has(l.assignedTo) || !wasManuallyTransferred) {
+        // Retain lead assignment if it belongs to any valid user in the system.
+        // Only assign to Hassan Shehata if lead is completely unassigned or assigned to a deleted user ID.
+        if (!l.assignedTo || !validUserIds.has(l.assignedTo)) {
           l.assignedTo = hassanAdmin.id;
         }
         const assignedUser = parsedDb.users.find((u: any) => u.id === l.assignedTo) || hassanAdmin;
         if (assignedUser && Array.isArray(l.activities)) {
           l.activities.forEach((act: any) => {
-            if (act.type === 'sheet_import') {
+            if (act.type === 'sheet_import' && !act.summary.includes(assignedUser.fullName)) {
               act.summary = `تم استيراد العميل من شيت CRM1 (${
                 (l.formResponses || []).length
-              } إجابات من الفورم) وتعيينه تلقائياً إلى مدير الـ CRM الثاني ${assignedUser.fullName}.`;
+              } إجابات من الفورم) وتعيينه إلى ${assignedUser.fullName}.`;
             }
           });
         }
@@ -758,9 +787,52 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     );
   }
 
-  function selectNextSalesAgent(_projectInterest: string, _routingMode: string): any {
-    // Automatic distribution across sales employees is disabled:
-    // Always assign incoming/synced leads automatically to the second CRM Admin: Hassan Shehata (usr_admin2)
+  function selectNextSalesAgent(
+    projectInterest: string,
+    routingMode: string,
+    conn?: any
+  ): any {
+    const activeConn = conn || db.sheetConnections?.[0];
+    const isAutoEnabled = Boolean(activeConn?.autoDistributionEnabled);
+
+    if (isAutoEnabled) {
+      const selectedIds: string[] = Array.isArray(activeConn?.selectedSalesUserIds)
+        ? activeConn.selectedSalesUserIds
+        : [];
+      let pool =
+        selectedIds.length > 0
+          ? db.users.filter((u: any) => selectedIds.includes(u.id))
+          : db.users.filter(
+              (u: any) =>
+                u.isActiveForRouting &&
+                (u.roleId === 'role_employee' ||
+                  u.roleId === 'role_supervisor' ||
+                  u.roleId === 'role_deputy')
+            );
+
+      if (routingMode === 'project_then_round_robin' && projectInterest && pool.length > 1) {
+        const projectMatched = pool.filter(
+          (u: any) =>
+            Array.isArray(u.assignedProjects) && u.assignedProjects.includes(projectInterest)
+        );
+        if (projectMatched.length > 0) {
+          pool = projectMatched;
+        }
+      }
+
+      if (pool.length > 0) {
+        const sortedPool = [...pool].sort((a: any, b: any) => {
+          const timeA = a.lastAssignedAt ? new Date(a.lastAssignedAt).getTime() : 0;
+          const timeB = b.lastAssignedAt ? new Date(b.lastAssignedAt).getTime() : 0;
+          return timeA - timeB;
+        });
+        const chosenAgent = sortedPool[0];
+        chosenAgent.lastAssignedAt = new Date().toISOString();
+        return chosenAgent;
+      }
+    }
+
+    // Fallback when auto-distribution is disabled: assign to CRM Admin (Hassan Shehata)
     const hassanAdmin = getSecondCrmAdminUser();
     if (hassanAdmin) {
       hassanAdmin.lastAssignedAt = new Date().toISOString();
@@ -952,7 +1024,6 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
 
   function getVisibleUsersForUser(user: any, role: any): any[] {
     const isAdmin = role?.id === 'role_admin' || user?.roleId === 'role_admin';
-    const userReadScope = role?.permissions?.users?.read || 'own';
     const stripSecrets = (u: any) => {
       const { passwordHash: _uPh, clientAuthDigest: _cad, ...rest } = u;
       if (!isAdmin) {
@@ -961,24 +1032,8 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       return rest;
     };
 
-    if (isAdmin || userReadScope === 'all') {
-      return db.users.map(stripSecrets);
-    }
-    if (userReadScope === 'team') {
-      const userProjects: string[] = Array.isArray(user.assignedProjects)
-        ? user.assignedProjects
-        : [];
-      return db.users
-        .filter(
-          (u: any) =>
-            u.id === user.id ||
-            (Array.isArray(u.assignedProjects) &&
-              u.assignedProjects.some((p: string) => userProjects.includes(p)))
-        )
-        .map(stripSecrets);
-    }
-    // For 'own' or 'none', only return the logged-in user's own profile
-    return [stripSecrets(user)];
+    // Return all safe user profiles to all authenticated team members so team roster, assignees on cards, and league standings circulate seamlessly
+    return db.users.map(stripSecrets);
   }
 
   // 3. Bootstrap Workspace Data (Enforces strict 'all' | 'team' | 'own' | 'none' from Role Permissions Matrix)
@@ -1032,6 +1087,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       syncLogs: canReadSheets ? db.syncLogs : [],
       notifications: userNotifications,
       projects: db.projects || DEFAULT_PROJECTS,
+      projectsCatalog: db.projectsCatalog || [],
     });
   });
 
@@ -1264,8 +1320,20 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     db.users.push(newUser);
     saveDb(db);
 
+    broadcastNotification({
+      id: `notif_${Date.now()}_new_user`,
+      userId: 'all',
+      title: 'New Sales Team Member Added',
+      titleAr: 'تمت إضافة مستخدم جديد للنظام',
+      message: `${newUser.fullName} (@${newUser.username}) joined the CRM workspace.`,
+      messageAr: `انضم ${newUser.fullName} (@${newUser.username}) إلى فريق المبيعات بنجاح.`,
+      type: 'user_created',
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    });
+
     const { passwordHash: _ph, ...safeUser } = newUser;
-    res.json({ user: safeUser });
+    res.json({ user: safeUser, users: getVisibleUsersForUser(user, role) });
   });
 
   app.put('/api/users/:id', (req: Request, res: Response) => {
@@ -1467,21 +1535,38 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       return res.status(400).json({ error: 'اسم العميل ورقم الهاتف مطلوبان' });
     }
 
-    const canonicalPhone = normalizePhone(String(phone));
-    if (
-      canonicalPhone.length >= 8 &&
-      db.leads.some((existing: any) => normalizePhone(existing.phone) === canonicalPhone)
-    ) {
+    const canonicalPhone = getPhoneMatchKey(String(phone));
+    const canonicalSecondary = secondaryPhone ? getPhoneMatchKey(String(secondaryPhone)) : '';
+    const candidateKeys = [canonicalPhone, canonicalSecondary].filter((k) => k.length >= 8);
+
+    if (candidateKeys.length === 0) {
+      return res.status(400).json({ error: 'يرجى إدخال رقم هاتف صحيح (8 أرقام على الأقل)' });
+    }
+
+    const existingDuplicate = db.leads.find((existing: any) => {
+      const existingPrimary = getPhoneMatchKey(String(existing.phone || ''));
+      const existingSecondary = existing.secondaryPhone
+        ? getPhoneMatchKey(String(existing.secondaryPhone))
+        : '';
+      return candidateKeys.some(
+        (key) =>
+          (existingPrimary && existingPrimary === key) ||
+          (existingSecondary && existingSecondary === key)
+      );
+    });
+
+    if (existingDuplicate) {
+      const owner = db.users.find((u: any) => u.id === existingDuplicate.assignedTo);
+      const ownerName = owner?.fullName || 'غير معين';
       return res.status(409).json({
-        error: 'هذا العميل مسجل بالفعل بنفس رقم الهاتف (منع التكرار مفعل)',
+        error: `هذا العميل مسجل بالفعل في النظام بنفس رقم الهاتف باسم "${existingDuplicate.fullName}" (مسؤول المبيعات: ${ownerName})`,
+        duplicateLeadId: existingDuplicate.id,
       });
     }
 
-    // If addScope is 'own', force assignment to the current user; otherwise default to Hassan Shehata (usr_admin2) unless explicitly specified
-    const hassanAdmin = getSecondCrmAdminUser();
-    const targetAgentId =
-      addScope === 'own' ? user.id : assignedTo || hassanAdmin?.id || user.id;
-    const targetAgent = db.users.find((u: any) => u.id === targetAgentId);
+    // Default manual lead assignment to the creator (user.id) unless an admin/supervisor explicitly picked someone else
+    const targetAgentId = (addScope === 'own' || !assignedTo) ? user.id : assignedTo;
+    const targetAgent = db.users.find((u: any) => u.id === targetAgentId) || user;
     const nowIso = new Date().toISOString();
 
     const newLead = {
@@ -1497,7 +1582,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       propertyType: propertyType || 'Apartment',
       budgetMin: Number(budgetMin) || 0,
       budgetMax: Number(budgetMax) || 0,
-      status: status || 'New',
+      status: normalizeLeadStatus(status || 'Fresh Lead'),
       priority: priority || 'Medium',
       assignedTo: targetAgentId,
       assignedBy: user.id,
@@ -1580,6 +1665,40 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       }
     }
 
+    // Check duplicate phone numbers if phone or secondaryPhone is modified
+    if (req.body.phone !== undefined || req.body.secondaryPhone !== undefined) {
+      const nextPhone = req.body.phone !== undefined ? String(req.body.phone) : String(lead.phone || '');
+      const nextSecondary =
+        req.body.secondaryPhone !== undefined
+          ? String(req.body.secondaryPhone)
+          : String(lead.secondaryPhone || '');
+      const keyPrimary = getPhoneMatchKey(nextPhone);
+      const keySecondary = nextSecondary ? getPhoneMatchKey(nextSecondary) : '';
+      const checkKeys = [keyPrimary, keySecondary].filter((k) => k.length >= 8);
+
+      if (checkKeys.length > 0) {
+        const duplicateLead = db.leads.find((existing: any) => {
+          if (existing.id === leadId) return false;
+          const exPrimary = getPhoneMatchKey(String(existing.phone || ''));
+          const exSecondary = existing.secondaryPhone
+            ? getPhoneMatchKey(String(existing.secondaryPhone))
+            : '';
+          return checkKeys.some(
+            (key) => (exPrimary && exPrimary === key) || (exSecondary && exSecondary === key)
+          );
+        });
+
+        if (duplicateLead) {
+          const owner = db.users.find((u: any) => u.id === duplicateLead.assignedTo);
+          const ownerName = owner?.fullName || 'غير معين';
+          return res.status(409).json({
+            error: `هذا العميل مسجل بالفعل في النظام بنفس رقم الهاتف باسم "${duplicateLead.fullName}" (مسؤول المبيعات: ${ownerName})`,
+            duplicateLeadId: duplicateLead.id,
+          });
+        }
+      }
+    }
+
     const nowIso = new Date().toISOString();
     const prevStatus = lead.status;
     const prevAssigned = lead.assignedTo;
@@ -1601,11 +1720,15 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       'notes',
       'formResponses',
       'nextFollowUpAt',
+      'reminderDateTime',
+      'reminderNote',
+      'reminderNotified',
     ];
 
     updatableFields.forEach((field) => {
       if (req.body[field] !== undefined) {
-        lead[field] = req.body[field];
+        lead[field] =
+          field === 'status' ? normalizeLeadStatus(req.body[field]) : req.body[field];
       }
     });
 
@@ -1615,7 +1738,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
 
     lead.updatedAt = nowIso;
 
-    if (req.body.status && req.body.status !== prevStatus) {
+    if (req.body.status && normalizeLeadStatus(req.body.status) !== prevStatus) {
       lead.lastContactedAt = nowIso;
       lead.activities.unshift({
         id: `act_${Date.now()}_st`,
@@ -1627,8 +1750,8 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
         createdAt: nowIso,
       });
 
-      // Automatically create a Closed Won deal if lead status transitions to Won and no deal exists yet
-      if (lead.status === 'Won' && !db.deals.some((d: any) => d.leadId === lead.id)) {
+      // Automatically create a Closed Won deal if lead status transitions to Contracted and no deal exists yet
+      if (lead.status === 'Contracted' && !db.deals.some((d: any) => d.leadId === lead.id)) {
         db.deals.unshift({
           id: `deal_${Date.now()}`,
           title: `تعاقد ${lead.propertyType} ${lead.projectInterest} - ${lead.fullName}`,
@@ -1729,8 +1852,9 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       lead.nextFollowUpAt = nextFollowUpAt;
     }
     if (newStatus) {
-      lead.status = newStatus;
-      if (newStatus === 'Won' && !db.deals.some((d: any) => d.leadId === lead.id)) {
+      const normalizedNewStatus = normalizeLeadStatus(newStatus);
+      lead.status = normalizedNewStatus;
+      if (normalizedNewStatus === 'Contracted' && !db.deals.some((d: any) => d.leadId === lead.id)) {
         db.deals.unshift({
           id: `deal_${Date.now()}`,
           title: `تعاقد ${lead.propertyType} ${lead.projectInterest} - ${lead.fullName}`,
@@ -1751,7 +1875,8 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
 
     if (scheduleCalendarEvent && (nextFollowUpAt || lead.nextFollowUpAt)) {
       const eventDate = nextFollowUpAt || lead.nextFollowUpAt || nowIso.slice(0, 10);
-      const isVisit = type === 'visit' || newStatus === 'Site Visit Scheduled';
+      const normNew = newStatus ? normalizeLeadStatus(newStatus) : '';
+      const isVisit = type === 'visit' || normNew === 'Inspection' || normNew === 'Visit';
       db.events.unshift({
         id: `evt_${Date.now()}`,
         title: isVisit
@@ -1786,21 +1911,39 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       return res.status(403).json({ error: 'ليس لديك صلاحية لنقل الليدز بين مناديب المبيعات' });
     }
 
-    const { leadIds, fromUserId, toUserId, reason } = req.body;
+    const { leadIds, fromUserId, toUserId, count, statusFilter, projectFilter, reason } = req.body;
     if (!toUserId) {
-      return res.status(400).json({ error: 'يرجى اختيار مندوب المبيعات المستلم' });
+      return res.status(400).json({ error: 'يرجى اختيار مسؤول المبيعات المستلم' });
+    }
+    if (fromUserId && fromUserId === toUserId && (!Array.isArray(leadIds) || leadIds.length === 0)) {
+      return res.status(400).json({ error: 'لا يمكن نقل الليدز لنفس المستخدم، يرجى اختيار مستخدم آخر' });
     }
 
     const targetAgent = db.users.find((u: any) => u.id === toUserId);
     if (!targetAgent) {
-      return res.status(404).json({ error: 'مندوب المبيعات المستلم غير موجود' });
+      return res.status(404).json({ error: 'مسؤول المبيعات المستلم غير موجود' });
     }
 
     let targetLeads: any[] = [];
     if (Array.isArray(leadIds) && leadIds.length > 0) {
-      targetLeads = db.leads.filter((l: any) => leadIds.includes(l.id));
+      const idSet = new Set(leadIds.map((id: any) => String(id)));
+      targetLeads = db.leads.filter((l: any) => idSet.has(String(l.id)));
     } else if (fromUserId) {
-      targetLeads = db.leads.filter((l: any) => l.assignedTo === fromUserId);
+      targetLeads = db.leads.filter((l: any) => {
+        if (l.assignedTo !== fromUserId) return false;
+        if (
+          statusFilter &&
+          statusFilter !== 'ALL' &&
+          normalizeLeadStatus(l.status) !== normalizeLeadStatus(statusFilter)
+        )
+          return false;
+        if (projectFilter && projectFilter !== 'ALL' && l.projectInterest !== projectFilter) return false;
+        return true;
+      });
+      const parsedCount = Number(count);
+      if (parsedCount > 0 && parsedCount < targetLeads.length) {
+        targetLeads = targetLeads.slice(0, parsedCount);
+      }
     }
 
     if (role.id !== 'role_admin' && transferScope !== 'all') {
@@ -1851,42 +1994,191 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     });
   });
 
-  // Assign New/Uncontacted Leads to the second CRM Admin: Hassan Shehata (usr_admin2)
+  // Round-Robin Auto Lead Distribution across selected Sales Representatives
   app.post('/api/leads/auto-distribute', (req: Request, res: Response) => {
     const { user, role, authenticated } = getAuthContext(req);
     if (!authenticated || !user) {
       return res.status(401).json({ error: 'يرجى تسجيل الدخول' });
     }
     if (role.permissions?.leads?.transfer === 'none' && role.id !== 'role_admin') {
-      return res.status(403).json({ error: 'ليس لديك صلاحية لإعادة التعيين التلقائي' });
+      return res.status(403).json({ error: 'ليس لديك صلاحية للتوزيع التلقائي للعملاء' });
     }
 
-    const uncontactedNewLeads = db.leads.filter((l: any) => l.status === 'New');
-    if (uncontactedNewLeads.length === 0) {
-      return res.status(400).json({ error: 'لا توجد ليدز في حالة (جديد - New) حالياً' });
+    const {
+      targetUserIds,
+      leadIds,
+      statusFilter = 'Fresh Lead',
+      onlyUnassignedOrAdmin = true,
+      autoDistributionEnabled,
+      saveRoutingSettings = true,
+    } = req.body || {};
+
+    let selectedIds: string[] = Array.isArray(targetUserIds)
+      ? targetUserIds.map((id: any) => String(id)).filter(Boolean)
+      : [];
+
+    if (selectedIds.length === 0) {
+      const connIds = db.sheetConnections?.[0]?.selectedSalesUserIds;
+      if (Array.isArray(connIds) && connIds.length > 0) {
+        selectedIds = connIds;
+      } else {
+        selectedIds = db.users
+          .filter(
+            (u: any) =>
+              u.isActiveForRouting &&
+              (u.roleId === 'role_employee' ||
+                u.roleId === 'role_supervisor' ||
+                u.roleId === 'role_deputy')
+          )
+          .map((u: any) => u.id);
+      }
     }
 
-    const hassanAdmin = getSecondCrmAdminUser();
+    const targetAgents = db.users.filter((u: any) => selectedIds.includes(u.id));
+    if (targetAgents.length === 0) {
+      return res
+        .status(400)
+        .json({ error: 'يرجى اختيار مسؤول مبيعات واحد على الأقل للتوزيع التلقائي' });
+    }
+
+    // Persist routing preferences if requested
+    if (saveRoutingSettings) {
+      db.users.forEach((u: any) => {
+        if (
+          u.roleId === 'role_employee' ||
+          u.roleId === 'role_supervisor' ||
+          u.roleId === 'role_deputy'
+        ) {
+          u.isActiveForRouting = selectedIds.includes(u.id);
+        }
+      });
+      if (Array.isArray(db.sheetConnections) && db.sheetConnections.length > 0) {
+        db.sheetConnections.forEach((c: any) => {
+          c.selectedSalesUserIds = selectedIds;
+          if (typeof autoDistributionEnabled === 'boolean') {
+            c.autoDistributionEnabled = autoDistributionEnabled;
+          }
+        });
+      }
+    }
+
+    const adminUserIds = new Set(
+      db.users
+        .filter(
+          (u: any) =>
+            u.roleId === 'role_admin' ||
+            u.id === 'usr_admin' ||
+            u.id === 'usr_admin2' ||
+            String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata'
+        )
+        .map((u: any) => u.id)
+    );
+
+    let leadsToDistribute: any[] = [];
+    if (Array.isArray(leadIds) && leadIds.length > 0) {
+      const idSet = new Set(leadIds.map((id: any) => String(id)));
+      leadsToDistribute = db.leads.filter((l: any) => idSet.has(String(l.id)));
+    } else {
+      leadsToDistribute = db.leads.filter((l: any) => {
+        const normStatus = normalizeLeadStatus(l.status);
+        if (statusFilter && statusFilter !== 'ALL' && normStatus !== normalizeLeadStatus(statusFilter)) {
+          return false;
+        }
+        if (onlyUnassignedOrAdmin) {
+          const isUnassignedOrAdmin =
+            !l.assignedTo ||
+            adminUserIds.has(l.assignedTo) ||
+            !db.users.some((u: any) => u.id === l.assignedTo);
+          if (!isUnassignedOrAdmin) return false;
+        }
+        return true;
+      });
+    }
+
+    if (leadsToDistribute.length === 0) {
+      if (saveRoutingSettings) {
+        saveDb(db);
+      }
+      return res.status(400).json({
+        error: 'لا توجد ليدز مطابقة لشروط التوزيع المحددة حالياً',
+      });
+    }
+
     const nowIso = new Date().toISOString();
-    uncontactedNewLeads.forEach((lead: any) => {
-      if (hassanAdmin && hassanAdmin.id !== lead.assignedTo) {
-        lead.assignedTo = hassanAdmin.id;
-        lead.assignedBy = user.id;
-        lead.updatedAt = nowIso;
-        lead.activities.unshift({
-          id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-          leadId: lead.id,
-          userId: user.id,
-          userName: user.fullName,
-          type: 'transfer',
-          summary: `تم تعيين الليد تلقائياً إلى مدير الـ CRM الثاني ${hassanAdmin.fullName}`,
+    const assignmentsCounter: Record<
+      string,
+      { userId: string; userName: string; count: number; firstLeadId?: string }
+    > = {};
+
+    leadsToDistribute.forEach((lead: any, index: number) => {
+      const agent = targetAgents[index % targetAgents.length];
+      const oldOwner = db.users.find((u: any) => u.id === lead.assignedTo);
+      lead.assignedTo = agent.id;
+      lead.assignedBy = user.id;
+      lead.updatedAt = nowIso;
+      agent.lastAssignedAt = nowIso;
+
+      if (!Array.isArray(lead.activities)) {
+        lead.activities = [];
+      }
+      lead.activities.unshift({
+        id: `act_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 6)}`,
+        leadId: lead.id,
+        userId: user.id,
+        userName: user.fullName,
+        type: 'transfer',
+        summary: `تم التوزيع الأوتوماتيكي بالتساوي (Round-Robin) من (${
+          oldOwner?.fullName || 'غير معين'
+        }) إلى (${agent.fullName}) بواسطة ${user.fullName}`,
+        createdAt: nowIso,
+      });
+
+      if (!assignmentsCounter[agent.id]) {
+        assignmentsCounter[agent.id] = {
+          userId: agent.id,
+          userName: agent.fullName,
+          count: 0,
+          firstLeadId: lead.id,
+        };
+      }
+      assignmentsCounter[agent.id].count++;
+    });
+
+    const assignmentsSummary = Object.values(assignmentsCounter).map(
+      ({ userId, userName, count }) => ({
+        userId,
+        userName,
+        count,
+      })
+    );
+
+    Object.values(assignmentsCounter).forEach((entry) => {
+      if (entry.count > 0) {
+        broadcastNotification({
+          id: `notif_autodist_${Date.now()}_${entry.userId}`,
+          userId: entry.userId,
+          title: `${entry.count} Lead(s) Auto-Distributed to You`,
+          titleAr: `تم توزيع ${entry.count} عميل جديد إلى حسابك تلقائياً`,
+          message: `${user.fullName} distributed ${entry.count} lead(s) to your pipeline via Round-Robin.`,
+          messageAr: `قام ${user.fullName} بتوزيع ${entry.count} عميل على حسابك بالتساوي (Round-Robin) للمتابعة الفورية.`,
+          type: 'lead_transferred',
+          relatedLeadId: entry.firstLeadId,
+          isRead: false,
           createdAt: nowIso,
         });
       }
     });
 
     saveDb(db);
-    res.json({ distributedCount: uncontactedNewLeads.length, assignedTo: hassanAdmin?.fullName });
+    res.json({
+      distributedCount: leadsToDistribute.length,
+      assignmentsSummary,
+      autoDistributionEnabled:
+        typeof autoDistributionEnabled === 'boolean'
+          ? autoDistributionEnabled
+          : Boolean(db.sheetConnections?.[0]?.autoDistributionEnabled),
+      selectedSalesUserIds: selectedIds,
+    });
   });
 
   app.delete('/api/leads/:id', (req: Request, res: Response) => {
@@ -2027,6 +2319,13 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       campaignTag: campaignTag || 'CRM1_GoogleDrive_Form',
       autoSyncEnabled: autoSyncEnabled !== undefined ? Boolean(autoSyncEnabled) : true,
       syncIntervalMinutes: Number(syncIntervalMinutes) || 15,
+      autoDistributionEnabled:
+        req.body.autoDistributionEnabled !== undefined
+          ? Boolean(req.body.autoDistributionEnabled)
+          : false,
+      selectedSalesUserIds: Array.isArray(req.body.selectedSalesUserIds)
+        ? req.body.selectedSalesUserIds
+        : [],
       ignoreIdColumns: true,
       columnMapping: columnMapping || {
         fullName: 'الاسم',
@@ -2164,11 +2463,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
   }
 
   function normalizePhoneKey(raw: string): string {
-    const canonical = normalizePhone(cleanPhoneString(raw));
-    if (canonical.length >= 10) {
-      return canonical.slice(-10);
-    }
-    return canonical;
+    return getPhoneMatchKey(cleanPhoneString(raw));
   }
 
   async function findCrm1OnGoogleDrive(authHeader: string, targetFileName = 'CRM1') {
@@ -2393,6 +2688,16 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       const assignmentCounter: Record<string, { userId: string; userName: string; count: number }> =
         {};
 
+      const seenPhonesInSystemAndBatch = new Set<string>();
+      db.leads.forEach((existingLead: any) => {
+        const primaryKey = getPhoneMatchKey(String(existingLead.phone || ''));
+        if (primaryKey.length >= 8) seenPhonesInSystemAndBatch.add(primaryKey);
+        if (existingLead.secondaryPhone) {
+          const secondaryKey = getPhoneMatchKey(String(existingLead.secondaryPhone));
+          if (secondaryKey.length >= 8) seenPhonesInSystemAndBatch.add(secondaryKey);
+        }
+      });
+
       dataRows.forEach((row, rowIndex) => {
         if (!Array.isArray(row) || row.every((c) => !String(c || '').trim())) return;
 
@@ -2407,10 +2712,11 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
             if (isUselessIdOrTechnicalColumn(header)) return;
             const val = String(cell || '').trim();
             if (!val) return;
-            if (!rawPhone && /^(p:)?\+?[0-9\s-]{9,15}$/i.test(val)) {
+            const normCandidate = normalizePhone(val);
+            if (!rawPhone && normCandidate.length >= 9 && normCandidate.length <= 15) {
               rawPhone = val;
               if (phoneColIdx === -1) phoneColIdx = cIdx;
-            } else if (!fullName && val.length >= 3 && !/^[0-9]+$/.test(val)) {
+            } else if (!fullName && val.length >= 3 && !/^[0-9\u0660-\u0669\u06F0-\u06F9]+$/.test(val)) {
               fullName = val;
               if (nameColIdx === -1) nameColIdx = cIdx;
             }
@@ -2425,24 +2731,16 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
           return;
         }
 
-        // Strict Deduplication (`بدون تكرار`) by normalized 10-digit phone key or exact name+phone
-        const phoneKey = normalizePhoneKey(cleanPhone);
-        const alreadyExists = db.leads.some((existingLead: any) => {
-          const existingKey = normalizePhoneKey(existingLead.phone);
-          if (phoneKey.length >= 8 && existingKey === phoneKey) return true;
-          if (
-            String(existingLead.fullName).trim().toLowerCase() === fullName.toLowerCase() &&
-            existingKey === phoneKey
-          ) {
-            return true;
-          }
-          return false;
-        });
+        // Strict Deduplication (`بدون تكرار`) across existing system leads AND duplicates within the same sheet batch
+        const phoneKey = getPhoneMatchKey(cleanPhone);
+        if (!phoneKey || phoneKey.length < 8) return;
 
-        if (alreadyExists) {
+        if (seenPhonesInSystemAndBatch.has(phoneKey)) {
           duplicatesSkipped++;
           return;
         }
+
+        seenPhonesInSystemAndBatch.add(phoneKey);
 
         // Extract all Form Questions & Answers (`الأسئلة التي تم الإجابة عليها في الفورم`)
         // Strictly excluding any ID / technical columns and excluding the Name & Phone columns
@@ -2519,7 +2817,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
             ? formResponses.map((fr) => `${fr.question}: ${fr.answer}`).join(' | ')
             : '';
 
-        const agent = selectNextSalesAgent(inferredProject, conn.routingMode);
+        const agent = selectNextSalesAgent(inferredProject, conn.routingMode, conn);
         const leadId = `lead_${Date.now()}_${rowIndex}`;
 
         const newLead = {
@@ -2534,7 +2832,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
           propertyType: inferredType,
           budgetMin: inferredBudget > 0 ? Math.round(inferredBudget * 0.8) : 0,
           budgetMax: inferredBudget,
-          status: 'New',
+          status: 'Fresh Lead',
           priority: 'High',
           assignedTo: agent.id,
           assignedBy: options.triggeredByUserId || 'usr_admin',
@@ -2655,7 +2953,159 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     }, FIFTEEN_MINUTES_MS);
   }
 
-  // 8. Properties & Deals Endpoints
+  // 8. Real Estate Projects Catalog & Properties & Deals Endpoints
+  app.get('/api/projects-catalog', (req: Request, res: Response) => {
+    const { authenticated } = getAuthContext(req);
+    if (!authenticated) {
+      return res.status(401).json({ error: 'يرجى تسجيل الدخول' });
+    }
+    res.json(db.projectsCatalog || []);
+  });
+
+  app.post('/api/projects-catalog', (req: Request, res: Response) => {
+    const { user, role, authenticated } = getAuthContext(req);
+    if (!authenticated || !user) {
+      return res.status(401).json({ error: 'يرجى تسجيل الدخول' });
+    }
+    if (role.permissions?.properties?.add === 'none' && role.id !== 'role_admin') {
+      return res.status(403).json({ error: 'ليس لديك صلاحية لإضافة مشاريع عقارية' });
+    }
+    if (!Array.isArray(db.projectsCatalog)) {
+      db.projectsCatalog = [];
+    }
+    const nowIso = new Date().toISOString();
+    const cleanName =
+      String(req.body.name || '').trim() ||
+      `مشروع عقاري جديد #${db.projectsCatalog.length + 1}`;
+
+    const newProject = {
+      id: req.body.id || `proj_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      name: cleanName,
+      developer: req.body.developer ? String(req.body.developer).trim() : '',
+      location: req.body.location ? String(req.body.location).trim() : '',
+      projectType: req.body.projectType || 'Residential',
+      unitTypes: Array.isArray(req.body.unitTypes) ? req.body.unitTypes : [],
+      areaMinSqm:
+        req.body.areaMinSqm !== undefined && req.body.areaMinSqm !== ''
+          ? Number(req.body.areaMinSqm)
+          : undefined,
+      areaMaxSqm:
+        req.body.areaMaxSqm !== undefined && req.body.areaMaxSqm !== ''
+          ? Number(req.body.areaMaxSqm)
+          : undefined,
+      priceMin:
+        req.body.priceMin !== undefined && req.body.priceMin !== ''
+          ? Number(req.body.priceMin)
+          : undefined,
+      priceMax:
+        req.body.priceMax !== undefined && req.body.priceMax !== ''
+          ? Number(req.body.priceMax)
+          : undefined,
+      pricePerSqm:
+        req.body.pricePerSqm !== undefined && req.body.pricePerSqm !== ''
+          ? Number(req.body.pricePerSqm)
+          : undefined,
+      downPaymentPercent:
+        req.body.downPaymentPercent !== undefined && req.body.downPaymentPercent !== ''
+          ? Number(req.body.downPaymentPercent)
+          : undefined,
+      installmentYears:
+        req.body.installmentYears !== undefined && req.body.installmentYears !== ''
+          ? Number(req.body.installmentYears)
+          : undefined,
+      deliveryDate: req.body.deliveryDate ? String(req.body.deliveryDate).trim() : '',
+      finishingType: req.body.finishingType ? String(req.body.finishingType).trim() : '',
+      commissionPercent:
+        req.body.commissionPercent !== undefined && req.body.commissionPercent !== ''
+          ? Number(req.body.commissionPercent)
+          : undefined,
+      maintenancePercent:
+        req.body.maintenancePercent !== undefined && req.body.maintenancePercent !== ''
+          ? Number(req.body.maintenancePercent)
+          : undefined,
+      brochureUrl: req.body.brochureUrl ? String(req.body.brochureUrl).trim() : '',
+      masterPlanImageUrl: req.body.masterPlanImageUrl
+        ? String(req.body.masterPlanImageUrl).trim()
+        : '',
+      facilities: req.body.facilities ? String(req.body.facilities).trim() : '',
+      sellingPoints: req.body.sellingPoints ? String(req.body.sellingPoints).trim() : '',
+      notes: req.body.notes ? String(req.body.notes).trim() : '',
+      status: req.body.status || 'Active',
+      createdAt: nowIso,
+    };
+
+    db.projectsCatalog.unshift(newProject);
+    if (!Array.isArray(db.projects)) {
+      db.projects = [...DEFAULT_PROJECTS];
+    }
+    if (!db.projects.includes(cleanName)) {
+      db.projects.push(cleanName);
+    }
+    saveDb(db);
+    res.json({
+      project: newProject,
+      projects: db.projects,
+      projectsCatalog: db.projectsCatalog,
+    });
+  });
+
+  app.put('/api/projects-catalog/:id', (req: Request, res: Response) => {
+    const { user, role, authenticated } = getAuthContext(req);
+    if (!authenticated || !user) {
+      return res.status(401).json({ error: 'يرجى تسجيل الدخول' });
+    }
+    if (role.permissions?.properties?.edit === 'none' && role.id !== 'role_admin') {
+      return res.status(403).json({ error: 'ليس لديك صلاحية لتعديل المشاريع العقارية' });
+    }
+    if (!Array.isArray(db.projectsCatalog)) {
+      db.projectsCatalog = [];
+    }
+    const idx = db.projectsCatalog.findIndex((p: any) => p.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'المشروع غير موجود' });
+
+    const prevName = db.projectsCatalog[idx].name;
+    const updatedName =
+      req.body.name !== undefined && String(req.body.name).trim()
+        ? String(req.body.name).trim()
+        : prevName;
+
+    db.projectsCatalog[idx] = {
+      ...db.projectsCatalog[idx],
+      ...req.body,
+      id: req.params.id,
+      name: updatedName,
+    };
+
+    if (!Array.isArray(db.projects)) {
+      db.projects = [...DEFAULT_PROJECTS];
+    }
+    if (updatedName && !db.projects.includes(updatedName)) {
+      db.projects.push(updatedName);
+    }
+    saveDb(db);
+    res.json({
+      project: db.projectsCatalog[idx],
+      projects: db.projects,
+      projectsCatalog: db.projectsCatalog,
+    });
+  });
+
+  app.delete('/api/projects-catalog/:id', (req: Request, res: Response) => {
+    const { user, role, authenticated } = getAuthContext(req);
+    if (!authenticated || !user) {
+      return res.status(401).json({ error: 'يرجى تسجيل الدخول' });
+    }
+    if (role.permissions?.properties?.delete === 'none' && role.id !== 'role_admin') {
+      return res.status(403).json({ error: 'ليس لديك صلاحية لحذف المشاريع العقارية' });
+    }
+    if (!Array.isArray(db.projectsCatalog)) {
+      db.projectsCatalog = [];
+    }
+    db.projectsCatalog = db.projectsCatalog.filter((p: any) => p.id !== req.params.id);
+    saveDb(db);
+    res.json({ ok: true, projectsCatalog: db.projectsCatalog });
+  });
+
   app.post('/api/properties', (req: Request, res: Response) => {
     const { user, role, authenticated } = getAuthContext(req);
     if (!authenticated || !user) {
@@ -2947,12 +3397,16 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       visitsScheduledToday = Math.max(visitsScheduledToday, agentEventsToday);
 
       const qualifiedCount = agentLeads.filter((l: any) =>
-        ['Qualified', 'Site Visit Scheduled', 'Negotiation', 'Won'].includes(l.status)
+        ['Interested', 'Inspection', 'Visit', 'Reservation', 'Contracted'].includes(
+          normalizeLeadStatus(l.status)
+        )
       ).length;
 
       const interestedToday = agentLeads.filter(
         (l: any) =>
-          ['Qualified', 'Site Visit Scheduled', 'Negotiation', 'Won'].includes(l.status) &&
+          ['Interested', 'Inspection', 'Visit', 'Reservation', 'Contracted'].includes(
+            normalizeLeadStatus(l.status)
+          ) &&
           (String(l.createdAt).startsWith(dateFilter) ||
             (l.lastContactedAt && String(l.lastContactedAt).startsWith(dateFilter)))
       ).length;
@@ -3065,7 +3519,9 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
 
       const weeklyInterested = agentLeads.filter(
         (l: any) =>
-          ['Qualified', 'Site Visit Scheduled', 'Negotiation', 'Won'].includes(l.status) &&
+          ['Interested', 'Inspection', 'Visit', 'Reservation', 'Contracted'].includes(
+            normalizeLeadStatus(l.status)
+          ) &&
           ((String(l.createdAt).slice(0, 10) >= weekStartStr && String(l.createdAt).slice(0, 10) <= dateFilter) ||
             (l.lastContactedAt &&
               String(l.lastContactedAt).slice(0, 10) >= weekStartStr &&
@@ -3089,7 +3545,15 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
         weeklyAssignedLeads > 0
           ? Math.round((weeklyInterested / weeklyAssignedLeads) * 100)
           : agentLeads.length > 0
-          ? Math.round((agentLeads.filter((l: any) => ['Qualified', 'Site Visit Scheduled', 'Negotiation', 'Won'].includes(l.status)).length / agentLeads.length) * 100)
+          ? Math.round(
+              (agentLeads.filter((l: any) =>
+                ['Interested', 'Inspection', 'Visit', 'Reservation', 'Contracted'].includes(
+                  normalizeLeadStatus(l.status)
+                )
+              ).length /
+                agentLeads.length) *
+                100
+            )
           : 0;
 
       const weeklyEfficiencyBonus = weeklyConversionRate >= 25 ? 30 : 0;

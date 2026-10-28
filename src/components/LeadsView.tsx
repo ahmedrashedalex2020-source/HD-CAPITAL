@@ -29,10 +29,21 @@ import {
   GripVertical,
   FileText,
   SlidersHorizontal,
+  AlarmClock,
+  BellRing,
 } from 'lucide-react';
-import { Lead, LeadStatus, PropertyUnit, Role, UserProfile } from '../types/crm';
+import {
+  Lead,
+  LEAD_SOURCES,
+  LeadStatus,
+  normalizeLeadStatus,
+  PropertyUnit,
+  Role,
+  UserProfile,
+} from '../types/crm';
 import { Lang, translations } from '../i18n/translations';
-import { apiRequest } from '../services/api';
+import { apiRequest, invalidateSwrCache } from '../services/api';
+import { getPhoneMatchKey, normalizePhone } from '../services/cloudStore';
 
 interface LeadsViewProps {
   lang: Lang;
@@ -52,25 +63,30 @@ interface LeadsViewProps {
   isSyncingSheets?: boolean;
   openAddModalTrigger?: boolean;
   onResetAddModalTrigger?: () => void;
+  initialTransferFromUser?: string;
+  initialTransferToUser?: string;
+  onResetTransferInitialUsers?: () => void;
 }
 
 export const ALL_LEAD_STATUSES: LeadStatus[] = [
-  'New',
-  'Contacted',
-  'Qualified',
-  'Site Visit Scheduled',
-  'Negotiation',
-  'Won',
-  'Lost',
-  'Unqualified',
+  'Fresh Lead',
+  'No Answer',
+  'Follow Up',
+  'Interested',
+  'Inspection',
+  'Visit',
+  'Contracted',
+  'Reservation',
+  'Not Interested',
 ];
 
 export const COMPACT_META_STATUSES: LeadStatus[] = [
-  'New',
-  'Qualified',
-  'Won',
-  'Lost',
-  'Unqualified',
+  'Fresh Lead',
+  'Follow Up',
+  'Interested',
+  'Inspection',
+  'Contracted',
+  'Not Interested',
 ];
 
 interface StageMetaConfig {
@@ -89,27 +105,44 @@ interface StageMetaConfig {
 }
 
 const STAGE_META: Record<LeadStatus, StageMetaConfig> = {
-  New: {
-    shortAr: 'مسجل',
-    shortEn: 'Registered',
-    emptyTitleAr: 'لا يوجد عملاء محتملون بمرحلة "مسجل"',
-    emptyTitleEn: 'No leads in "Registered" stage',
-    emptyDescAr: 'سيظهر هنا العملاء المحتملون الجدد أو الذين تفاعلوا مؤخرًا مع صفحتك أو شيت الإعلانات.',
+  'Fresh Lead': {
+    shortAr: 'فريش ليدز',
+    shortEn: 'Fresh Leads',
+    emptyTitleAr: 'لا يوجد عملاء بمرحلة "فريش ليدز"',
+    emptyTitleEn: 'No leads in "Fresh Leads" stage',
+    emptyDescAr:
+      'سيظهر هنا العملاء المحتملون الجدد الواردون من الحملات الإعلانية أو شيت جوجل بانتظار أول تواصل.',
     emptyDescEn: 'New inbound leads from Meta Ads or Google Sheets will appear here.',
     badgeType: 'spinner',
-    pct: 15,
+    pct: 10,
     color: 'bg-blue-600',
     bg: 'bg-blue-50',
     text: 'text-blue-700',
     border: 'border-blue-200',
   },
-  Contacted: {
-    shortAr: 'قيد المتابعة',
-    shortEn: 'In Progress',
-    emptyTitleAr: 'لا يوجد عملاء محتملون بمرحلة "قيد المتابعة"',
-    emptyTitleEn: 'No leads in "In Progress" stage',
-    emptyDescAr: 'انقل العملاء المحتملين إلى هذه المرحلة عند بدء المكالمات الهاتفية أو إرسال تفاصيل المشروع عبر واتساب.',
-    emptyDescEn: 'Move leads here once initial phone or WhatsApp contact has started.',
+  'No Answer': {
+    shortAr: 'لم يرد',
+    shortEn: 'No Answer',
+    emptyTitleAr: 'لا يوجد عملاء بمرحلة "لم يرد"',
+    emptyTitleEn: 'No leads in "No Answer" stage',
+    emptyDescAr:
+      'انقل العملاء إلى هذه المرحلة عند محاولة الاتصال بهم دون رد لإعادة المحاولة لاحقاً.',
+    emptyDescEn: 'Move leads here when calls go unanswered to retry later.',
+    badgeType: 'spinner',
+    pct: 20,
+    color: 'bg-orange-500',
+    bg: 'bg-orange-50',
+    text: 'text-orange-700',
+    border: 'border-orange-200',
+  },
+  'Follow Up': {
+    shortAr: 'متابعة',
+    shortEn: 'Follow Up',
+    emptyTitleAr: 'لا يوجد عملاء بمرحلة "متابعة"',
+    emptyTitleEn: 'No leads in "Follow Up" stage',
+    emptyDescAr:
+      'انقل العملاء المحتملين إلى هذه المرحلة عند بدء المكالمات الهاتفية أو إرسال تفاصيل المشروع عبر واتساب.',
+    emptyDescEn: 'Move leads here once phone or WhatsApp follow-up is underway.',
     badgeType: 'spinner',
     pct: 35,
     color: 'bg-amber-500',
@@ -117,15 +150,14 @@ const STAGE_META: Record<LeadStatus, StageMetaConfig> = {
     text: 'text-amber-700',
     border: 'border-amber-200',
   },
-  Qualified: {
-    shortAr: 'مؤهل',
-    shortEn: 'Qualified',
-    emptyTitleAr: 'لا يوجد عملاء محتملون بمرحلة "مؤهل"',
-    emptyTitleEn: 'No leads in "Qualified" stage',
+  Interested: {
+    shortAr: 'مهتم',
+    shortEn: 'Interested',
+    emptyTitleAr: 'لا يوجد عملاء بمرحلة "مهتم"',
+    emptyTitleEn: 'No leads in "Interested" stage',
     emptyDescAr:
-      'انقل العملاء المحتملين إلى هذه المرحلة إذا كانوا يولون اهتمامًا كبيرًا بالمنتجات أو الخدمات التي تقدمها ومن المحتمل أن يكونوا مناسبين لنشاطك التجاري.',
-    emptyDescEn:
-      'Move leads to this stage if they show strong interest in your properties and fit your target criteria.',
+      'انقل العملاء إلى هذه المرحلة إذا أبدوا اهتماماً قوياً بالمشروعات والوحدات العقارية المطروحة.',
+    emptyDescEn: 'Move leads to this stage if they show strong interest in your properties.',
     badgeType: 'none',
     pct: 55,
     color: 'bg-indigo-600',
@@ -133,44 +165,44 @@ const STAGE_META: Record<LeadStatus, StageMetaConfig> = {
     text: 'text-indigo-700',
     border: 'border-indigo-200',
   },
-  'Site Visit Scheduled': {
-    shortAr: 'معاينة مجدولة',
-    shortEn: 'Site Visit',
-    emptyTitleAr: 'لا يوجد عملاء محتملون بمرحلة "معاينة مجدولة"',
-    emptyTitleEn: 'No leads in "Site Visit" stage',
+  Inspection: {
+    shortAr: 'معاينه',
+    shortEn: 'Inspection',
+    emptyTitleAr: 'لا يوجد عملاء بمرحلة "معاينه"',
+    emptyTitleEn: 'No leads in "Inspection" stage',
     emptyDescAr:
-      'انقل العملاء المحتملين إلى هذه المرحلة عند تحديد موعد زيارة ميدانية لموقع المشروع العقاري.',
-    emptyDescEn: 'Move leads here when an on-site property inspection is scheduled.',
+      'انقل العملاء إلى هذه المرحلة عند تحديد أو إجراء معاينة لموقع المشروع العقاري.',
+    emptyDescEn: 'Move leads here when a property inspection is scheduled or completed.',
     badgeType: 'none',
-    pct: 75,
+    pct: 70,
     color: 'bg-purple-600',
     bg: 'bg-purple-50',
     text: 'text-purple-700',
     border: 'border-purple-200',
   },
-  Negotiation: {
-    shortAr: 'تفاوض',
-    shortEn: 'Negotiation',
-    emptyTitleAr: 'لا يوجد عملاء محتملون بمرحلة "تفاوض"',
-    emptyTitleEn: 'No leads in "Negotiation" stage',
+  Visit: {
+    shortAr: 'زيارة',
+    shortEn: 'Visit',
+    emptyTitleAr: 'لا يوجد عملاء بمرحلة "زيارة"',
+    emptyTitleEn: 'No leads in "Visit" stage',
     emptyDescAr:
-      'انقل العملاء المحتملين إلى هذه المرحلة أثناء التفاوض على خطة السداد ونسبة المقدم واختيار الوحدة.',
-    emptyDescEn: 'Move leads here while negotiating payment plans and down payment terms.',
+      'انقل العملاء إلى هذه المرحلة عند حضور العميل لزيارة المقر أو موقع المشروع.',
+    emptyDescEn: 'Move leads here when the client attends an office or site visit.',
     badgeType: 'none',
-    pct: 90,
-    color: 'bg-cyan-600',
-    bg: 'bg-cyan-50',
-    text: 'text-cyan-700',
-    border: 'border-cyan-200',
+    pct: 80,
+    color: 'bg-violet-600',
+    bg: 'bg-violet-50',
+    text: 'text-violet-700',
+    border: 'border-violet-200',
   },
-  Won: {
-    shortAr: 'تم التحويل',
-    shortEn: 'Converted',
-    emptyTitleAr: 'لا يوجد عملاء محتملون بمرحلة "تم التحويل"',
-    emptyTitleEn: 'No leads in "Converted" stage',
+  Contracted: {
+    shortAr: 'تعاقد',
+    shortEn: 'Contracted',
+    emptyTitleAr: 'لا يوجد عملاء بمرحلة "تعاقد"',
+    emptyTitleEn: 'No leads in "Contracted" stage',
     emptyDescAr:
-      'انقل العملاء المحتملين إلى هذه المرحلة إذا أجروا اتفاقية أو معاملة مع نشاطك التجاري.',
-    emptyDescEn: 'Move leads to this stage once they complete a deal or contract.',
+      'انقل العملاء إلى هذه المرحلة عند إتمام التعاقد الرسمي على الوحدة العقارية.',
+    emptyDescEn: 'Move leads to this stage once they complete an official property contract.',
     badgeType: 'check',
     pct: 100,
     color: 'bg-emerald-600',
@@ -178,30 +210,29 @@ const STAGE_META: Record<LeadStatus, StageMetaConfig> = {
     text: 'text-emerald-700',
     border: 'border-emerald-200',
   },
-  Lost: {
-    shortAr: 'مفقود',
-    shortEn: 'Lost',
-    emptyTitleAr: 'لا يوجد عملاء محتملون بمرحلة "مفقود"',
-    emptyTitleEn: 'No leads in "Lost" stage',
+  Reservation: {
+    shortAr: 'حجز',
+    shortEn: 'Reservation',
+    emptyTitleAr: 'لا يوجد عملاء بمرحلة "حجز"',
+    emptyTitleEn: 'No leads in "Reservation" stage',
     emptyDescAr:
-      'انقل العملاء المحتملين إلى هذه المرحلة إذا أنهوا المحادثات معك. ويمكنك إعادة التفاعل معهم أو الاحتفاظ بهم للحملات الإعلانية المستقبلية التي تستند إلى إعادة الاستهداف.',
-    emptyDescEn:
-      'Move leads here if they ended conversations. You can re-engage them later in retargeting campaigns.',
-    badgeType: 'none',
-    pct: 0,
-    color: 'bg-slate-500',
-    bg: 'bg-slate-100',
-    text: 'text-slate-700',
-    border: 'border-slate-300',
+      'انقل العملاء إلى هذه المرحلة عند دفع جدية الحجز أو حجز الوحدة العقارية.',
+    emptyDescEn: 'Move leads here when a unit reservation or booking deposit is placed.',
+    badgeType: 'check',
+    pct: 90,
+    color: 'bg-teal-600',
+    bg: 'bg-teal-50',
+    text: 'text-teal-700',
+    border: 'border-teal-200',
   },
-  Unqualified: {
-    shortAr: 'غير مؤهل',
-    shortEn: 'Unqualified',
-    emptyTitleAr: 'لا يوجد عملاء محتملون بمرحلة "غير مؤهل"',
-    emptyTitleEn: 'No leads in "Unqualified" stage',
+  'Not Interested': {
+    shortAr: 'غير مهتم',
+    shortEn: 'Not Interested',
+    emptyTitleAr: 'لا يوجد عملاء بمرحلة "غير مهتم"',
+    emptyTitleEn: 'No leads in "Not Interested" stage',
     emptyDescAr:
-      'انقل العملاء المحتملين إلى هذه المرحلة إذا لم يعودوا مناسبين لنشاطك التجاري.',
-    emptyDescEn: 'Move leads to this stage if they are not a fit for your business.',
+      'انقل العملاء إلى هذه المرحلة إذا لم يعودوا مهتمين أو كانت العروض غير مناسبة لهم حالياً.',
+    emptyDescEn: 'Move leads to this stage if they are not interested in current offers.',
     badgeType: 'cross',
     pct: 0,
     color: 'bg-rose-500',
@@ -345,7 +376,7 @@ const QUICK_FOLLOWUP_TEMPLATES = [
       'تم الاتصال الهاتفي بالعميل، أبدى اهتماماً قوياً بالمشروع وطلب إرسال المخططات وخطة السداد عبر واتساب.',
     summaryEn:
       'Phone call completed. Client showed strong interest and requested floor plans & payment plan via WhatsApp.',
-    suggestedStatus: 'Qualified' as LeadStatus,
+    suggestedStatus: 'Interested' as LeadStatus,
   },
   {
     type: 'whatsapp' as const,
@@ -355,35 +386,35 @@ const QUICK_FOLLOWUP_TEMPLATES = [
       'تم إرسال بروشور المشروع والأسعار المحدثة وجدول الأقساط عبر واتساب وفي انتظار رد العميل.',
     summaryEn:
       'Sent project brochure, updated price list, and installment schedule via WhatsApp.',
-    suggestedStatus: 'Contacted' as LeadStatus,
+    suggestedStatus: 'Follow Up' as LeadStatus,
   },
   {
     type: 'visit' as const,
-    labelAr: '📅 تأكيد موعد معاينة ميدانية للمشروع',
-    labelEn: '📅 Confirmed Site Visit Appointment',
+    labelAr: '📅 تأكيد موعد معاينه للمشروع',
+    labelEn: '📅 Confirmed Inspection Appointment',
     summaryAr:
-      'تم الاتفاق مع العميل على موعد معاينة ميدانية لموقع المشروع لاستعراض الوحدات المتاحة على الطبيعة.',
+      'تم الاتفاق مع العميل على موعد معاينه ميدانية لموقع المشروع لاستعراض الوحدات المتاحة على الطبيعة.',
     summaryEn: 'Confirmed on-site property inspection appointment with the client.',
-    suggestedStatus: 'Site Visit Scheduled' as LeadStatus,
+    suggestedStatus: 'Inspection' as LeadStatus,
   },
   {
     type: 'call' as const,
-    labelAr: '⏳ لم يتم الرد (No Answer) - إعادة محاولة',
+    labelAr: '⏳ لم يرد (No Answer) - إعادة محاولة',
     labelEn: '⏳ No Answer - Schedule Retry',
     summaryAr:
-      'تم الاتصال بالعميل أكثر من مرة ولم يتم الرد، تم إرسال رسالة تعريفية قصيرة وجدولة متابعة غداً.',
+      'تم الاتصال بالعميل أكثر من مرة ولم يرد، تم إرسال رسالة تعريفية قصيرة وجدولة متابعة غداً.',
     summaryEn:
       'Called client with no answer. Sent intro message and scheduled follow-up for tomorrow.',
-    suggestedStatus: 'Contacted' as LeadStatus,
+    suggestedStatus: 'No Answer' as LeadStatus,
   },
   {
     type: 'note' as const,
-    labelAr: '✕ العميل غير مناسب / خارج الميزانية',
-    labelEn: '✕ Client Unqualified / Out of Budget',
+    labelAr: '✕ العميل غير مهتم / خارج الميزانية',
+    labelEn: '✕ Client Not Interested / Out of Budget',
     summaryAr:
-      'بعد التواصل تبين أن ميزانية العميل أو طلبه العقاري غير متوافق حالياً مع الوحدات المطروحة.',
-    summaryEn: 'Client requirements or budget do not match current property inventory.',
-    suggestedStatus: 'Unqualified' as LeadStatus,
+      'بعد التواصل تبين أن العميل غير مهتم حالياً أو طلبه العقاري غير متوافق مع الوحدات المطروحة.',
+    summaryEn: 'Client is not interested or requirements do not match current property inventory.',
+    suggestedStatus: 'Not Interested' as LeadStatus,
   },
 ];
 
@@ -405,21 +436,24 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
   isSyncingSheets = false,
   openAddModalTrigger = false,
   onResetAddModalTrigger,
+  initialTransferFromUser,
+  initialTransferToUser,
+  onResetTransferInitialUsers,
 }) => {
   const isAr = lang === 'ar';
   const t = translations[lang];
 
   // Default view mode is 'cards_list' so all leads are immediately visible and easy to work with on mobile & desktop
   const [viewMode, setViewMode] = useState<'board' | 'cards_list' | 'profile_grid'>('cards_list');
-  // Toggle between the 5 exact columns in image_445ed453.png vs all 8 detailed real-estate columns
-  const [boardColumnsMode, setBoardColumnsMode] = useState<'meta_5' | 'full_8'>('meta_5');
+  // Default to 'full_8' so all 9 real-estate columns appear side-by-side by default in the Kanban board
+  const [boardColumnsMode, setBoardColumnsMode] = useState<'meta_5' | 'full_8'>('full_8');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [agentFilter, setAgentFilter] = useState<string>('ALL');
   const [projectFilter, setProjectFilter] = useState<string>('ALL');
   const [followUpQueue, setFollowUpQueue] = useState<
-    'ALL' | 'URGENT_NEW' | 'TODAY_FOLLOWUP' | 'VIP_BUDGET'
+    'ALL' | 'URGENT_NEW' | 'TODAY_FOLLOWUP' | 'DUE_REMINDERS' | 'VIP_BUDGET'
   >('ALL');
 
   // Drag & Drop State (`نقل بالإمساك`)
@@ -434,7 +468,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
 
   useEffect(() => {
     if (openAddModalTrigger) {
-      setShowAddModal(true);
+      openCreateModal('Fresh Lead');
       onResetAddModalTrigger?.();
     }
   }, [openAddModalTrigger, onResetAddModalTrigger]);
@@ -444,6 +478,14 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
   const [quickNoteLead, setQuickNoteLead] = useState<Lead | null>(null);
   const [quickNoteText, setQuickNoteText] = useState<string>('');
   const [isSavingQuickNote, setIsSavingQuickNote] = useState<boolean>(false);
+
+  // Smart Call & Follow-up Reminder Modal State
+  const [reminderModalLead, setReminderModalLead] = useState<Lead | null>(null);
+  const [reminderDateInput, setReminderDateInput] = useState<string>('');
+  const [reminderTimeInput, setReminderTimeInput] = useState<string>('');
+  const [reminderNoteInput, setReminderNoteInput] = useState<string>('');
+  const [reminderSyncCalendar, setReminderSyncCalendar] = useState<boolean>(true);
+  const [isSavingReminder, setIsSavingReminder] = useState<boolean>(false);
 
   // Client Data Drawer Active Tab (`لوحة بيانات العميل`)
   const [drawerTab, setDrawerTab] = useState<'profile_data' | 'followup' | 'history'>('profile_data');
@@ -458,7 +500,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
     propertyType: 'Villa' as Lead['propertyType'],
     budgetMin: 0,
     budgetMax: 0,
-    status: 'New' as LeadStatus,
+    status: 'Fresh Lead' as LeadStatus,
     priority: 'High' as Lead['priority'],
     assignedTo: '',
     notes: '',
@@ -475,13 +517,13 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
         phone: selectedLead.phone || '',
         secondaryPhone: selectedLead.secondaryPhone || '',
         email: selectedLead.email || '',
-        source: selectedLead.source || 'Google Drive - شيت CRM1',
+        source: selectedLead.source || 'حملة اعلانية',
         campaignName: selectedLead.campaignName || '',
         projectInterest: selectedLead.projectInterest || '',
         propertyType: selectedLead.propertyType || 'Apartment',
         budgetMin: Number(selectedLead.budgetMin) || 0,
         budgetMax: Number(selectedLead.budgetMax) || 0,
-        status: optimisticStatuses[selectedLead.id] || selectedLead.status,
+        status: optimisticStatuses[selectedLead.id] || normalizeLeadStatus(selectedLead.status),
         priority: selectedLead.priority || 'High',
         assignedTo: selectedLead.assignedTo || currentUser.id,
         notes: selectedLead.notes || '',
@@ -494,14 +536,82 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
     }
   }, [selectedLead, optimisticStatuses, projects, currentUser.id]);
 
-  // Transfer Modal state
+  // Transfer Modal state (Supports transferring by count, selected leads, or all leads)
+  const [transferMode, setTransferMode] = useState<'by_count' | 'selected' | 'all'>('by_count');
+  const [transferCount, setTransferCount] = useState<number>(10);
+  const [transferStatusFilter, setTransferStatusFilter] = useState<string>('ALL');
   const [transferFromUser, setTransferFromUser] = useState<string>('');
-  const [transferToUser, setTransferToUser] = useState<string>(
-    users.find((u) => u.roleId === 'role_employee')?.id || users[0]?.id || ''
-  );
+  const [transferToUser, setTransferToUser] = useState<string>('');
   const [transferReason, setTransferReason] = useState('');
   const [isTransferring, setIsTransferring] = useState(false);
   const [isRebalancing, setIsRebalancing] = useState(false);
+
+  // Auto Lead Distribution (Round-Robin) Modal State
+  const [showAutoDistributeModal, setShowAutoDistributeModal] = useState(false);
+  const [autoDistSelectedUserIds, setAutoDistSelectedUserIds] = useState<string[]>([]);
+  const [autoDistTargetMode, setAutoDistTargetMode] = useState<
+    'admin_fresh' | 'stage_all' | 'selected'
+  >('admin_fresh');
+  const [autoDistStageFilter, setAutoDistStageFilter] = useState<string>('Fresh Lead');
+  const [autoDistSheetSyncEnabled, setAutoDistSheetSyncEnabled] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (initialTransferFromUser) {
+      setTransferFromUser(initialTransferFromUser);
+    }
+    if (initialTransferToUser) {
+      setTransferToUser(initialTransferToUser);
+    }
+  }, [initialTransferFromUser, initialTransferToUser]);
+
+  useEffect(() => {
+    if (showTransferModal) {
+      if (selectedIds.length > 0) {
+        setTransferMode('selected');
+      } else if (transferMode === 'selected') {
+        setTransferMode('by_count');
+      }
+      if (!transferFromUser) {
+        const hassan = users.find(
+          (u) =>
+            u.id === 'usr_admin2' ||
+            String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata'
+        );
+        const topUserWithLeads = users.slice().sort((a, b) => {
+          const aCount = leads.filter((l) => l.assignedTo === a.id).length;
+          const bCount = leads.filter((l) => l.assignedTo === b.id).length;
+          return bCount - aCount;
+        })[0];
+        setTransferFromUser(hassan?.id || topUserWithLeads?.id || users[0]?.id || '');
+      }
+      if (!transferToUser || (selectedIds.length === 0 && transferToUser === transferFromUser)) {
+        const otherUser =
+          users.find(
+            (u) =>
+              u.id !== transferFromUser &&
+              (u.roleId === 'role_employee' || u.roleId === 'role_supervisor')
+          ) ||
+          users.find((u) => u.id !== transferFromUser) ||
+          users[0];
+        if (otherUser) {
+          setTransferToUser(otherUser.id);
+        }
+      }
+    }
+  }, [showTransferModal, selectedIds.length, users, leads]);
+
+  // Ensure transferToUser has a sensible default when selecting leads for the floating bulk bar
+  useEffect(() => {
+    if (selectedIds.length > 0 && !transferToUser && users.length > 0) {
+      const defaultTarget =
+        users.find(
+          (u) => u.roleId === 'role_employee' || u.roleId === 'role_supervisor'
+        ) || users[0];
+      if (defaultTarget) {
+        setTransferToUser(defaultTarget.id);
+      }
+    }
+  }, [selectedIds.length, transferToUser, users]);
 
   // Follow-up Activity Form state inside Drawer
   const [activityType, setActivityType] = useState<'call' | 'whatsapp' | 'visit' | 'note'>('call');
@@ -520,13 +630,13 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
     phone: '',
     secondaryPhone: '',
     email: '',
-    source: 'Google Drive - شيت CRM1',
+    source: 'حملة اعلانية',
     campaignName: '',
     projectInterest: projects[0] || '',
     propertyType: 'Villa' as Lead['propertyType'],
     budgetMin: 0,
     budgetMax: 0,
-    status: 'New' as LeadStatus,
+    status: 'Fresh Lead' as LeadStatus,
     priority: 'High' as Lead['priority'],
     assignedTo: currentUser.id,
     notes: '',
@@ -550,28 +660,38 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  // Apply strict RBAC scope + optimistic status overrides
+  // Apply strict RBAC scope + optimistic status overrides + legacy status normalization
   const scopedLeads =
     currentRole.id !== 'role_admin' && currentRole.permissions?.leads?.read === 'own'
       ? leads.filter((l) => l.assignedTo === currentUser.id)
       : leads;
 
-  const effectiveLeads = scopedLeads.map((l) =>
-    optimisticStatuses[l.id] ? { ...l, status: optimisticStatuses[l.id] } : l
-  );
+  const effectiveLeads = scopedLeads.map((l) => ({
+    ...l,
+    status: optimisticStatuses[l.id] || normalizeLeadStatus(l.status),
+  }));
 
   // Queue counts
   const urgentNewLeadsCount = effectiveLeads.filter(
-    (l) => l.status === 'New' && !l.lastContactedAt
+    (l) => l.status === 'Fresh Lead' && !l.lastContactedAt
   ).length;
   const todayFollowUpCount = effectiveLeads.filter(
     (l) =>
       l.nextFollowUpAt &&
       l.nextFollowUpAt <= todayStr &&
-      !['Won', 'Lost', 'Unqualified'].includes(l.status)
+      !['Contracted', 'Not Interested'].includes(l.status)
   ).length;
   const vipBudgetCount = effectiveLeads.filter(
     (l) => (Number(l.budgetMax) || 0) >= 15000000
+  ).length;
+  const dueRemindersCount = effectiveLeads.filter(
+    (l) =>
+      Boolean(l.reminderDateTime) &&
+      !l.reminderNotified &&
+      new Date(l.reminderDateTime!).getTime() <= Date.now()
+  ).length;
+  const activeRemindersCount = effectiveLeads.filter(
+    (l) => Boolean(l.reminderDateTime) && !l.reminderNotified
   ).length;
 
   // Filtered Leads
@@ -580,16 +700,23 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
     if (agentFilter !== 'ALL' && l.assignedTo !== agentFilter) return false;
     if (projectFilter !== 'ALL' && l.projectInterest !== projectFilter) return false;
 
-    if (followUpQueue === 'URGENT_NEW' && !(l.status === 'New' && !l.lastContactedAt)) return false;
+    if (followUpQueue === 'URGENT_NEW' && !(l.status === 'Fresh Lead' && !l.lastContactedAt))
+      return false;
     if (
       followUpQueue === 'TODAY_FOLLOWUP' &&
       !(
         l.nextFollowUpAt &&
         l.nextFollowUpAt <= todayStr &&
-        !['Won', 'Lost', 'Unqualified'].includes(l.status)
+        !['Contracted', 'Not Interested'].includes(l.status)
       )
     )
       return false;
+    if (followUpQueue === 'DUE_REMINDERS') {
+      if (!l.reminderDateTime || l.reminderNotified) return false;
+      if (dueRemindersCount > 0 && new Date(l.reminderDateTime).getTime() > Date.now()) {
+        return false;
+      }
+    }
     if (followUpQueue === 'VIP_BUDGET' && (Number(l.budgetMax) || 0) < 15000000) return false;
 
     if (searchQuery.trim() !== '') {
@@ -598,6 +725,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
         l.fullName.toLowerCase().includes(q) ||
         l.phone.toLowerCase().includes(q) ||
         l.projectInterest.toLowerCase().includes(q) ||
+        (l.source || '').toLowerCase().includes(q) ||
         l.campaignName.toLowerCase().includes(q)
       );
     }
@@ -605,7 +733,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
   });
 
   const totalLeadsCount = effectiveLeads.length;
-  const contactedOrFurtherCount = effectiveLeads.filter((l) => l.status !== 'New').length;
+  const contactedOrFurtherCount = effectiveLeads.filter((l) => l.status !== 'Fresh Lead').length;
   const followUpCompletionRate =
     totalLeadsCount > 0 ? Math.round((contactedOrFurtherCount / totalLeadsCount) * 100) : 0;
   const totalBudgetVolume = filteredLeads.reduce((sum, l) => sum + (Number(l.budgetMax) || 0), 0);
@@ -616,11 +744,90 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
       u.roleId === 'role_supervisor' ||
       u.roleId === 'role_deputy'
   );
+  const distributableSalesUsers = salesTeam.length > 0 ? salesTeam : users;
+
+  // Initialize selected sales reps when opening Auto-Distribute Modal
+  useEffect(() => {
+    if (showAutoDistributeModal) {
+      if (selectedIds.length > 0) {
+        setAutoDistTargetMode('selected');
+      } else if (autoDistTargetMode === 'selected') {
+        setAutoDistTargetMode('admin_fresh');
+      }
+      if (autoDistSelectedUserIds.length === 0) {
+        const activeRoutingIds = distributableSalesUsers
+          .filter((u) => u.isActiveForRouting !== false)
+          .map((u) => u.id);
+        setAutoDistSelectedUserIds(
+          activeRoutingIds.length > 0
+            ? activeRoutingIds
+            : distributableSalesUsers.map((u) => u.id)
+        );
+      }
+    }
+  }, [showAutoDistributeModal, selectedIds.length]);
+
+  const adminUserIdsSet = new Set(
+    users
+      .filter(
+        (u) =>
+          u.roleId === 'role_admin' ||
+          u.id === 'usr_admin' ||
+          u.id === 'usr_admin2' ||
+          String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata'
+      )
+      .map((u) => u.id)
+  );
+
+  const previewLeadsToDistribute = (() => {
+    if (autoDistTargetMode === 'selected') {
+      const idSet = new Set(selectedIds);
+      return effectiveLeads.filter((l) => idSet.has(l.id));
+    }
+    if (autoDistTargetMode === 'admin_fresh') {
+      return effectiveLeads.filter(
+        (l) =>
+          l.status === 'Fresh Lead' &&
+          (!l.assignedTo ||
+            adminUserIdsSet.has(l.assignedTo) ||
+            !users.some((u) => u.id === l.assignedTo))
+      );
+    }
+    return effectiveLeads.filter((l) =>
+      autoDistStageFilter === 'ALL' ? true : l.status === autoDistStageFilter
+    );
+  })();
 
   const toggleSelectId = (id: string) => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
+  };
+
+  const allFilteredSelected =
+    filteredLeads.length > 0 && filteredLeads.every((l) => selectedIds.includes(l.id));
+
+  const handleToggleSelectAllFiltered = () => {
+    if (filteredLeads.length === 0) return;
+    const filteredIds = filteredLeads.map((l) => l.id);
+    if (allFilteredSelected) {
+      const filteredSet = new Set(filteredIds);
+      setSelectedIds((prev) => prev.filter((id) => !filteredSet.has(id)));
+    } else {
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...filteredIds])));
+    }
+  };
+
+  const handleToggleSelectStageColumn = (stageLeads: Lead[]) => {
+    if (stageLeads.length === 0) return;
+    const stageIds = stageLeads.map((l) => l.id);
+    const allStageSelected = stageIds.every((id) => selectedIds.includes(id));
+    if (allStageSelected) {
+      const stageSet = new Set(stageIds);
+      setSelectedIds((prev) => prev.filter((id) => !stageSet.has(id)));
+    } else {
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...stageIds])));
+    }
   };
 
   const getUserName = (userId: string) => {
@@ -638,6 +845,42 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
         .toUpperCase() || 'C'
     );
   };
+
+  // Real-time duplicate phone detection for Add/Edit Modal
+  const formPrimaryPhoneKey = getPhoneMatchKey(formData.phone);
+  const formSecondaryPhoneKey = formData.secondaryPhone
+    ? getPhoneMatchKey(formData.secondaryPhone)
+    : '';
+  const formCandidateKeys = [formPrimaryPhoneKey, formSecondaryPhoneKey].filter(
+    (k) => k.length >= 8
+  );
+  const duplicateLeadForForm =
+    formCandidateKeys.length > 0
+      ? leads.find((l) => {
+          if (editingLead && l.id === editingLead.id) return false;
+          const pKey = getPhoneMatchKey(l.phone || '');
+          const sKey = l.secondaryPhone ? getPhoneMatchKey(l.secondaryPhone) : '';
+          return formCandidateKeys.some((k) => (pKey && pKey === k) || (sKey && sKey === k));
+        }) || null
+      : null;
+
+  // Real-time duplicate phone detection for Client Data Panel
+  const panelPrimaryPhoneKey = getPhoneMatchKey(clientPanelForm.phone);
+  const panelSecondaryPhoneKey = clientPanelForm.secondaryPhone
+    ? getPhoneMatchKey(clientPanelForm.secondaryPhone)
+    : '';
+  const panelCandidateKeys = [panelPrimaryPhoneKey, panelSecondaryPhoneKey].filter(
+    (k) => k.length >= 8
+  );
+  const duplicateLeadForPanel =
+    selectedLead && panelCandidateKeys.length > 0
+      ? leads.find((l) => {
+          if (l.id === selectedLead.id) return false;
+          const pKey = getPhoneMatchKey(l.phone || '');
+          const sKey = l.secondaryPhone ? getPhoneMatchKey(l.secondaryPhone) : '';
+          return panelCandidateKeys.some((k) => (pKey && pKey === k) || (sKey && sKey === k));
+        }) || null
+      : null;
 
   /**
    * Fast 1-tap note logging saved directly to Firebase
@@ -671,6 +914,225 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
   };
 
   /**
+   * Format Date object to local YYYY-MM-DD and HH:mm
+   */
+  const toLocalDateAndTime = (dateObj: Date) => {
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const d = String(dateObj.getDate()).padStart(2, '0');
+    const hh = String(dateObj.getHours()).padStart(2, '0');
+    const mm = String(dateObj.getMinutes()).padStart(2, '0');
+    return { dateStr: `${y}-${m}-${d}`, timeStr: `${hh}:${mm}` };
+  };
+
+  /**
+   * Open Smart Call & Follow-up Reminder Modal for any Lead
+   */
+  const openReminderModal = (lead: Lead, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setReminderModalLead(lead);
+    if (lead.reminderDateTime && !Number.isNaN(new Date(lead.reminderDateTime).getTime())) {
+      const parsed = new Date(lead.reminderDateTime);
+      const { dateStr, timeStr } = toLocalDateAndTime(parsed);
+      setReminderDateInput(dateStr);
+      setReminderTimeInput(timeStr);
+    } else {
+      const plus1Hour = new Date(Date.now() + 60 * 60 * 1000);
+      const { dateStr, timeStr } = toLocalDateAndTime(plus1Hour);
+      setReminderDateInput(dateStr);
+      setReminderTimeInput(timeStr);
+    }
+    setReminderNoteInput(lead.reminderNote || '');
+    setReminderSyncCalendar(true);
+  };
+
+  const applyReminderPreset = (preset: '30m' | '1h' | '3h' | 'tomorrow_11am') => {
+    const now = new Date();
+    let target = new Date(now);
+    if (preset === '30m') {
+      target = new Date(now.getTime() + 30 * 60 * 1000);
+    } else if (preset === '1h') {
+      target = new Date(now.getTime() + 60 * 60 * 1000);
+    } else if (preset === '3h') {
+      target = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+    } else if (preset === 'tomorrow_11am') {
+      target = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 11, 0, 0);
+    }
+    const { dateStr, timeStr } = toLocalDateAndTime(target);
+    setReminderDateInput(dateStr);
+    setReminderTimeInput(timeStr);
+  };
+
+  const getLeadReminderMeta = (lead: Lead) => {
+    if (!lead.reminderDateTime || lead.reminderNotified) {
+      return {
+        hasActive: false,
+        isDueNow: false,
+        isToday: false,
+        shortLabel: isAr ? 'تذكير مكالمة' : 'Set Reminder',
+        fullLabel: isAr ? 'تحديد منبه مكالمة' : 'Set Call Reminder',
+      };
+    }
+    const dt = new Date(lead.reminderDateTime);
+    if (Number.isNaN(dt.getTime())) {
+      return {
+        hasActive: false,
+        isDueNow: false,
+        isToday: false,
+        shortLabel: isAr ? 'تذكير مكالمة' : 'Set Reminder',
+        fullLabel: isAr ? 'تحديد منبه مكالمة' : 'Set Call Reminder',
+      };
+    }
+    const now = new Date();
+    const isDueNow = dt.getTime() <= now.getTime();
+    const { dateStr, timeStr } = toLocalDateAndTime(dt);
+    const { dateStr: todayLocal } = toLocalDateAndTime(now);
+    const isToday = dateStr === todayLocal;
+
+    const timeFormatted = dt.toLocaleTimeString(isAr ? 'ar-EG' : 'en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    if (isDueNow) {
+      return {
+        hasActive: true,
+        isDueNow: true,
+        isToday,
+        shortLabel: isAr ? `مستحق الآن (${timeFormatted})` : `Due Now (${timeFormatted})`,
+        fullLabel: isAr
+          ? `منبه مستحق الآن (${dateStr} ${timeStr})`
+          : `Reminder Due Now (${dateStr} ${timeStr})`,
+      };
+    }
+    if (isToday) {
+      return {
+        hasActive: true,
+        isDueNow: false,
+        isToday: true,
+        shortLabel: isAr ? `اليوم ${timeFormatted}` : `Today ${timeFormatted}`,
+        fullLabel: isAr ? `تذكير اليوم الساعة ${timeFormatted}` : `Today at ${timeFormatted}`,
+      };
+    }
+    return {
+      hasActive: true,
+      isDueNow: false,
+      isToday: false,
+      shortLabel: `${dateStr.slice(5)} ${timeStr}`,
+      fullLabel: `${dateStr} · ${timeFormatted}`,
+    };
+  };
+
+  const handleSaveReminder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reminderModalLead || !reminderDateInput || !reminderTimeInput) return;
+
+    if (
+      typeof window !== 'undefined' &&
+      'Notification' in window &&
+      Notification.permission === 'default'
+    ) {
+      Notification.requestPermission().catch(() => {});
+    }
+
+    setIsSavingReminder(true);
+    try {
+      const localDateTimeObj = new Date(`${reminderDateInput}T${reminderTimeInput}`);
+      const isoDateTime = Number.isNaN(localDateTimeObj.getTime())
+        ? `${reminderDateInput}T${reminderTimeInput}`
+        : localDateTimeObj.toISOString();
+
+      const res = await apiRequest(`/api/leads/${reminderModalLead.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          reminderDateTime: isoDateTime,
+          reminderNote: reminderNoteInput.trim(),
+          reminderNotified: false,
+          nextFollowUpAt: reminderDateInput,
+        }),
+      });
+
+      if (reminderSyncCalendar) {
+        await apiRequest('/api/events', {
+          method: 'POST',
+          body: JSON.stringify({
+            title: isAr
+              ? `⏰ تذكير مكالمة: ${reminderModalLead.fullName} (${reminderModalLead.projectInterest})`
+              : `⏰ Call Reminder: ${reminderModalLead.fullName} (${reminderModalLead.projectInterest})`,
+            category: 'Client Call',
+            priority: reminderModalLead.priority || 'High',
+            date: reminderDateInput,
+            time: reminderTimeInput,
+            leadId: reminderModalLead.id,
+            leadName: reminderModalLead.fullName,
+            projectName: reminderModalLead.projectInterest,
+            assignedTo: reminderModalLead.assignedTo || currentUser.id,
+            description:
+              reminderNoteInput.trim() ||
+              (isAr
+                ? `متابعة هاتفية مجدولة مع العميل ${reminderModalLead.fullName} على الرقم ${reminderModalLead.phone}`
+                : `Scheduled phone follow-up with ${reminderModalLead.fullName} (${reminderModalLead.phone})`),
+            completed: false,
+          }),
+        }).catch(() => {});
+      }
+
+      if (selectedLead?.id === reminderModalLead.id) {
+        onSelectLead(res.lead);
+      }
+
+      setLastChangedLeadId(reminderModalLead.id);
+      setTimeout(
+        () => setLastChangedLeadId((cur) => (cur === reminderModalLead.id ? null : cur)),
+        4000
+      );
+
+      onToast(
+        isAr
+          ? `⏰ تم ضبط منبه المكالمة للعميل "${reminderModalLead.fullName}" بتاريخ ${reminderDateInput} الساعة ${reminderTimeInput} بنجاح!`
+          : `⏰ Call reminder set for "${reminderModalLead.fullName}" on ${reminderDateInput} at ${reminderTimeInput}!`
+      );
+      setReminderModalLead(null);
+      invalidateSwrCache('/api/leads');
+      onRefresh();
+    } catch (err: any) {
+      onToast(err.message || (isAr ? 'تعذر حفظ التذكير' : 'Failed to save reminder'));
+    } finally {
+      setIsSavingReminder(false);
+    }
+  };
+
+  const handleClearReminder = async () => {
+    if (!reminderModalLead) return;
+    setIsSavingReminder(true);
+    try {
+      const res = await apiRequest(`/api/leads/${reminderModalLead.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          reminderDateTime: '',
+          reminderNote: '',
+          reminderNotified: true,
+        }),
+      });
+      if (selectedLead?.id === reminderModalLead.id) {
+        onSelectLead(res.lead);
+      }
+      onToast(
+        isAr
+          ? `تم إلغاء التذكير للعميل "${reminderModalLead.fullName}"`
+          : `Reminder cleared for "${reminderModalLead.fullName}"`
+      );
+      setReminderModalLead(null);
+      invalidateSwrCache('/api/leads');
+      onRefresh();
+    } catch (err: any) {
+      onToast(err.message || (isAr ? 'تعذر إلغاء التذكير' : 'Failed to clear reminder'));
+    } finally {
+      setIsSavingReminder(false);
+    }
+  };
+
+  /**
    * Instant Stage Change (Used by Drag & Drop, Card Stage Selector, and Client Data Panel)
    */
   const handleQuickStatusChange = async (lead: Lead, newStatus: LeadStatus) => {
@@ -699,10 +1161,10 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
       }
       const stageName = isAr ? STAGE_META[newStatus].shortAr : STAGE_META[newStatus].shortEn;
       onToast(
-        newStatus === 'Won'
+        newStatus === 'Contracted'
           ? isAr
-            ? `تم نقل العميل "${lead.fullName}" إلى مرحلة (تم التحويل ✓) وحفظ التغييرات في Firebase!`
-            : `Moved "${lead.fullName}" to Converted (Won) & saved to Firebase!`
+            ? `تم نقل العميل "${lead.fullName}" إلى مرحلة (تعاقد ✓) وحفظ التغييرات في Firebase!`
+            : `Moved "${lead.fullName}" to Contracted & saved to Firebase!`
           : isAr
           ? `تم نقل العميل "${lead.fullName}" إلى مرحلة "${stageName}" وحفظها في Firebase بنجاح ✓`
           : `Moved "${lead.fullName}" to "${stageName}" and saved to Firebase ✓`
@@ -793,6 +1255,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
           ? `تم نقل العميل "${lead.fullName}" إلى مسؤول المبيعات (${targetName}) وحفظها في Firebase!`
           : `Transferred "${lead.fullName}" to ${targetName} and saved in Firebase!`
       );
+      invalidateSwrCache('/api/leads');
       onRefresh();
     } catch (err: any) {
       onToast(err.message);
@@ -809,6 +1272,13 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
       onToast(isAr ? 'ليس لديك صلاحية لتعديل بيانات العميل' : 'No permission to edit client');
       return;
     }
+    if (duplicateLeadForPanel) {
+      const ownerName = getUserName(duplicateLeadForPanel.assignedTo);
+      onToast(
+        `هذا العميل مسجل بالفعل في النظام بنفس رقم الهاتف باسم "${duplicateLeadForPanel.fullName}" (مسؤول المبيعات: ${ownerName})`
+      );
+      return;
+    }
 
     try {
       const res = await apiRequest(`/api/leads/${selectedLead.id}`, {
@@ -821,6 +1291,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
           ? `تم حفظ وتحديث لوحة بيانات العميل "${res.lead.fullName}" بنجاح!`
           : `Client profile data saved successfully!`
       );
+      invalidateSwrCache('/api/leads');
       onRefresh();
     } catch (err: any) {
       onToast(err.message);
@@ -835,7 +1306,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
         body: JSON.stringify({
           type: 'whatsapp',
           summary: msgSummary,
-          newStatus: lead.status === 'New' ? 'Contacted' : undefined,
+          newStatus: normalizeLeadStatus(lead.status) === 'Fresh Lead' ? 'Follow Up' : undefined,
         }),
       });
       if (selectedLead?.id === lead.id) {
@@ -864,7 +1335,10 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
         body: JSON.stringify({
           type: 'whatsapp',
           summary,
-          newStatus: lead.status === 'New' ? 'Contacted' : lead.status,
+          newStatus:
+            normalizeLeadStatus(lead.status) === 'Fresh Lead'
+              ? 'Follow Up'
+              : normalizeLeadStatus(lead.status),
         }),
       });
       onSelectLead(res.lead);
@@ -879,17 +1353,56 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
     }
   };
 
-  const handleAutoRebalance = async () => {
-    setIsRebalancing(true);
-    try {
-      const res = await apiRequest('/api/leads/auto-distribute', {
-        method: 'POST',
-      });
+  const handleExecuteAutoDistribute = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (autoDistSelectedUserIds.length === 0) {
       onToast(
         isAr
-          ? `تم تعيين ${res.distributedCount} ليدز جديدة تلقائياً إلى مدير الـ CRM الثاني: حسن شحاتة (Hassan shehata)!`
-          : `Assigned ${res.distributedCount} new leads automatically to 2nd CRM Manager (Hassan shehata)!`
+          ? 'يرجى اختيار مسؤول مبيعات واحد على الأقل للتوزيع التلقائي'
+          : 'Please select at least one sales rep for auto-distribution'
       );
+      return;
+    }
+
+    setIsRebalancing(true);
+    try {
+      const payload: any = {
+        targetUserIds: autoDistSelectedUserIds,
+        autoDistributionEnabled: autoDistSheetSyncEnabled,
+        saveRoutingSettings: true,
+      };
+
+      if (autoDistTargetMode === 'selected') {
+        payload.leadIds = selectedIds;
+      } else if (autoDistTargetMode === 'admin_fresh') {
+        payload.statusFilter = 'Fresh Lead';
+        payload.onlyUnassignedOrAdmin = true;
+      } else {
+        payload.statusFilter = autoDistStageFilter;
+        payload.onlyUnassignedOrAdmin = false;
+      }
+
+      const res = await apiRequest('/api/leads/auto-distribute', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      const summaryStr = Array.isArray(res.assignmentsSummary)
+        ? res.assignmentsSummary.map((s: any) => `${s.userName} (${s.count})`).join(' · ')
+        : '';
+
+      if (autoDistTargetMode === 'selected') {
+        setSelectedIds([]);
+      }
+      setShowAutoDistributeModal(false);
+      onToast(
+        isAr
+          ? `تم توزيع ${res.distributedCount} عميل بالتساوي (Round-Robin) على السيلز بنجاح! ${
+              summaryStr ? `[${summaryStr}]` : ''
+            }`
+          : `Distributed ${res.distributedCount} lead(s) equally across selected sales reps! ${summaryStr}`
+      );
+      invalidateSwrCache('/api/leads');
       onRefresh();
     } catch (err: any) {
       onToast(err.message);
@@ -898,22 +1411,14 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
     }
   };
 
-  const openCreateModal = (initialStatus: LeadStatus = 'New') => {
+  const openCreateModal = (initialStatus: LeadStatus = 'Fresh Lead') => {
     setEditingLead(null);
-    const hassanAdmin =
-      users.find(
-        (u) =>
-          u.id === 'usr_admin2' ||
-          String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata'
-      ) || currentUser;
-    const defaultAssigneeId =
-      currentRole.permissions?.leads?.add === 'own' ? currentUser.id : hassanAdmin.id;
     setFormData({
       fullName: '',
       phone: '',
       secondaryPhone: '',
       email: '',
-      source: 'Google Drive - شيت CRM1',
+      source: 'حملة اعلانية',
       campaignName: '',
       projectInterest: projects[0] || '',
       propertyType: 'Villa',
@@ -921,7 +1426,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
       budgetMax: 0,
       status: initialStatus,
       priority: 'High',
-      assignedTo: defaultAssigneeId,
+      assignedTo: currentUser.id,
       notes: '',
       nextFollowUpAt: new Date().toISOString().slice(0, 10),
     });
@@ -930,6 +1435,13 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
 
   const handleSaveLead = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (duplicateLeadForForm) {
+      const ownerName = getUserName(duplicateLeadForForm.assignedTo);
+      onToast(
+        `هذا العميل مسجل بالفعل في النظام بنفس رقم الهاتف باسم "${duplicateLeadForForm.fullName}" (مسؤول المبيعات: ${ownerName})`
+      );
+      return;
+    }
     try {
       if (editingLead) {
         const res = await apiRequest(`/api/leads/${editingLead.id}`, {
@@ -948,6 +1460,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
         onToast(isAr ? 'تمت إضافة العميل وتوجيهه للمندوب بنجاح' : 'New lead created and assigned');
       }
       setShowAddModal(false);
+      invalidateSwrCache('/api/leads');
       onRefresh();
     } catch (err: any) {
       onToast(err.message);
@@ -1004,27 +1517,92 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
     }
   };
 
-  const handleExecuteTransfer = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleDirectSelectedTransfer = async () => {
+    if (selectedIds.length === 0) return;
+    if (!transferToUser) {
+      onToast(isAr ? 'يرجى اختيار مسؤول المبيعات المستلم أولاً' : 'Please select target sales representative');
+      return;
+    }
+
     setIsTransferring(true);
     try {
       const res = await apiRequest('/api/leads/transfer', {
         method: 'POST',
         body: JSON.stringify({
-          leadIds: selectedIds.length > 0 ? selectedIds : undefined,
-          fromUserId: selectedIds.length === 0 ? transferFromUser : undefined,
+          leadIds: selectedIds,
           toUserId: transferToUser,
-          reason: transferReason,
+          reason: transferReason.trim() || undefined,
         }),
       });
+
       setSelectedIds([]);
       setTransferReason('');
       setShowTransferModal(false);
+      onResetTransferInitialUsers?.();
       onToast(
         isAr
-          ? `تم نقل ${res.transferredCount} ليدز إلى ${res.toUser} وإرسال تنبيه فوري له!`
-          : `Transferred ${res.transferredCount} lead(s) to ${res.toUser} with instant alert!`
+          ? `تم بنجاح نقل ${res.transferredCount} عميل في عملية واحدة إلى (${res.toUser}) وإرسال إشعار فوري له!`
+          : `Successfully transferred ${res.transferredCount} lead(s) in one operation to ${res.toUser}!`
       );
+      invalidateSwrCache('/api/leads');
+      onRefresh();
+    } catch (err: any) {
+      onToast(err.message);
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
+  const handleExecuteTransfer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!transferToUser) {
+      onToast(isAr ? 'يرجى اختيار مسؤول المبيعات المستلم' : 'Please select target sales representative');
+      return;
+    }
+    const isSelectedMode = transferMode === 'selected' && selectedIds.length > 0;
+    if (!isSelectedMode && !transferFromUser) {
+      onToast(isAr ? 'يرجى اختيار المندوب المراد نقل الليدز منه' : 'Please select source sales representative');
+      return;
+    }
+    if (!isSelectedMode && transferFromUser === transferToUser) {
+      onToast(isAr ? 'لا يمكن النقل لنفس المستخدم، يرجى اختيار مستخدم آخر' : 'Cannot transfer to the same user');
+      return;
+    }
+
+    setIsTransferring(true);
+    try {
+      const payload: any = {
+        toUserId: transferToUser,
+        reason: transferReason.trim() || undefined,
+      };
+
+      if (isSelectedMode) {
+        payload.leadIds = selectedIds;
+      } else {
+        payload.fromUserId = transferFromUser;
+        if (transferMode === 'by_count') {
+          payload.count = Math.max(1, Number(transferCount) || 1);
+          if (transferStatusFilter !== 'ALL') {
+            payload.statusFilter = transferStatusFilter;
+          }
+        }
+      }
+
+      const res = await apiRequest('/api/leads/transfer', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      setSelectedIds([]);
+      setTransferReason('');
+      setShowTransferModal(false);
+      onResetTransferInitialUsers?.();
+      onToast(
+        isAr
+          ? `تم بنجاح نقل ${res.transferredCount} ليدز في عملية واحدة إلى (${res.toUser}) وإرسال إشعار فوري له!`
+          : `Successfully transferred ${res.transferredCount} lead(s) to ${res.toUser}!`
+      );
+      invalidateSwrCache('/api/leads');
       onRefresh();
     } catch (err: any) {
       onToast(err.message);
@@ -1087,20 +1665,20 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
   const activeBoardStages: LeadStatus[] =
     boardColumnsMode === 'meta_5' ? COMPACT_META_STATUSES : ALL_LEAD_STATUSES;
 
-  // Helper to get leads belonging to a column in either 5-column Meta mode or 8-column Full mode
+  // Helper to get leads belonging to a column in either Compact mode or 9-column Full mode
   const getLeadsForBoardColumn = (stage: LeadStatus): Lead[] => {
     if (boardColumnsMode === 'full_8') {
       return filteredLeads.filter((l) => l.status === stage);
     }
-    // In 5-column Meta mode (`مسجل` | `مؤهل` | `تم التحويل` | `مفقود` | `غير مؤهل`),
-    // map intermediate real-estate stages so no lead is ever hidden:
-    if (stage === 'New') {
-      return filteredLeads.filter((l) => l.status === 'New' || l.status === 'Contacted');
+    // In Compact mode, map intermediate real-estate stages so no lead is ever hidden:
+    if (stage === 'Fresh Lead') {
+      return filteredLeads.filter((l) => l.status === 'Fresh Lead' || l.status === 'No Answer');
     }
-    if (stage === 'Qualified') {
-      return filteredLeads.filter((l) =>
-        ['Qualified', 'Site Visit Scheduled', 'Negotiation'].includes(l.status)
-      );
+    if (stage === 'Inspection') {
+      return filteredLeads.filter((l) => l.status === 'Inspection' || l.status === 'Visit');
+    }
+    if (stage === 'Contracted') {
+      return filteredLeads.filter((l) => l.status === 'Contracted' || l.status === 'Reservation');
     }
     return filteredLeads.filter((l) => l.status === stage);
   };
@@ -1146,7 +1724,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {canAdd && (
                 <button
-                  onClick={() => openCreateModal('New')}
+                  onClick={() => openCreateModal('Fresh Lead')}
                   className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -1176,31 +1754,44 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
               {canTransfer && (
                 <>
                   <button
-                    onClick={handleAutoRebalance}
+                    onClick={() => setShowAutoDistributeModal(true)}
                     disabled={isRebalancing}
-                    className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
-                    <Sparkles className="w-3.5 h-3.5" />
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
                     <span>
                       {isRebalancing
                         ? isAr
-                          ? 'جاري التعيين...'
-                          : 'Assigning...'
+                          ? 'جاري التوزيع...'
+                          : 'Distributing...'
                         : isAr
-                        ? 'تعيين أوتوماتيك إلى Hassan shehata'
-                        : 'Auto-Assign to Hassan shehata'}
+                        ? 'توزيع أوتوماتيك على السيلز'
+                        : 'Auto-Distribute to Sales'}
                     </span>
                   </button>
 
                   <button
-                    onClick={() => setShowTransferModal(true)}
-                    className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    onClick={() => {
+                      if (selectedIds.length > 0) {
+                        setTransferMode('selected');
+                      }
+                      setShowTransferModal(true);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                      selectedIds.length > 0
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-800'
+                    }`}
                   >
-                    <ArrowLeftRight className="w-3.5 h-3.5 text-blue-600" />
+                    <ArrowLeftRight
+                      className={`w-3.5 h-3.5 ${
+                        selectedIds.length > 0 ? 'text-white' : 'text-blue-600'
+                      }`}
+                    />
                     <span>
                       {selectedIds.length > 0
                         ? isAr
-                          ? `نقل المحدد (${selectedIds.length}) لسيلز آخر`
+                          ? `نقل المحدد (${selectedIds.length}) في عملية واحدة`
                           : `Transfer Selected (${selectedIds.length})`
                         : isAr
                         ? 'نقل الليدز بين السيلز'
@@ -1313,9 +1904,15 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
           </div>
 
           {/* Quick Priority Queue Pills */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {[
               { id: 'ALL', label: isAr ? 'الكل' : 'All', count: totalLeadsCount },
+              {
+                id: 'DUE_REMINDERS',
+                label: isAr ? '⏰ تذكيرات مستحقة الآن' : '⏰ Due Reminders',
+                count: dueRemindersCount > 0 ? dueRemindersCount : activeRemindersCount,
+                isAlert: dueRemindersCount > 0,
+              },
               {
                 id: 'URGENT_NEW',
                 label: isAr ? '🔔 بانتظار أول مكالمة' : '🔔 Awaiting 1st Call',
@@ -1338,6 +1935,8 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                 className={`px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all cursor-pointer ${
                   followUpQueue === q.id
                     ? 'bg-slate-900 text-white'
+                    : (q as any).isAlert
+                    ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-bold animate-pulse'
                     : 'bg-[#F8FAFC] hover:bg-slate-100 text-slate-600 border border-slate-200/70'
                 }`}
               >
@@ -1351,9 +1950,12 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
       {/* 2.5 Quick Stage Filter Strip (1-tap Access with Live Counts on Web & Mobile) */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
         <button
-          onClick={() => setStatusFilter('ALL')}
+          onClick={() => {
+            setStatusFilter('ALL');
+            setFollowUpQueue('ALL');
+          }}
           className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
-            statusFilter === 'ALL'
+            statusFilter === 'ALL' && followUpQueue === 'ALL'
               ? 'bg-blue-600 text-white shadow-xs'
               : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200'
           }`}
@@ -1361,10 +1963,40 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
           <span>{isAr ? 'كل العملاء' : 'All Leads'}</span>
           <span
             className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono-tabular font-bold ${
-              statusFilter === 'ALL' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+              statusFilter === 'ALL' && followUpQueue === 'ALL'
+                ? 'bg-white/20 text-white'
+                : 'bg-slate-100 text-slate-700'
             }`}
           >
             {effectiveLeads.length}
+          </span>
+        </button>
+
+        {/* Due Reminders Quick Filter Button visible to ALL roles */}
+        <button
+          onClick={() =>
+            setFollowUpQueue(followUpQueue === 'DUE_REMINDERS' ? 'ALL' : 'DUE_REMINDERS')
+          }
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 shrink-0 border ${
+            followUpQueue === 'DUE_REMINDERS'
+              ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+              : dueRemindersCount > 0
+              ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-300 animate-pulse'
+              : 'bg-amber-50/70 hover:bg-amber-100/80 text-amber-800 border-amber-200'
+          }`}
+        >
+          <AlarmClock className="w-3.5 h-3.5" />
+          <span>{isAr ? '⏰ تذكيرات مستحقة الآن' : '⏰ Due Reminders'}</span>
+          <span
+            className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono-tabular font-bold ${
+              followUpQueue === 'DUE_REMINDERS'
+                ? 'bg-white/25 text-white'
+                : dueRemindersCount > 0
+                ? 'bg-rose-600 text-white'
+                : 'bg-amber-200/70 text-amber-900'
+            }`}
+          >
+            {dueRemindersCount > 0 ? dueRemindersCount : activeRemindersCount}
           </span>
         </button>
 
@@ -1438,6 +2070,35 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2">
+          {/* Select All / Deselect All Filtered Leads Button */}
+          {filteredLeads.length > 0 && (
+            <button
+              type="button"
+              onClick={handleToggleSelectAllFiltered}
+              className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                allFilteredSelected
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                  : 'bg-[#F8FAFC] hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={allFilteredSelected}
+                onChange={() => {}}
+                className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 pointer-events-none accent-blue-600"
+              />
+              <span>
+                {allFilteredSelected
+                  ? isAr
+                    ? `إلغاء تحديد الكل (${filteredLeads.length})`
+                    : `Deselect All (${filteredLeads.length})`
+                  : isAr
+                  ? `تحديد كل المعروض (${filteredLeads.length})`
+                  : `Select All Shown (${filteredLeads.length})`}
+              </span>
+            </button>
+          )}
+
           {/* Toggle between 5-Stage Meta Columns (Exact Image) and 8-Stage Detailed Real Estate Columns */}
           {viewMode === 'board' && (
             <div className="flex items-center p-1 bg-[#F4F7FE] rounded-xl border border-slate-200/80">
@@ -1449,7 +2110,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                {isAr ? 'المراحل الأساسية (5 مراحل)' : 'Standard Stages (5)'}
+                {isAr ? 'المراحل المختصرة (6 مراحل)' : 'Compact Stages (6)'}
               </button>
               <button
                 onClick={() => setBoardColumnsMode('full_8')}
@@ -1459,7 +2120,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                {isAr ? 'المراحل العقارية التفصيلية (8 مراحل)' : 'Detailed Real Estate (8)'}
+                {isAr ? 'المراحل العقارية الكاملة (9 مراحل)' : 'All Real Estate Stages (9)'}
               </button>
             </div>
           )}
@@ -1538,7 +2199,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
           <div
             ref={boardScrollRef}
             className={`flex gap-3.5 overflow-x-auto pb-3 ${
-              boardColumnsMode === 'meta_5' ? 'xl:grid xl:grid-cols-5' : ''
+              boardColumnsMode === 'meta_5' ? 'xl:grid xl:grid-cols-6' : ''
             }`}
           >
             {activeBoardStages.map((stage, stageIdx) => {
@@ -1573,6 +2234,19 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                   {/* Column Header (Exact layout from image_445ed453.png: Stage Name + solid Info icon on Right, Counter badge on Left) */}
                   <div className="p-4 pb-3 border-b border-slate-100 flex items-center justify-between relative">
                     <div className="flex items-center gap-1.5">
+                      {stageLeads.length > 0 && (
+                        <input
+                          type="checkbox"
+                          checked={stageLeads.every((l) => selectedIds.includes(l.id))}
+                          onChange={() => handleToggleSelectStageColumn(stageLeads)}
+                          title={
+                            isAr
+                              ? `تحديد / إلغاء تحديد كل عملاء مرحلة (${meta.shortAr})`
+                              : `Select / deselect all in ${meta.shortEn}`
+                          }
+                          className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0 accent-blue-600"
+                        />
+                      )}
                       <h3 className="text-sm font-bold text-slate-900">
                         {isAr ? meta.shortAr : meta.shortEn}
                       </h3>
@@ -1624,9 +2298,9 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                       <p className="text-[11px] text-slate-500 leading-relaxed mt-1.5 max-w-[220px]">
                         {isAr ? meta.emptyDescAr : meta.emptyDescEn}
                       </p>
-                      {stage === 'New' && canAdd && (
+                      {stage === 'Fresh Lead' && canAdd && (
                         <button
-                          onClick={() => openCreateModal('New')}
+                          onClick={() => openCreateModal('Fresh Lead')}
                           className="mt-2.5 text-xs font-semibold text-blue-600 hover:underline cursor-pointer"
                         >
                           {isAr ? 'كيفية إضافة العملاء المحتملين' : 'How to add new leads'}
@@ -1636,10 +2310,11 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                   ) : (
                     <div className="p-3 space-y-3 flex-1 overflow-y-auto max-h-[650px]">
                       {stageLeads.map((lead) => {
+                        const isSelected = selectedIds.includes(lead.id);
                         const assignedAgent = users.find((u) => u.id === lead.assignedTo);
                         const isBeingDragged = draggedLeadId === lead.id;
                         const needsUrgentCall =
-                          lead.status === 'New' && !lead.lastContactedAt;
+                          lead.status === 'Fresh Lead' && !lead.lastContactedAt;
                         const callCount = (lead.activities || []).filter(
                           (a) => a.type === 'call'
                         ).length;
@@ -1658,14 +2333,28 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                             } ${
                               isBeingDragged
                                 ? 'opacity-50 scale-95 border-blue-500 ring-2 ring-blue-400'
+                                : isSelected
+                                ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/20 shadow-sm'
                                 : needsUrgentCall
                                 ? 'border-amber-200/90 hover:border-blue-400 shadow-2xs hover:shadow-md'
                                 : 'border-slate-200/90 hover:border-blue-400 shadow-2xs hover:shadow-md'
                             }`}
                           >
-                            {/* Card Top Bar: Drag Grip + Priority + Direct Stage Dropdown */}
+                            {/* Card Top Bar: Selection Checkbox + Drag Grip + Priority + Direct Stage Dropdown */}
                             <div className="flex items-center justify-between gap-1.5 mb-2">
-                              <div className="flex items-center gap-1 text-slate-400">
+                              <div className="flex items-center gap-1.5 text-slate-400">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={() => toggleSelectId(lead.id)}
+                                  title={
+                                    isAr
+                                      ? 'تحديد العميل للنقل الجماعي'
+                                      : 'Select lead for bulk transfer'
+                                  }
+                                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0 accent-blue-600"
+                                />
                                 <GripVertical className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 shrink-0" />
                                 <span
                                   className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
@@ -1733,15 +2422,28 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                                   </span>
                                   <span className="text-slate-500 shrink-0">{lead.propertyType}</span>
                                 </div>
-                                <div className="flex items-center justify-between text-[11px]">
+                                <div className="flex items-center justify-between gap-1 text-[11px]">
                                   <span className="font-mono-tabular font-bold text-blue-600">
                                     {lead.budgetMax > 0
                                       ? `${(lead.budgetMax / 1000000).toFixed(1)}M EGP`
-                                      : lead.source || 'CRM1'}
+                                      : lead.source || 'حملة اعلانية'}
                                   </span>
-                                  <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-semibold">
-                                    CRM1 · {(lead.formResponses || []).length}{' '}
-                                    {isAr ? 'إجابات فورم' : 'Form Q&A'}
+                                  <span
+                                    className={`text-[10px] px-1.5 py-0.5 rounded font-semibold truncate max-w-[130px] ${
+                                      lead.source === 'بروكر'
+                                        ? 'text-purple-700 bg-purple-50 border border-purple-200/60'
+                                        : lead.source === 'اورجانيك'
+                                        ? 'text-emerald-700 bg-emerald-50 border border-emerald-200/60'
+                                        : 'text-blue-700 bg-blue-50 border border-blue-200/60'
+                                    }`}
+                                    title={
+                                      lead.campaignName
+                                        ? `${lead.source || 'حملة اعلانية'} · ${lead.campaignName}`
+                                        : lead.source || 'حملة اعلانية'
+                                    }
+                                  >
+                                    {lead.source || 'حملة اعلانية'}
+                                    {lead.campaignName ? ` · ${lead.campaignName}` : ''}
                                   </span>
                                 </div>
 
@@ -1848,50 +2550,92 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                               )}
                             </div>
 
-                            {/* Card Footer: Quick Follow-up + Open Client Data Panel */}
-                            <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-1.5">
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleQuickWhatsAppFollowUp(lead);
-                                  }}
-                                  className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
-                                  title={isAr ? 'توثيق رسالة واتساب' : 'Log WhatsApp'}
-                                >
-                                  <MessageSquare className="w-3 h-3" />
-                                  <span>{waCount}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActivityType('call');
-                                    setDrawerTab('followup');
-                                    onSelectLead(lead);
-                                  }}
-                                  className="px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
-                                  title={isAr ? 'تسجيل مكالمة' : 'Log Call'}
-                                >
-                                  <Phone className="w-3 h-3" />
-                                  <span>{callCount}</span>
-                                </button>
-                              </div>
+                            {/* Card Footer: Quick Follow-up + Call Reminder + Open Client Data Panel */}
+                            {(() => {
+                              const remMeta = getLeadReminderMeta(lead);
+                              return (
+                                <div className="mt-2.5 pt-2 border-t border-slate-100 space-y-1.5">
+                                  {remMeta.hasActive && lead.reminderNote && (
+                                    <div
+                                      onClick={(e) => openReminderModal(lead, e)}
+                                      className={`px-2 py-1 rounded-lg text-[10px] font-semibold truncate cursor-pointer flex items-center gap-1 ${
+                                        remMeta.isDueNow
+                                          ? 'bg-rose-50 text-rose-800 border border-rose-200'
+                                          : 'bg-amber-50 text-amber-900 border border-amber-200/70'
+                                      }`}
+                                      title={lead.reminderNote}
+                                    >
+                                      <AlarmClock className="w-3 h-3 shrink-0" />
+                                      <span className="truncate">{lead.reminderNote}</span>
+                                    </div>
+                                  )}
+                                  <div className="flex items-center justify-between gap-1">
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleQuickWhatsAppFollowUp(lead);
+                                        }}
+                                        className="px-1.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                                        title={isAr ? 'توثيق رسالة واتساب' : 'Log WhatsApp'}
+                                      >
+                                        <MessageSquare className="w-3 h-3" />
+                                        <span>{waCount}</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActivityType('call');
+                                          setDrawerTab('followup');
+                                          onSelectLead(lead);
+                                        }}
+                                        className="px-1.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                                        title={isAr ? 'تسجيل مكالمة' : 'Log Call'}
+                                      >
+                                        <Phone className="w-3 h-3" />
+                                        <span>{callCount}</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => openReminderModal(lead, e)}
+                                        className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors ${
+                                          remMeta.isDueNow
+                                            ? 'bg-rose-600 text-white animate-pulse shadow-2xs'
+                                            : remMeta.hasActive
+                                            ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
+                                            : 'bg-amber-50 hover:bg-amber-100 text-amber-700'
+                                        }`}
+                                        title={remMeta.fullLabel}
+                                      >
+                                        <AlarmClock className="w-3 h-3 shrink-0" />
+                                        <span className="truncate max-w-[85px]">
+                                          {remMeta.hasActive
+                                            ? remMeta.shortLabel
+                                            : isAr
+                                            ? 'تذكير'
+                                            : 'Remind'}
+                                        </span>
+                                      </button>
+                                    </div>
 
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDrawerTab('profile_data');
-                                  onSelectLead(lead);
-                                }}
-                                className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-blue-600 text-white text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
-                              >
-                                <FileText className="w-3 h-3" />
-                                <span>{isAr ? 'لوحة بيانات العميل' : 'Client Panel'}</span>
-                              </button>
-                            </div>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDrawerTab('profile_data');
+                                        onSelectLead(lead);
+                                      }}
+                                      className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-blue-600 text-white text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                                    >
+                                      <FileText className="w-3 h-3" />
+                                      <span>{isAr ? 'ملف العميل' : 'Profile'}</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
                         );
                       })}
@@ -1950,8 +2694,8 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
               const isSelected = selectedIds.includes(lead.id);
               const isJustChanged = lastChangedLeadId === lead.id;
               const assignedAgent = users.find((u) => u.id === lead.assignedTo);
-              const needsUrgentCall = lead.status === 'New' && !lead.lastContactedAt;
-              const stMeta = STAGE_META[lead.status] || STAGE_META.New;
+              const needsUrgentCall = lead.status === 'Fresh Lead' && !lead.lastContactedAt;
+              const stMeta = STAGE_META[lead.status] || STAGE_META['Fresh Lead'];
               const waCount = (lead.activities || []).filter((a) => a.type === 'whatsapp').length;
               const cleanPhone = String(lead.phone || '').replace(/[^\d+]/g, '');
               const waPhone = cleanPhone.startsWith('0')
@@ -1971,16 +2715,16 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                 >
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-center">
                     <div className="lg:col-span-3 flex items-center gap-3 min-w-0">
-                      <button
-                        onClick={() => toggleSelectId(lead.id)}
-                        className="cursor-pointer shrink-0"
-                      >
-                        {isSelected ? (
-                          <CheckSquare className="w-4 h-4 text-blue-600" />
-                        ) : (
-                          <Square className="w-4 h-4 text-slate-300 hover:text-slate-500" />
-                        )}
-                      </button>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={() => toggleSelectId(lead.id)}
+                        title={
+                          isAr ? 'تحديد العميل للنقل الجماعي' : 'Select lead for bulk transfer'
+                        }
+                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0 accent-blue-600"
+                      />
 
                       <div
                         onClick={() => {
@@ -2028,8 +2772,19 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                       <div className="text-xs font-bold text-slate-800 truncate">
                         {lead.projectInterest}
                       </div>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                      <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-slate-500 mt-0.5">
                         <span>{lead.propertyType}</span>
+                        <span
+                          className={`inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                            lead.source === 'بروكر'
+                              ? 'text-purple-700 bg-purple-50 border border-purple-200/60'
+                              : lead.source === 'اورجانيك'
+                              ? 'text-emerald-700 bg-emerald-50 border border-emerald-200/60'
+                              : 'text-blue-700 bg-blue-50 border border-blue-200/60'
+                          }`}
+                        >
+                          {lead.source || 'حملة اعلانية'}
+                        </span>
                         <span
                           className={`inline-flex items-center gap-0.5 font-semibold ${
                             lead.priority === 'High'
@@ -2103,7 +2858,31 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1">
+                      <div className="flex flex-wrap items-center gap-1">
+                        {(() => {
+                          const remMeta = getLeadReminderMeta(lead);
+                          return (
+                            <button
+                              type="button"
+                              onClick={(e) => openReminderModal(lead, e)}
+                              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors ${
+                                remMeta.isDueNow
+                                  ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse shadow-xs'
+                                  : remMeta.hasActive
+                                  ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
+                                  : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/70'
+                              }`}
+                              title={
+                                lead.reminderNote
+                                  ? `${remMeta.fullLabel} — ${lead.reminderNote}`
+                                  : remMeta.fullLabel
+                              }
+                            >
+                              <AlarmClock className="w-3.5 h-3.5 shrink-0" />
+                              <span>{remMeta.shortLabel}</span>
+                            </button>
+                          );
+                        })()}
                         <a
                           href={`tel:${cleanPhone}`}
                           className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1"
@@ -2179,8 +2958,9 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
         /* MODE C: Profile Cards Grid View */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {filteredLeads.map((lead) => {
+            const isSelected = selectedIds.includes(lead.id);
             const assignedAgent = users.find((u) => u.id === lead.assignedTo);
-            const stMeta = STAGE_META[lead.status] || STAGE_META.New;
+            const stMeta = STAGE_META[lead.status] || STAGE_META['Fresh Lead'];
             const callCount = (lead.activities || []).filter((a) => a.type === 'call').length;
             const waCount = (lead.activities || []).filter((a) => a.type === 'whatsapp').length;
             const visitCount = (lead.activities || []).filter((a) => a.type === 'visit').length;
@@ -2188,23 +2968,40 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
             return (
               <div
                 key={lead.id}
-                className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+                className={`bg-white rounded-2xl border p-5 transition-all flex flex-col justify-between ${
+                  isSelected
+                    ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/20 shadow-sm'
+                    : 'border-slate-200 shadow-xs hover:shadow-md'
+                }`}
               >
                 <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <select
-                      value={lead.status}
-                      onChange={(e) =>
-                        handleQuickStatusChange(lead, e.target.value as LeadStatus)
-                      }
-                      className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold cursor-pointer ${stMeta.bg} ${stMeta.text}`}
-                    >
-                      {ALL_LEAD_STATUSES.map((st) => (
-                        <option key={st} value={st} className="bg-white text-slate-800">
-                          {isAr ? STAGE_META[st].shortAr : STAGE_META[st].shortEn}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={() => toggleSelectId(lead.id)}
+                        title={
+                          isAr ? 'تحديد العميل للنقل الجماعي' : 'Select lead for bulk transfer'
+                        }
+                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0 accent-blue-600"
+                      />
+                      <select
+                        value={lead.status}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) =>
+                          handleQuickStatusChange(lead, e.target.value as LeadStatus)
+                        }
+                        className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold cursor-pointer ${stMeta.bg} ${stMeta.text}`}
+                      >
+                        {ALL_LEAD_STATUSES.map((st) => (
+                          <option key={st} value={st} className="bg-white text-slate-800">
+                            {isAr ? STAGE_META[st].shortAr : STAGE_META[st].shortEn}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     <span className="text-xs font-mono-tabular font-bold text-blue-600">
                       {(lead.budgetMax / 1000000).toFixed(1)}M EGP
                     </span>
@@ -2272,15 +3069,37 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                     </span>
                   </div>
 
-                  <button
-                    onClick={() => {
-                      setDrawerTab('profile_data');
-                      onSelectLead(lead);
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold cursor-pointer"
-                  >
-                    {isAr ? 'لوحة بيانات العميل' : 'Client Panel'}
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    {(() => {
+                      const remMeta = getLeadReminderMeta(lead);
+                      return (
+                        <button
+                          type="button"
+                          onClick={(e) => openReminderModal(lead, e)}
+                          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer ${
+                            remMeta.isDueNow
+                              ? 'bg-rose-600 text-white animate-pulse'
+                              : remMeta.hasActive
+                              ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                              : 'bg-amber-50 hover:bg-amber-100 text-amber-800'
+                          }`}
+                          title={remMeta.fullLabel}
+                        >
+                          <AlarmClock className="w-3.5 h-3.5" />
+                          <span>{remMeta.hasActive ? remMeta.shortLabel : isAr ? 'تذكير' : 'Remind'}</span>
+                        </button>
+                      );
+                    })()}
+                    <button
+                      onClick={() => {
+                        setDrawerTab('profile_data');
+                        onSelectLead(lead);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold cursor-pointer"
+                    >
+                      {isAr ? 'لوحة بيانات العميل' : 'Client Panel'}
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -2314,12 +3133,33 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => onSelectLead(null)}
-                  className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const remMeta = getLeadReminderMeta(selectedLead);
+                    return (
+                      <button
+                        type="button"
+                        onClick={(e) => openReminderModal(selectedLead, e)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
+                          remMeta.isDueNow
+                            ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse shadow-xs'
+                            : remMeta.hasActive
+                            ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
+                            : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200'
+                        }`}
+                      >
+                        <AlarmClock className="w-4 h-4" />
+                        <span>{remMeta.fullLabel}</span>
+                      </button>
+                    );
+                  })()}
+                  <button
+                    onClick={() => onSelectLead(null)}
+                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
               {/* A. Direct Stage Control Bar inside Client Data Panel (`تغيير مرحلة العميل من داخل لوحة بيانات العميل`) */}
@@ -2335,18 +3175,18 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                   </span>
                   <span
                     className={`px-2.5 py-0.5 rounded-md text-xs font-bold ${
-                      STAGE_META[selectedLead.status]?.bg
-                    } ${STAGE_META[selectedLead.status]?.text}`}
+                      STAGE_META[normalizeLeadStatus(selectedLead.status)]?.bg
+                    } ${STAGE_META[normalizeLeadStatus(selectedLead.status)]?.text}`}
                   >
                     {isAr
-                      ? STAGE_META[selectedLead.status]?.shortAr
-                      : STAGE_META[selectedLead.status]?.shortEn}
+                      ? STAGE_META[normalizeLeadStatus(selectedLead.status)]?.shortAr
+                      : STAGE_META[normalizeLeadStatus(selectedLead.status)]?.shortEn}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {ALL_LEAD_STATUSES.map((st) => {
-                    const active = selectedLead.status === st;
+                    const active = normalizeLeadStatus(selectedLead.status) === st;
                     const meta = STAGE_META[st];
                     return (
                       <button
@@ -2591,7 +3431,11 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                           setClientPanelForm({ ...clientPanelForm, phone: e.target.value })
                         }
                         disabled={!canEdit}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-[#F8FAFC] focus:bg-white font-mono-tabular"
+                        className={`w-full px-3 py-2 rounded-xl border bg-[#F8FAFC] focus:bg-white font-mono-tabular ${
+                          duplicateLeadForPanel
+                            ? 'border-red-500 ring-1 ring-red-500'
+                            : 'border-slate-200'
+                        }`}
                         required
                       />
                     </div>
@@ -2613,6 +3457,26 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                         className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-[#F8FAFC] focus:bg-white font-mono-tabular"
                       />
                     </div>
+
+                    {duplicateLeadForPanel && (
+                      <div className="sm:col-span-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-900 flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div>
+                          <span className="font-bold">⚠️ تنبيه منع التكرار: </span>
+                          <span>
+                            هذا الرقم مسجل بالفعل باسم{' '}
+                            <strong>"{duplicateLeadForPanel.fullName}"</strong> (مسؤول المبيعات:{' '}
+                            <strong>{getUserName(duplicateLeadForPanel.assignedTo)}</strong>)
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onSelectLead(duplicateLeadForPanel)}
+                          className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold cursor-pointer shrink-0"
+                        >
+                          {isAr ? 'فتح ملف العميل المسجل' : 'Open Existing Lead'}
+                        </button>
+                      </div>
+                    )}
 
                     <div>
                       <label className="block font-semibold text-slate-700 mb-1">
@@ -2758,22 +3622,39 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
 
                     <div>
                       <label className="block font-semibold text-slate-700 mb-1">
-                        {isAr ? 'المصدر' : 'Source'}
+                        {isAr ? 'مصدر العميل' : 'Lead Source'}
                       </label>
-                      <input
-                        type="text"
+                      <select
                         value={clientPanelForm.source}
                         onChange={(e) =>
                           setClientPanelForm({ ...clientPanelForm, source: e.target.value })
                         }
                         disabled={!canEdit}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-[#F8FAFC] focus:bg-white"
-                      />
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-[#F8FAFC] focus:bg-white font-semibold text-slate-800"
+                      >
+                        {LEAD_SOURCES.map((src) => (
+                          <option key={src} value={src}>
+                            {src}
+                          </option>
+                        ))}
+                        {clientPanelForm.source &&
+                          !(LEAD_SOURCES as readonly string[]).includes(clientPanelForm.source) && (
+                            <option value={clientPanelForm.source}>
+                              {clientPanelForm.source}
+                            </option>
+                          )}
+                      </select>
                     </div>
 
                     <div>
                       <label className="block font-semibold text-slate-700 mb-1">
-                        {isAr ? 'اسم الحملة الإعلانية (Meta Campaign)' : 'Campaign Name'}
+                        {clientPanelForm.source === 'بروكر'
+                          ? isAr
+                            ? 'اسم البروكر / المسوق العقاري'
+                            : 'Broker Name'
+                          : isAr
+                          ? 'اسم الحملة الإعلانية / تفاصيل المصدر'
+                          : 'Campaign Name / Source Details'}
                       </label>
                       <input
                         type="text"
@@ -2783,6 +3664,15 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                             ...clientPanelForm,
                             campaignName: e.target.value,
                           })
+                        }
+                        placeholder={
+                          clientPanelForm.source === 'بروكر'
+                            ? isAr
+                              ? 'أدخل اسم البروكر أو شركة التسويق...'
+                              : 'Enter broker name...'
+                            : isAr
+                            ? 'مثال: حملة فيسبوك التجمع الخامس...'
+                            : 'e.g. Meta Lead Ads Campaign...'
                         }
                         disabled={!canEdit}
                         className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-[#F8FAFC] focus:bg-white"
@@ -3066,85 +3956,233 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
 
       {/* Bulk / Modal Lead Transfer */}
       {showTransferModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 max-w-lg w-full p-6 shadow-xl">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <ArrowLeftRight className="w-5 h-5 text-blue-600" />
-                <h3 className="text-base font-bold text-slate-900">
-                  {isAr
-                    ? 'نقل الليدز من سيلز إلى سيلز آخر'
-                    : 'Transfer Leads Between Sales Representatives'}
-                </h3>
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <ArrowLeftRight className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900">
+                    {isAr ? 'نقل وتوزيع العملاء بين مسؤولي المبيعات' : 'Transfer & Reassign Leads'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {isAr
+                      ? 'اختر المندوب المحوّل منه والمستلم وعدد الليدز بسهولة وبدون أي أخطاء'
+                      : 'Easily reassign leads between sales representatives'}
+                  </p>
+                </div>
               </div>
               <button
-                onClick={() => setShowTransferModal(false)}
-                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 cursor-pointer"
+                onClick={() => {
+                  setShowTransferModal(false);
+                  onResetTransferInitialUsers?.();
+                }}
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleExecuteTransfer} className="mt-4 space-y-4 text-xs">
-              {selectedIds.length > 0 ? (
-                <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 font-medium">
-                  {isAr
-                    ? `تم تحديد ${selectedIds.length} ليد لنقلها فوراً إلى مندوب جديد.`
-                    : `You have selected ${selectedIds.length} lead(s) to reassign.`}
+            {/* Mode selection tabs */}
+            <div className="flex items-center p-1 bg-[#F4F7FE] rounded-xl border border-slate-200 text-xs">
+              <button
+                type="button"
+                onClick={() => setTransferMode('by_count')}
+                className={`flex-1 py-1.5 px-2 rounded-lg font-bold transition-all cursor-pointer ${
+                  transferMode === 'by_count'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {isAr ? 'نقل بعدد محدد (سريع)' : 'By Count'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setTransferMode('all')}
+                className={`flex-1 py-1.5 px-2 rounded-lg font-bold transition-all cursor-pointer ${
+                  transferMode === 'all'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {isAr ? 'نقل كل الليدز (100%)' : 'All Leads'}
+              </button>
+              {selectedIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setTransferMode('selected')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg font-bold transition-all cursor-pointer ${
+                    transferMode === 'selected'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {isAr ? `المحدد (${selectedIds.length})` : `Selected (${selectedIds.length})`}
+                </button>
+              )}
+            </div>
+
+            <form onSubmit={handleExecuteTransfer} className="space-y-3.5 text-xs">
+              {selectedIds.length > 0 && transferMode === 'selected' ? (
+                <div className="p-3.5 rounded-xl bg-blue-50/90 border border-blue-200 text-blue-950 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-blue-900">
+                      {isAr
+                        ? `✓ تم تحديد ${selectedIds.length} عميل لنقلهم معاً في عملية واحدة مباشرة:`
+                        : `✓ ${selectedIds.length} lead(s) selected for single-operation batch transfer:`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedIds([]);
+                        setTransferMode('by_count');
+                      }}
+                      className="text-[11px] font-bold text-red-600 hover:underline cursor-pointer"
+                    >
+                      {isAr ? 'إلغاء التحديد' : 'Clear All'}
+                    </button>
+                  </div>
+
+                  {/* Preview of Selected Clients */}
+                  <div className="max-h-36 overflow-y-auto space-y-1.5 pe-1">
+                    {effectiveLeads
+                      .filter((l) => selectedIds.includes(l.id))
+                      .map((selLead) => (
+                        <div
+                          key={selLead.id}
+                          className="flex items-center justify-between gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-blue-100 text-[11px]"
+                        >
+                          <div className="min-w-0 flex-1 flex items-center gap-2">
+                            <span className="font-bold text-slate-900 truncate">
+                              {selLead.fullName}
+                            </span>
+                            <span className="text-slate-400 font-mono-tabular shrink-0" dir="ltr">
+                              {selLead.phone}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">
+                              {getUserName(selLead.assignedTo).split(' ').slice(0, 2).join(' ')}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => toggleSelectId(selLead.id)}
+                              className="text-slate-400 hover:text-red-600 cursor-pointer"
+                              title={isAr ? 'إزالة من التحديد' : 'Remove from selection'}
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
                 </div>
               ) : (
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1.5">
-                    {isAr
-                      ? 'نقل جميع الليدز الخاصة بالمندوب (من سيلز):'
-                      : 'Transfer all leads currently owned by (From Sales Rep):'}
-                  </label>
-                  <select
-                    value={transferFromUser}
-                    onChange={(e) => setTransferFromUser(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white"
-                    required
-                  >
-                    <option value="">
-                      {isAr ? '-- اختر المندوب الحالي --' : '-- Select Current Sales Rep --'}
-                    </option>
-                    {users.map((u) => {
-                      const count = effectiveLeads.filter((l) => l.assignedTo === u.id).length;
-                      return (
-                        <option key={u.id} value={u.id}>
-                          {u.fullName} ({count} {isAr ? 'ليد' : 'leads'})
-                        </option>
-                      );
-                    })}
-                  </select>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      {isAr ? 'نقل الليدز من (المندوب الحالي):' : 'Transfer From (Current Owner):'}
+                    </label>
+                    <select
+                      value={transferFromUser}
+                      onChange={(e) => setTransferFromUser(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800"
+                      required
+                    >
+                      <option value="">
+                        {isAr ? '-- اختر مسؤول المبيعات الحالي --' : '-- Select Current Rep --'}
+                      </option>
+                      {users.map((u) => {
+                        const count = effectiveLeads.filter((l) => l.assignedTo === u.id).length;
+                        return (
+                          <option key={u.id} value={u.id}>
+                            {u.fullName} ({count} {isAr ? 'عميل' : 'leads'})
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  {transferMode === 'by_count' && (
+                    <div className="p-3 rounded-xl bg-[#F8FAFC] border border-slate-200/80 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="font-semibold text-slate-700">
+                          {isAr ? 'عدد الليدز المراد نقلها:' : 'Number of Leads to Transfer:'}
+                        </label>
+                        <div className="flex items-center gap-1">
+                          {[5, 10, 15, 20].map((num) => (
+                            <button
+                              key={num}
+                              type="button"
+                              onClick={() => setTransferCount(num)}
+                              className={`px-2 py-0.5 rounded-md text-[11px] font-bold cursor-pointer transition-colors ${
+                                transferCount === num
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                              }`}
+                            >
+                              {num}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <input
+                        type="number"
+                        min="1"
+                        max={Math.max(1, effectiveLeads.filter((l) => l.assignedTo === transferFromUser).length)}
+                        value={transferCount}
+                        onChange={(e) => setTransferCount(Math.max(1, Number(e.target.value)))}
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-mono-tabular font-bold text-blue-700"
+                      />
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-slate-500">{isAr ? 'حالة الليدز المراد نقلها:' : 'Lead Status Filter:'}</span>
+                        <select
+                          value={transferStatusFilter}
+                          onChange={(e) => setTransferStatusFilter(e.target.value)}
+                          className="px-2 py-1 rounded-md border border-slate-200 bg-white text-[11px] font-semibold text-slate-700"
+                        >
+                          <option value="ALL">{isAr ? 'كل الحالات' : 'All Statuses'}</option>
+                          {ALL_LEAD_STATUSES.map((st) => (
+                            <option key={st} value={st}>
+                              {t.status[st]}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1.5">
-                  {isAr
-                    ? 'إلى مسؤول المبيعات المستلم (إلى سيلز):'
-                    : 'Target Sales Representative (To Sales Rep):'}
+                <label className="block font-semibold text-slate-700 mb-1">
+                  {isAr ? 'إلى مسؤول المبيعات المستلم (المندوب الجديد):' : 'Transfer To (New Owner):'}
                 </label>
                 <select
                   value={transferToUser}
                   onChange={(e) => setTransferToUser(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800"
                   required
                 >
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.fullName} (@{u.username})
-                    </option>
-                  ))}
+                  <option value="">{isAr ? '-- اختر مسؤول المبيعات المستلم --' : '-- Select New Rep --'}</option>
+                  {users
+                    .filter((u) => selectedIds.length > 0 || u.id !== transferFromUser)
+                    .map((u) => {
+                      const currentCount = effectiveLeads.filter((l) => l.assignedTo === u.id).length;
+                      return (
+                        <option key={u.id} value={u.id}>
+                          {u.fullName} (@{u.username}) · {currentCount} {isAr ? 'عميل لديه حالياً' : 'leads'}
+                        </option>
+                      );
+                    })}
                 </select>
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1.5">
-                  {isAr
-                    ? 'سبب النقل / توجيهات للمندوب الجديد:'
-                    : 'Transfer Reason / Handover Note:'}
+                <label className="block font-semibold text-slate-700 mb-1">
+                  {isAr ? 'سبب النقل / توجيهات للمندوب (اختياري):' : 'Handover Note (Optional):'}
                 </label>
                 <input
                   type="text"
@@ -3152,33 +4190,57 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                   onChange={(e) => setTransferReason(e.target.value)}
                   placeholder={
                     isAr
-                      ? 'مثال: إعادة توزيع ضغط العمل أو تخصص مشروع بالم هيلز...'
-                      : 'e.g. Workload balancing or project specialization...'
+                      ? 'مثال: توزيع عمل للموظف الجديد، أو تخصص متابعة ليدز مغتربين...'
+                      : 'e.g. Onboarding new sales rep or workload rebalancing...'
                   }
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
                 />
+              </div>
+
+              {/* Informative Summary Pill */}
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 flex items-center gap-1.5">
+                <span className="text-blue-600 font-bold">ℹ</span>
+                <span>
+                  {isAr
+                    ? 'سيتم تحديث سجل المتابعة فوراً وإرسال إشعار فوري للمستلم وحفظ التغييرات مباشرة في قاعدة البيانات.'
+                    : 'Lead history will be logged and the new owner will be notified instantly.'}
+                </span>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setShowTransferModal(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 font-semibold cursor-pointer"
+                  onClick={() => {
+                    setShowTransferModal(false);
+                    onResetTransferInitialUsers?.();
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
                 >
                   {t.common.cancel}
                 </button>
                 <button
                   type="submit"
-                  disabled={isTransferring}
-                  className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold cursor-pointer"
+                  disabled={
+                    isTransferring ||
+                    !transferToUser ||
+                    (!(transferMode === 'selected' && selectedIds.length > 0) && !transferFromUser)
+                  }
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold flex items-center gap-1.5 cursor-pointer shadow-xs"
                 >
-                  {isTransferring
-                    ? isAr
-                      ? 'جاري النقل...'
-                      : 'Transferring...'
-                    : isAr
-                    ? 'تأكيد النقل وإرسال إشعار فوري'
-                    : 'Confirm Transfer & Notify'}
+                  <ArrowLeftRight className="w-3.5 h-3.5" />
+                  <span>
+                    {isTransferring
+                      ? isAr
+                        ? 'جاري النقل...'
+                        : 'Transferring...'
+                      : transferMode === 'selected' && selectedIds.length > 0
+                      ? isAr
+                        ? `نقل العملاء المحددين (${selectedIds.length}) الآن`
+                        : `Transfer Selected (${selectedIds.length}) Now`
+                      : isAr
+                      ? 'تأكيد النقل الآن'
+                      : 'Confirm Transfer'}
+                  </span>
                 </button>
               </div>
             </form>
@@ -3227,8 +4289,114 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                   type="text"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 font-mono-tabular"
+                  placeholder={isAr ? 'مثال: 01012345678 أو +2010...' : 'e.g. 01012345678'}
+                  className={`w-full px-3 py-2 rounded-lg border font-mono-tabular ${
+                    duplicateLeadForForm
+                      ? 'border-red-500 bg-red-50/40 text-red-900 focus:outline-none ring-1 ring-red-500'
+                      : 'border-slate-200'
+                  }`}
                   required
+                />
+                {formData.phone.trim() && normalizePhone(formData.phone).length >= 8 && (
+                  <div className="mt-1 text-[10px] text-slate-400 font-mono-tabular" dir="ltr">
+                    Normalized: +{normalizePhone(formData.phone)}
+                  </div>
+                )}
+              </div>
+
+              {duplicateLeadForForm && (
+                <div className="sm:col-span-2 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-900 flex flex-wrap items-center justify-between gap-2.5 shadow-xs">
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-xs text-red-800">
+                      {isAr
+                        ? '⚠️ تنبيه: رقم الهاتف مسجل مسبقاً في النظام (منع التكرار مفعل)'
+                        : '⚠️ Duplicate Phone Number Detected'}
+                    </div>
+                    <div className="text-[11px] text-red-700">
+                      {isAr ? (
+                        <>
+                          هذا العميل مسجل بالفعل باسم{' '}
+                          <strong className="underline">{duplicateLeadForForm.fullName}</strong> — مسؤول
+                          المبيعات الحالي:{' '}
+                          <strong>{getUserName(duplicateLeadForForm.assignedTo)}</strong>
+                        </>
+                      ) : (
+                        <>
+                          Already registered under{' '}
+                          <strong>{duplicateLeadForForm.fullName}</strong> (Sales Rep:{' '}
+                          <strong>{getUserName(duplicateLeadForForm.assignedTo)}</strong>)
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddModal(false);
+                      setDrawerTab('profile_data');
+                      onSelectLead(duplicateLeadForForm);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold cursor-pointer shrink-0 shadow-xs"
+                  >
+                    {isAr ? 'فتح ملف العميل مباشرة' : 'Open Client Profile'}
+                  </button>
+                </div>
+              )}
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  {isAr ? 'مصدر العميل *' : 'Lead Source *'}
+                </label>
+                <select
+                  value={formData.source}
+                  onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white font-semibold text-slate-800"
+                  required
+                >
+                  {LEAD_SOURCES.map((src) => (
+                    <option key={src} value={src}>
+                      {src}
+                    </option>
+                  ))}
+                  {formData.source &&
+                    !(LEAD_SOURCES as readonly string[]).includes(formData.source) && (
+                      <option value={formData.source}>{formData.source}</option>
+                    )}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  {formData.source === 'بروكر'
+                    ? isAr
+                      ? 'اسم البروكر / المسوق (اختياري)'
+                      : 'Broker Name (Optional)'
+                    : formData.source === 'حملة اعلانية'
+                    ? isAr
+                      ? 'اسم الحملة الإعلانية (اختياري)'
+                      : 'Campaign Name (Optional)'
+                    : isAr
+                    ? 'تفاصيل المصدر (اختياري)'
+                    : 'Source Details (Optional)'}
+                </label>
+                <input
+                  type="text"
+                  value={formData.campaignName}
+                  onChange={(e) => setFormData({ ...formData, campaignName: e.target.value })}
+                  placeholder={
+                    formData.source === 'بروكر'
+                      ? isAr
+                        ? 'مثال: اسم البروكر أو المكتب الوسيط'
+                        : 'e.g. Broker or Agency Name'
+                      : formData.source === 'حملة اعلانية'
+                      ? isAr
+                        ? 'مثال: حملة ميتا - التجمع الخامس'
+                        : 'e.g. Meta Campaign - New Cairo'
+                      : isAr
+                      ? 'مثال: ترشيح عميل أو زيارة مباشرة'
+                      : 'e.g. Referral or Walk-in'
+                  }
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200"
                 />
               </div>
 
@@ -3287,17 +4455,27 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                 <label className="block font-semibold text-slate-700 mb-1">
                   {isAr ? 'تعيين إلى مسؤول المبيعات' : 'Assign to Sales Rep'}
                 </label>
-                <select
-                  value={formData.assignedTo}
-                  onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white"
-                >
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.fullName}
-                    </option>
-                  ))}
-                </select>
+                {!canTransfer || currentRole.permissions?.leads?.add === 'own' ? (
+                  <select
+                    value={currentUser.id}
+                    disabled
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-100 text-slate-600 cursor-not-allowed"
+                  >
+                    <option value={currentUser.id}>{currentUser.fullName}</option>
+                  </select>
+                ) : (
+                  <select
+                    value={formData.assignedTo || currentUser.id}
+                    onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white"
+                  >
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.fullName}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div>
@@ -3355,7 +4533,8 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold cursor-pointer"
+                  disabled={Boolean(duplicateLeadForForm)}
+                  className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold cursor-pointer"
                 >
                   {t.common.save}
                 </button>
@@ -3459,6 +4638,578 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Smart Call & Follow-up Reminder Modal (`⏰ أداة تنبيه وتذكير ذكية بالمكالمات والمتابعات`) */}
+      {reminderModalLead && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden">
+            <div className="p-5 bg-amber-50/80 border-b border-amber-200/70 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs">
+                  <AlarmClock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900">
+                    {isAr
+                      ? `منبه وتذكير مكالمة: ${reminderModalLead.fullName}`
+                      : `Call & Follow-up Reminder: ${reminderModalLead.fullName}`}
+                  </h3>
+                  <p className="text-[11px] text-slate-600 font-mono-tabular mt-0.5" dir="ltr">
+                    {reminderModalLead.phone} · {reminderModalLead.projectInterest}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReminderModalLead(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-white/60 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveReminder} className="p-5 space-y-4 text-xs">
+              {/* 1. Fast Presets */}
+              <div className="space-y-1.5">
+                <label className="block font-bold text-slate-800">
+                  {isAr
+                    ? 'اختيارات سريعة بضغطة واحدة:'
+                    : 'Quick 1-Click Time Presets:'}
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { id: '30m' as const, ar: 'بعد 30 دقيقة', en: 'In 30 mins' },
+                    { id: '1h' as const, ar: 'بعد ساعة', en: 'In 1 hour' },
+                    { id: '3h' as const, ar: 'بعد 3 ساعات', en: 'In 3 hours' },
+                    { id: 'tomorrow_11am' as const, ar: 'غداً 11:00 صباحاً', en: 'Tomorrow 11 AM' },
+                  ].map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => applyReminderPreset(preset.id)}
+                      className="px-2.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-500 text-amber-900 hover:text-white border border-amber-200 font-bold text-[11px] transition-colors cursor-pointer text-center"
+                    >
+                      {isAr ? preset.ar : preset.en}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 2. Exact Date & Time Inputs */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    {isAr ? 'تاريخ التذكير *' : 'Reminder Date *'}
+                  </label>
+                  <input
+                    type="date"
+                    value={reminderDateInput}
+                    onChange={(e) => setReminderDateInput(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-[#F8FAFC] focus:bg-white font-mono-tabular font-bold text-slate-900 focus:outline-none focus:border-amber-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    {isAr ? 'وقت التنبيه (الساعة) *' : 'Reminder Time *'}
+                  </label>
+                  <input
+                    type="time"
+                    value={reminderTimeInput}
+                    onChange={(e) => setReminderTimeInput(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-[#F8FAFC] focus:bg-white font-mono-tabular font-bold text-slate-900 focus:outline-none focus:border-amber-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* 3. Reminder Note */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  {isAr
+                    ? 'ملاحظة التذكير (تظهر في التنبيه الصوتي والمرئي):'
+                    : 'Reminder Note (Shown in Alert Banner):'}
+                </label>
+                <textarea
+                  rows={2}
+                  value={reminderNoteInput}
+                  onChange={(e) => setReminderNoteInput(e.target.value)}
+                  placeholder={
+                    isAr
+                      ? 'مثال: الاتصال بالعميل بعد رجوعه من العمل لمناقشة مقدم الفيلا...'
+                      : 'e.g. Call client after work to discuss villa down payment...'
+                  }
+                  className="w-full p-3 rounded-xl border border-slate-200 bg-[#F8FAFC] focus:bg-white text-slate-900 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              {/* 4. Sync with Calendar Checkbox */}
+              <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200/80 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={reminderSyncCalendar}
+                  onChange={(e) => setReminderSyncCalendar(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                />
+                <div>
+                  <div className="font-bold text-slate-800">
+                    {isAr
+                      ? 'إضافة الموعد تلقائياً في تقويم المهام والمواعيد (Calendar)'
+                      : 'Automatically add event to Calendar'}
+                  </div>
+                  <div className="text-[10px] text-slate-500">
+                    {isAr
+                      ? 'سيقوم النظام أيضاً بإصدار تنبيه صوتي وشريط إشعار حي في أعلى الشاشة في الموعد المحدد'
+                      : 'System will also trigger a live audio chime & sticky alert banner when due'}
+                  </div>
+                </div>
+              </label>
+
+              {/* 5. Actions: Save / Clear / Cancel */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
+                <div>
+                  {reminderModalLead.reminderDateTime && !reminderModalLead.reminderNotified && (
+                    <button
+                      type="button"
+                      disabled={isSavingReminder}
+                      onClick={handleClearReminder}
+                      className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs cursor-pointer transition-colors"
+                    >
+                      {isAr ? 'إلغاء التذكير الحالي' : 'Clear Reminder'}
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setReminderModalLead(null)}
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
+                  >
+                    {isAr ? 'إغلاق' : 'Close'}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingReminder || !reminderDateInput || !reminderTimeInput}
+                    className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold flex items-center gap-1.5 shadow-xs cursor-pointer transition-colors"
+                  >
+                    <BellRing className="w-4 h-4" />
+                    <span>
+                      {isSavingReminder
+                        ? isAr
+                          ? 'جاري الحفظ...'
+                          : 'Saving...'
+                        : isAr
+                        ? 'حفظ التذكير'
+                        : 'Save Reminder'}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Auto Lead Distribution (Round-Robin) Modal */}
+      {showAutoDistributeModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-indigo-50/60">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    {isAr
+                      ? 'التوزيع الأوتوماتيكي للعملاء على السيلز (Round-Robin)'
+                      : 'Automatic Round-Robin Lead Distribution'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {isAr
+                      ? 'اختر مسؤولي المبيعات لتوزيع الليدز عليهم بالتساوي وبشكل عادل مع إشعارات فورية'
+                      : 'Select sales representatives to distribute leads equally via Round-Robin'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAutoDistributeModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleExecuteAutoDistribute}
+              className="flex-1 overflow-y-auto p-5 space-y-5 text-xs"
+            >
+              {/* 1. Target Leads Category Selection */}
+              <div className="space-y-2">
+                <label className="block font-bold text-slate-800">
+                  {isAr
+                    ? '1. اختر فئة العملاء المراد توزيعهم الآن:'
+                    : '1. Select Leads Category to Distribute:'}
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setAutoDistTargetMode('admin_fresh')}
+                    className={`p-3 rounded-xl border text-start transition-all cursor-pointer ${
+                      autoDistTargetMode === 'admin_fresh'
+                        ? 'border-indigo-600 bg-indigo-50/70 text-indigo-900 ring-2 ring-indigo-500/20'
+                        : 'border-slate-200 hover:border-slate-300 text-slate-700'
+                    }`}
+                  >
+                    <div className="font-bold">
+                      {isAr ? 'فريش ليدز عند الأدمن' : 'Admin Fresh Leads'}
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      {isAr
+                        ? 'العملاء الجدد غير الموزعين أو الموجودين عند الأدمن'
+                        : 'Fresh leads currently with Admin'}
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAutoDistTargetMode('stage_all')}
+                    className={`p-3 rounded-xl border text-start transition-all cursor-pointer ${
+                      autoDistTargetMode === 'stage_all'
+                        ? 'border-indigo-600 bg-indigo-50/70 text-indigo-900 ring-2 ring-indigo-500/20'
+                        : 'border-slate-200 hover:border-slate-300 text-slate-700'
+                    }`}
+                  >
+                    <div className="font-bold">
+                      {isAr ? 'كل العملاء في مرحلة محددة' : 'All Leads in Stage'}
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      {isAr
+                        ? 'إعادة توزيع جميع عملاء مرحلة معينة بالتساوي'
+                        : 'Redistribute all leads in a chosen stage'}
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={selectedIds.length === 0}
+                    onClick={() => setAutoDistTargetMode('selected')}
+                    className={`p-3 rounded-xl border text-start transition-all ${
+                      selectedIds.length === 0
+                        ? 'border-slate-100 bg-slate-50 text-slate-400 cursor-not-allowed'
+                        : autoDistTargetMode === 'selected'
+                        ? 'border-indigo-600 bg-indigo-50/70 text-indigo-900 ring-2 ring-indigo-500/20 cursor-pointer'
+                        : 'border-slate-200 hover:border-slate-300 text-slate-700 cursor-pointer'
+                    }`}
+                  >
+                    <div className="font-bold">
+                      {isAr
+                        ? `العملاء المحددون حالياً (${selectedIds.length})`
+                        : `Selected Leads (${selectedIds.length})`}
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      {isAr
+                        ? 'توزيع العملاء الذين قمت بتحديدهم فقط'
+                        : 'Distribute only checked leads'}
+                    </div>
+                  </button>
+                </div>
+
+                {autoDistTargetMode === 'stage_all' && (
+                  <div className="pt-2">
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      {isAr ? 'اختر المرحلة المستهدفة:' : 'Select Target Stage:'}
+                    </label>
+                    <select
+                      value={autoDistStageFilter}
+                      onChange={(e) => setAutoDistStageFilter(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-semibold"
+                    >
+                      {ALL_LEAD_STATUSES.map((st) => (
+                        <option key={st} value={st}>
+                          {isAr ? STAGE_META[st].shortAr : STAGE_META[st].shortEn}
+                        </option>
+                      ))}
+                      <option value="ALL">
+                        {isAr ? 'كل المراحل (جميع العملاء)' : 'All Stages'}
+                      </option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Sales Representatives Checklist */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-800">
+                    {isAr
+                      ? `2. اختر مسؤولي المبيعات (السيلز) المشاركين في التوزيع (${autoDistSelectedUserIds.length}/${distributableSalesUsers.length}):`
+                      : `2. Select Sales Representatives (${autoDistSelectedUserIds.length}/${distributableSalesUsers.length}):`}
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAutoDistSelectedUserIds(distributableSalesUsers.map((u) => u.id))
+                      }
+                      className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px] cursor-pointer"
+                    >
+                      {isAr ? 'تحديد كل السيلز' : 'Select All Sales'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAutoDistSelectedUserIds([])}
+                      className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold text-[11px] cursor-pointer"
+                    >
+                      {isAr ? 'إلغاء التحديد' : 'Deselect All'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto p-1">
+                  {distributableSalesUsers.map((salesUser) => {
+                    const isChecked = autoDistSelectedUserIds.includes(salesUser.id);
+                    const currentLeadCount = effectiveLeads.filter(
+                      (l) => l.assignedTo === salesUser.id
+                    ).length;
+                    const idxInSelected = autoDistSelectedUserIds.indexOf(salesUser.id);
+                    const totalToDist = previewLeadsToDistribute.length;
+                    const numSelected = autoDistSelectedUserIds.length;
+                    const shareForThisUser =
+                      isChecked && numSelected > 0
+                        ? Math.floor(totalToDist / numSelected) +
+                          (idxInSelected < totalToDist % numSelected ? 1 : 0)
+                        : 0;
+
+                    return (
+                      <label
+                        key={salesUser.id}
+                        className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                          isChecked
+                            ? 'border-indigo-500 bg-indigo-50/40'
+                            : 'border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              setAutoDistSelectedUserIds((prev) =>
+                                prev.includes(salesUser.id)
+                                  ? prev.filter((id) => id !== salesUser.id)
+                                  : [...prev, salesUser.id]
+                              );
+                            }}
+                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          />
+                          <img
+                            src={salesUser.avatarUrl}
+                            alt={salesUser.fullName}
+                            referrerPolicy="no-referrer"
+                            className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <div className="font-bold text-slate-900 truncate">
+                              {salesUser.fullName}
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              {isAr ? `معه حالياً: ${currentLeadCount} عميل` : `Current: ${currentLeadCount} leads`}
+                            </div>
+                          </div>
+                        </div>
+
+                        {isChecked && shareForThisUser > 0 && (
+                          <span className="px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-800 font-bold font-mono-tabular text-[11px] shrink-0">
+                            +{shareForThisUser} {isAr ? 'عميل' : 'leads'}
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 3. Toggle Switch for Immediate Auto-Distribution on Sheet Sync */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3">
+                <div>
+                  <div className="font-bold text-slate-900">
+                    {isAr
+                      ? 'تفعيل التوزيع الأوتوماتيكي المباشر عند سحب الشيت (Google Sheets)'
+                      : 'Enable Direct Auto-Distribution on Google Sheets Sync'}
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">
+                    {isAr
+                      ? 'حفظ هؤلاء السيلز كقائمة معتمدة لتوزيع أي ليدز جديدة قادمة من الشيت عليهم بالتساوي فوراً'
+                      : 'Save selected sales reps to automatically receive new incoming sheet leads via Round-Robin'}
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={autoDistSheetSyncEnabled}
+                  onChange={(e) => setAutoDistSheetSyncEnabled(e.target.checked)}
+                  className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer shrink-0"
+                />
+              </div>
+
+              {/* 4. Live Share Preview Box */}
+              <div className="p-4 rounded-xl bg-indigo-950 text-white space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-indigo-200 font-semibold">
+                    {isAr ? 'معاينة التوزيع المتساوي قبل التأكيد:' : 'Equal Distribution Preview:'}
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-md bg-indigo-800 text-indigo-100 font-mono-tabular font-bold text-xs">
+                    {previewLeadsToDistribute.length} {isAr ? 'عميل جاهز للتوزيع' : 'leads ready'}
+                  </span>
+                </div>
+                <div className="text-xs font-bold text-emerald-300">
+                  {autoDistSelectedUserIds.length > 0 ? (
+                    isAr ? (
+                      `سيتم توزيع ${previewLeadsToDistribute.length} عميل على ${
+                        autoDistSelectedUserIds.length
+                      } سيلز = ~${Math.floor(
+                        previewLeadsToDistribute.length / autoDistSelectedUserIds.length
+                      )}${
+                        previewLeadsToDistribute.length % autoDistSelectedUserIds.length > 0
+                          ? `-${
+                              Math.floor(
+                                previewLeadsToDistribute.length / autoDistSelectedUserIds.length
+                              ) + 1
+                            }`
+                          : ''
+                      } عملاء لكل مسؤول مبيعات`
+                    ) : (
+                      `Distributing ${previewLeadsToDistribute.length} leads across ${
+                        autoDistSelectedUserIds.length
+                      } sales reps (~${Math.ceil(
+                        previewLeadsToDistribute.length / autoDistSelectedUserIds.length
+                      )} per rep)`
+                    )
+                  ) : isAr ? (
+                    'يرجى تحديد مسؤول مبيعات واحد على الأقل من القائمة أعلاه'
+                  ) : (
+                    'Please select at least one sales rep above'
+                  )}
+                </div>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAutoDistributeModal(false)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
+                >
+                  {isAr ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={
+                    isRebalancing ||
+                    autoDistSelectedUserIds.length === 0 ||
+                    previewLeadsToDistribute.length === 0
+                  }
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold flex items-center gap-2 shadow-sm cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>
+                    {isRebalancing
+                      ? isAr
+                        ? 'جاري التوزيع الأوتوماتيكي...'
+                        : 'Distributing...'
+                      : isAr
+                      ? 'بدء التوزيع الأوتوماتيكي الآن'
+                      : 'Start Auto-Distribution Now'}
+                  </span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Bulk Selection & Single-Operation Transfer Bar */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-4 inset-x-4 max-w-4xl mx-auto z-40 bg-slate-900/95 backdrop-blur-md text-white rounded-2xl border border-slate-700 p-3.5 shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="inline-flex items-center justify-center px-3 py-1 rounded-xl bg-blue-600 text-white text-xs font-bold font-mono-tabular shadow-xs">
+              {selectedIds.length}
+            </span>
+            <span className="text-xs font-bold text-white">
+              {isAr
+                ? `تم تحديد ${selectedIds.length} عميل للنقل الجماعي`
+                : `${selectedIds.length} lead(s) selected`}
+            </span>
+            {filteredLeads.length > 0 && !allFilteredSelected && (
+              <button
+                type="button"
+                onClick={handleToggleSelectAllFiltered}
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-blue-300 text-[11px] font-semibold cursor-pointer transition-colors"
+              >
+                {isAr
+                  ? `تحديد كل المعروض (${filteredLeads.length})`
+                  : `Select All Shown (${filteredLeads.length})`}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setSelectedIds([])}
+              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-red-900/60 text-slate-300 hover:text-red-200 text-[11px] font-semibold cursor-pointer transition-colors"
+            >
+              {isAr ? 'إلغاء التحديد' : 'Clear Selection'}
+            </button>
+          </div>
+
+          {canTransfer && (
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={transferToUser}
+                onChange={(e) => setTransferToUser(e.target.value)}
+                className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs font-semibold focus:outline-none focus:border-blue-500 cursor-pointer"
+              >
+                <option value="">
+                  {isAr ? '-- اختر مسؤول المبيعات المستلم --' : '-- Select Target Sales Rep --'}
+                </option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id} className="bg-slate-900 text-white">
+                    {u.fullName} (@{u.username})
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                disabled={isTransferring || !transferToUser}
+                onClick={handleDirectSelectedTransfer}
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm transition-colors"
+              >
+                <ArrowLeftRight className="w-3.5 h-3.5" />
+                <span>
+                  {isTransferring
+                    ? isAr
+                      ? 'جاري النقل...'
+                      : 'Transferring...'
+                    : isAr
+                    ? 'نقل الجميع في عملية واحدة الآن'
+                    : 'Transfer All in One Click'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setTransferMode('selected');
+                  setShowTransferModal(true);
+                }}
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold cursor-pointer transition-colors"
+              >
+                {isAr ? 'خيارات النقل' : 'Options'}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

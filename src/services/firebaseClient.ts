@@ -417,6 +417,7 @@ export async function saveFirestoreWorkspace(state: any): Promise<void> {
         syncLogs: (state.syncLogs || []).slice(0, 50),
         notifications: (state.notifications || []).slice(0, 100),
         projects: state.projects || [],
+        projectsCatalog: state.projectsCatalog || [],
         updatedAt: new Date().toISOString(),
       })
     );
