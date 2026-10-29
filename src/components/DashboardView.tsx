@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Users,
   TrendingUp,
@@ -7,10 +7,15 @@ import {
   PhoneCall,
   RefreshCw,
   ArrowLeftRight,
-  Building,
+  Building2,
+  Banknote,
+  ClipboardCheck,
   CheckCircle2,
   Clock,
   FileSpreadsheet,
+  Filter,
+  X,
+  AlarmClock,
 } from 'lucide-react';
 import {
   UserProfile,
@@ -41,6 +46,28 @@ interface DashboardViewProps {
   isSyncingSheets: boolean;
 }
 
+type FollowUpTileKey =
+  | 'fresh'
+  | 'without_stage'
+  | 'fresh_today'
+  | 'no_answer_first'
+  | 'following'
+  | 'follow_later'
+  | 'interested'
+  | 'visit'
+  | 'visit_declined'
+  | 'meeting'
+  | 'meeting_declined'
+  | 'following_after_meeting';
+
+interface FollowUpTileDefinition {
+  key: FollowUpTileKey;
+  labelEn: string;
+  labelAr: string;
+  count: number;
+  matches: (lead: Lead) => boolean;
+}
+
 export const DashboardView: React.FC<DashboardViewProps> = ({
   lang,
   currentUser,
@@ -60,37 +87,165 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const isAr = lang === 'ar';
   const t = translations[lang];
 
-  // Calculate live metrics from lightweight bootstrapCounts (with fallback to arrays)
-  const statusCounts: Record<string, number | undefined> = bootstrapCounts?.statusCounts || {};
-  const totalLeads = bootstrapCounts ? bootstrapCounts.totalLeadsCount : leads.length;
-  const newLeadsCount = bootstrapCounts
-    ? (statusCounts['Fresh Lead'] || 0) + (statusCounts['New'] || 0)
-    : leads.filter((l) => normalizeLeadStatus(l.status) === 'Fresh Lead').length;
-  const contactedCount = bootstrapCounts
-    ? (statusCounts['Follow Up'] || 0) +
-      (statusCounts['No Answer'] || 0) +
-      (statusCounts['Contacted'] || 0)
-    : leads.filter((l) =>
-        ['Follow Up', 'No Answer'].includes(normalizeLeadStatus(l.status))
-      ).length;
-  const qualifiedCount = bootstrapCounts
-    ? (statusCounts['Interested'] || 0) +
-      (statusCounts['Inspection'] || 0) +
-      (statusCounts['Visit'] || 0) +
-      (statusCounts['Reservation'] || 0) +
-      (statusCounts['Qualified'] || 0) +
-      (statusCounts['Site Visit Scheduled'] || 0) +
-      (statusCounts['Negotiation'] || 0)
-    : leads.filter((l) =>
-        ['Interested', 'Inspection', 'Visit', 'Reservation'].includes(
-          normalizeLeadStatus(l.status)
-        )
-      ).length;
-  const wonCount = bootstrapCounts
-    ? (statusCounts['Contracted'] || 0) + (statusCounts['Won'] || 0)
-    : leads.filter((l) => normalizeLeadStatus(l.status) === 'Contracted').length;
-  const conversionRate =
-    totalLeads > 0 ? Math.round(((qualifiedCount + wonCount) / totalLeads) * 100) : 0;
+  const [selectedTileKey, setSelectedTileKey] = useState<FollowUpTileKey | null>(null);
+  const [selectedAgentFilter, setSelectedAgentFilter] = useState<string>('ALL');
+  const [showArabicLabelsOnTiles, setShowArabicLabelsOnTiles] = useState<boolean>(false);
+
+  const canViewTeamUsers =
+    currentRole.id === 'role_admin' ||
+    currentRole.permissions?.users?.read === 'all' ||
+    currentRole.permissions?.users?.read === 'team';
+
+  const canTransfer =
+    currentRole.id === 'role_admin' || currentRole.permissions?.leads?.transfer !== 'none';
+  const canSyncSheets =
+    currentRole.id === 'role_admin' || currentRole.permissions?.sheets_sync?.import !== 'none';
+  const canViewSheets =
+    currentRole.id === 'role_admin' ||
+    (currentRole.permissions?.sheets_sync?.read !== undefined &&
+      currentRole.permissions?.sheets_sync?.read !== 'none');
+  const canViewPermissions = currentRole.id === 'role_admin';
+
+  const salesTeam = useMemo(
+    () =>
+      (users || []).filter(
+        (u) =>
+          u.roleId === 'role_employee' ||
+          u.roleId === 'role_supervisor' ||
+          u.roleId === 'role_deputy'
+      ),
+    [users]
+  );
+
+  // Filter leads by selected agent if manager filters by a specific rep
+  const scopedLeads = useMemo(() => {
+    if (selectedAgentFilter === 'ALL') return leads;
+    return leads.filter((l) => l.assignedTo === selectedAgentFilter);
+  }, [leads, selectedAgentFilter]);
+
+  const todayDateStr = useMemo(() => new Date().toDateString(), []);
+
+  const isLeadCreatedToday = (lead: Lead): boolean => {
+    if (!lead.createdAt) return false;
+    const d = new Date(lead.createdAt);
+    if (Number.isNaN(d.getTime())) return false;
+    return d.toDateString() === todayDateStr;
+  };
+
+  const hasVisitKeywords = (lead: Lead): boolean => {
+    const noteText = String(lead.notes || '').toLowerCase();
+    if (noteText.includes('زيارة') || noteText.includes('زياره') || noteText.includes('visit')) {
+      return true;
+    }
+    return (lead.activities || []).some((a) => {
+      const s = String(a.summary || '').toLowerCase();
+      return s.includes('زيارة') || s.includes('زياره') || s.includes('visit');
+    });
+  };
+
+  // The exact 12 Royal-Blue tiles from the attached Follow-Up Board design (4 rows × 3 columns)
+  const followUpTiles: FollowUpTileDefinition[] = useMemo(() => {
+    const defs: Omit<FollowUpTileDefinition, 'count'>[] = [
+      {
+        key: 'fresh',
+        labelEn: 'Fresh',
+        labelAr: 'فريش ليدز',
+        matches: (l) => normalizeLeadStatus(l.status) === 'Fresh Lead',
+      },
+      {
+        key: 'without_stage',
+        labelEn: 'Without Stage',
+        labelAr: 'بدون مرحلة',
+        matches: (l) =>
+          !l.status ||
+          (normalizeLeadStatus(l.status) === 'Fresh Lead' &&
+            (!l.activities || l.activities.filter((a) => a.type === 'call').length === 0)),
+      },
+      {
+        key: 'fresh_today',
+        labelEn: 'Fresh today',
+        labelAr: 'فريش اليوم',
+        matches: (l) => isLeadCreatedToday(l),
+      },
+      {
+        key: 'no_answer_first',
+        labelEn: 'No answer first call',
+        labelAr: 'لم يرد أول مكالمة',
+        matches: (l) => normalizeLeadStatus(l.status) === 'No Answer',
+      },
+      {
+        key: 'following',
+        labelEn: 'Following',
+        labelAr: 'متابعة',
+        matches: (l) => normalizeLeadStatus(l.status) === 'Follow Up',
+      },
+      {
+        key: 'follow_later',
+        labelEn: 'Follow later',
+        labelAr: 'متابعة لاحقاً',
+        matches: (l) =>
+          Boolean(l.reminderDateTime) ||
+          (normalizeLeadStatus(l.status) === 'Follow Up' &&
+            Boolean(l.notes || (l.activities && l.activities.length > 0))),
+      },
+      {
+        key: 'interested',
+        labelEn: 'intersted',
+        labelAr: 'مهتم',
+        matches: (l) => normalizeLeadStatus(l.status) === 'Interested',
+      },
+      {
+        key: 'visit',
+        labelEn: 'visit',
+        labelAr: 'زيارة',
+        matches: (l) => normalizeLeadStatus(l.status) === 'Visit',
+      },
+      {
+        key: 'visit_declined',
+        labelEn: 'Visit declined',
+        labelAr: 'إلغاء زيارة',
+        matches: (l) => normalizeLeadStatus(l.status) === 'Not Interested' && hasVisitKeywords(l),
+      },
+      {
+        key: 'meeting',
+        labelEn: 'meeting',
+        labelAr: 'معاينه',
+        matches: (l) => normalizeLeadStatus(l.status) === 'Inspection',
+      },
+      {
+        key: 'meeting_declined',
+        labelEn: 'meeting declined',
+        labelAr: 'غير مهتم / إلغاء معاينة',
+        matches: (l) => normalizeLeadStatus(l.status) === 'Not Interested',
+      },
+      {
+        key: 'following_after_meeting',
+        labelEn: 'Following after meeting',
+        labelAr: 'متابعة بعد المعاينة (حجز/تعاقد)',
+        matches: (l) => ['Contracted', 'Reservation'].includes(normalizeLeadStatus(l.status)),
+      },
+    ];
+
+    return defs.map((d) => ({
+      ...d,
+      count: scopedLeads.filter(d.matches).length,
+    }));
+  }, [scopedLeads, todayDateStr]);
+
+  const totalLeadsCount =
+    selectedAgentFilter === 'ALL' && bootstrapCounts
+      ? bootstrapCounts.totalLeadsCount
+      : scopedLeads.length;
+
+  const activeTileDef = useMemo(
+    () => followUpTiles.find((tile) => tile.key === selectedTileKey) || null,
+    [followUpTiles, selectedTileKey]
+  );
+
+  const displayedLeads = useMemo(() => {
+    if (!activeTileDef) return scopedLeads;
+    return scopedLeads.filter(activeTileDef.matches);
+  }, [scopedLeads, activeTileDef]);
 
   const totalPipelineValue = bootstrapCounts?.dealsSummary
     ? bootstrapCounts.dealsSummary.totalPipelineValue
@@ -108,7 +263,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     ? rawUpcomingEvents.slice(0, 4)
     : (events || []).filter((e) => !e.completed).slice(0, 4);
 
-  // Recent activities across visible leads
   const recentActivities = Array.isArray(bootstrapCounts?.recentActivities)
     ? bootstrapCounts.recentActivities.slice(0, 6)
     : (leads || [])
@@ -123,27 +277,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 6);
 
-  const salesTeam = (users || []).filter(
-    (u) =>
-      u.roleId === 'role_employee' ||
-      u.roleId === 'role_supervisor' ||
-      u.roleId === 'role_deputy'
-  );
-
-  const canTransfer =
-    currentRole.id === 'role_admin' || currentRole.permissions?.leads?.transfer !== 'none';
-  const canSyncSheets =
-    currentRole.id === 'role_admin' || currentRole.permissions?.sheets_sync?.import !== 'none';
-  const canViewSheets =
-    currentRole.id === 'role_admin' ||
-    (currentRole.permissions?.sheets_sync?.read !== undefined &&
-      currentRole.permissions?.sheets_sync?.read !== 'none');
-  const canViewTeamUsers =
-    currentRole.id === 'role_admin' ||
-    currentRole.permissions?.users?.read === 'all' ||
-    currentRole.permissions?.users?.read === 'team';
-  const canViewPermissions = currentRole.id === 'role_admin';
-
   const formatEgp = (val: number) => {
     if (val >= 1000000) {
       return `${(val / 1000000).toFixed(1)}M EGP`;
@@ -151,418 +284,402 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return `${val.toLocaleString()} EGP`;
   };
 
+  // Top 5 Icon Navigation Actions matching the attached screenshot
+  const topQuickIcons = [
+    {
+      id: 'properties',
+      icon: Building2,
+      labelAr: 'المشروعات والوحدات',
+      labelEn: 'Projects & Units',
+      isActive: false,
+      onClick: () => onNavigate('properties'),
+    },
+    {
+      id: 'deals',
+      icon: Banknote,
+      labelAr: 'الصفقات والمبيعات',
+      labelEn: 'Deals & Sales',
+      isActive: false,
+      onClick: () => onNavigate('deals'),
+    },
+    {
+      id: 'calendar',
+      icon: Calendar,
+      labelAr: 'المتابعات والمعاينات',
+      labelEn: 'Calendar & Visits',
+      isActive: false,
+      onClick: () => onNavigate('calendar'),
+    },
+    {
+      id: 'followup_board',
+      icon: ClipboardCheck,
+      labelAr: 'لوحة المتابعة',
+      labelEn: 'Follow-up Board',
+      isActive: selectedTileKey !== 'following_after_meeting',
+      onClick: () => setSelectedTileKey(null),
+    },
+    {
+      id: 'completed',
+      icon: CheckCircle2,
+      labelAr: 'التعاقدات المكتملة',
+      labelEn: 'Completed & Won',
+      isActive: selectedTileKey === 'following_after_meeting',
+      onClick: () =>
+        setSelectedTileKey((prev) =>
+          prev === 'following_after_meeting' ? null : 'following_after_meeting'
+        ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      {/* 1. User Profile & Key Metrics Header Card (Directly inspired by Reference Image 1) */}
-      <section className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-        <div className="flex items-center gap-4">
-          <div className="relative shrink-0">
-            <img
-              src={currentUser.avatarUrl}
-              alt={currentUser.fullName}
-              referrerPolicy="no-referrer"
-              className="w-16 h-16 rounded-full object-cover border-2 border-blue-500 p-0.5"
-            />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">{currentUser.fullName}</h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {isAr ? currentUser.jobTitleAr : currentUser.jobTitle}
-              <span className="mx-1.5">·</span>
-              <span>{ isAr ? currentRole.nameAr : currentRole.name }</span>
-              <span className="mx-1.5">·</span>
-              <span>{currentUser.location}</span>
-            </p>
-            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+      {/* MAIN FOLLOW-UP BOARD SECTION (Exact Visual Match to Attached Screenshot) */}
+      <section className="bg-white rounded-3xl border border-slate-200/90 p-4 sm:p-6 lg:p-8 shadow-xs max-w-4xl mx-auto">
+        {/* 1. Top 5 Rounded-Square Light-Slate Action Icons (Exact Match to Screenshot Top Row) */}
+        <div className="grid grid-cols-5 gap-2.5 sm:gap-4" dir="ltr">
+          {topQuickIcons.map((item) => {
+            const IconComponent = item.icon;
+            return (
               <button
-                onClick={() => onNavigate('leads')}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                key={item.id}
+                type="button"
+                onClick={item.onClick}
+                title={isAr ? item.labelAr : item.labelEn}
+                className={`group h-14 sm:h-[68px] rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer border ${
+                  item.isActive
+                    ? 'bg-[#E8ECF4] border-[#3B5BDB]/40 shadow-xs ring-2 ring-[#3B5BDB]/20'
+                    : 'bg-[#EEF1F6] hover:bg-[#E2E7F0] border-transparent'
+                }`}
               >
-                <Users className="w-4 h-4" />
-                <span>
-                  {isAr
-                    ? `فتح قائمة العملاء والمتابعة (${totalLeads} عميل)`
-                    : `Open My Leads (${totalLeads})`}
-                </span>
+                <IconComponent
+                  className="w-6 h-6 sm:w-7 sm:h-7 text-[#2B303A] group-hover:scale-105 transition-transform"
+                  strokeWidth={2}
+                />
               </button>
-              {canSyncSheets && (
-                <button
-                  onClick={onQuickSyncSheets}
-                  disabled={isSyncingSheets}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold transition-colors cursor-pointer"
+            );
+          })}
+        </div>
+
+        {/* 2. Toolbar & Right-Aligned "Total: <count>" Counter Line */}
+        <div
+          className="mt-5 mb-4 flex flex-wrap items-center justify-between gap-3 pt-1"
+          dir="ltr"
+        >
+          {/* Left side controls: Quick Filters & Sync */}
+          <div className="flex flex-wrap items-center gap-2">
+            {canViewTeamUsers && (
+              <div className="inline-flex items-center gap-1.5 bg-[#F4F7FE] border border-slate-200 rounded-xl px-2.5 py-1.5">
+                <Filter className="w-3.5 h-3.5 text-[#3B5BDB]" />
+                <select
+                  value={selectedAgentFilter}
+                  onChange={(e) => setSelectedAgentFilter(e.target.value)}
+                  className="bg-transparent text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer"
+                  dir={isAr ? 'rtl' : 'ltr'}
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingSheets ? 'animate-spin' : ''}`} />
-                  <span>
-                    {isSyncingSheets
-                      ? isAr
-                        ? 'جاري مزامنة العملاء...'
-                        : 'Syncing Clients...'
-                      : isAr
-                      ? 'مزامنة العملاء من الشيت الآن'
-                      : 'Sync Clients Now'}
-                  </span>
-                </button>
-              )}
-              {canTransfer && (
-                <button
-                  onClick={onOpenTransferModal}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-colors cursor-pointer"
-                >
-                  <ArrowLeftRight className="w-3.5 h-3.5 text-blue-600" />
-                  <span>{isAr ? 'تغيير مسؤول العميل' : 'Reassign Client'}</span>
-                </button>
-              )}
-            </div>
+                  <option value="ALL">
+                    {isAr ? 'كل مسؤولي المبيعات' : 'All Sales Agents'}
+                  </option>
+                  {salesTeam.map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.fullName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setShowArabicLabelsOnTiles((prev) => !prev)}
+              className="px-2.5 py-1.5 rounded-xl bg-[#F4F7FE] hover:bg-slate-200/70 border border-slate-200 text-xs font-semibold text-slate-700 transition-colors cursor-pointer"
+            >
+              {showArabicLabelsOnTiles ? 'English Labels' : 'مسميات عربي / EN'}
+            </button>
+
+            {canSyncSheets && (
+              <button
+                type="button"
+                onClick={onQuickSyncSheets}
+                disabled={isSyncingSheets}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncingSheets ? 'animate-spin' : ''}`} />
+                <span>{isAr ? 'مزامنة الشيت' : 'Sync'}</span>
+              </button>
+            )}
+
+            {canTransfer && (
+              <button
+                type="button"
+                onClick={onOpenTransferModal}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                <ArrowLeftRight className="w-3.5 h-3.5 text-[#3B5BDB]" />
+                <span>{isAr ? 'تحويل عملاء' : 'Transfer'}</span>
+              </button>
+            )}
+          </div>
+
+          {/* Right side: Exact "Total: <count>" Display from Screenshot */}
+          <div className="text-right ms-auto">
+            <span className="text-base sm:text-xl font-medium text-[#687076] font-mono-tabular tracking-tight">
+              Total: {totalLeadsCount}
+            </span>
           </div>
         </div>
 
-        {/* 4 Clean Unboxed Tabular Metrics */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 pt-4 lg:pt-0 border-t lg:border-t-0 border-slate-100">
-          <div
-            onClick={() => onNavigate('leads')}
-            className="text-center lg:text-start cursor-pointer group"
-          >
-            <div className="text-2xl font-bold text-slate-900 group-hover:text-blue-600 font-mono-tabular">
-              {totalLeads}
-            </div>
-            <div className="text-xs text-slate-500 mt-0.5">
-              {isAr ? 'إجمالي العملاء' : 'Total Clients'}
-            </div>
+        {/* 3. The 3×4 Royal-Blue Follow-Up Stage Grid (Exact Match to Screenshot) */}
+        <div className="grid grid-cols-3 gap-3 sm:gap-4" dir="ltr">
+          {followUpTiles.map((tile) => {
+            const isSelected = selectedTileKey === tile.key;
+            return (
+              <button
+                key={tile.key}
+                type="button"
+                onClick={() =>
+                  setSelectedTileKey((prev) => (prev === tile.key ? null : tile.key))
+                }
+                className={`group relative rounded-[18px] min-h-[116px] sm:min-h-[138px] p-3 sm:p-5 flex flex-col items-center justify-center text-center transition-all cursor-pointer select-none ${
+                  isSelected
+                    ? 'bg-[#2843B5] ring-4 ring-amber-400 shadow-lg scale-[1.01]'
+                    : 'bg-[#3B5BDB] hover:bg-[#3250C7] active:scale-[0.99] shadow-sm'
+                }`}
+              >
+                {/* Top Bold Count (Tabular Numerals) */}
+                <span className="text-2xl sm:text-[32px] font-bold text-white font-mono-tabular leading-none tracking-tight mb-2.5">
+                  {tile.count}
+                </span>
+
+                {/* Stage / Bucket Label matching Screenshot */}
+                <span className="text-xs sm:text-[17px] font-medium text-white leading-snug break-words max-w-full">
+                  {showArabicLabelsOnTiles ? tile.labelAr : tile.labelEn}
+                </span>
+
+                {/* Optional bilingual subtitle when toggled or hovered */}
+                <span
+                  className={`text-[10px] sm:text-xs text-blue-100/80 font-medium mt-1 transition-opacity ${
+                    showArabicLabelsOnTiles
+                      ? 'opacity-90'
+                      : 'opacity-80 group-hover:opacity-100'
+                  }`}
+                  dir="rtl"
+                >
+                  {showArabicLabelsOnTiles ? tile.labelEn : tile.labelAr}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Bottom Quick Action Bar under the 3x4 Grid */}
+        <div className="mt-5 pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs text-slate-600">
+            <span className="font-semibold text-slate-800">{currentUser.fullName}</span>
+            <span>·</span>
+            <span className="text-slate-500">
+              {isAr ? currentRole.nameAr : currentRole.name}
+            </span>
           </div>
-          <div className="text-center lg:text-start">
-            <div className="text-2xl font-bold text-blue-600 font-mono-tabular">
-              {conversionRate}%
-            </div>
-            <div className="text-xs text-slate-500 mt-0.5">
-              {isAr ? 'معدل التأهيل والتحويل' : 'Qualification Rate'}
-            </div>
-          </div>
-          <div className="text-center lg:text-start">
-            <div className="text-2xl font-bold text-slate-900 font-mono-tabular">
-              {upcomingEvents.length}
-            </div>
-            <div className="text-xs text-slate-500 mt-0.5">
-              {isAr ? 'معاينات ومهام قادمة' : 'Upcoming Visits'}
-            </div>
-          </div>
-          <div className="text-center lg:text-start">
-            <div className="text-lg font-bold text-emerald-600 font-mono-tabular">
-              {formatEgp(totalPipelineValue)}
-            </div>
-            <div className="text-xs text-slate-500 mt-0.5">
-              {isAr ? 'حجم الصفقات النشطة' : 'Active Pipeline'}
-            </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedTileKey && (
+              <button
+                type="button"
+                onClick={() => setSelectedTileKey(null)}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition-colors cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>
+                  {isAr
+                    ? `إلغاء فلتر (${activeTileDef?.labelAr})`
+                    : `Clear Filter (${activeTileDef?.labelEn})`}
+                </span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => onNavigate('leads')}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#3B5BDB] hover:bg-[#3250C7] text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>
+                {isAr
+                  ? `فتح قائمة العملاء الكاملة (${totalLeadsCount})`
+                  : `Open All Clients (${totalLeadsCount})`}
+              </span>
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </section>
 
-      {/* 1.5 Direct Leads Ready for Follow-Up (Immediate Visibility for Sales Reps & Admins) */}
-      {leads.length > 0 && (
+      {/* 4. Interactive Filtered Leads Drawer / Section (Updates Live when Clicking Any Blue Tile) */}
+      {(selectedTileKey !== null || displayedLeads.length > 0) && (
         <section className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Users className="w-4 h-4 text-blue-600" />
+                <Users className="w-4 h-4 text-[#3B5BDB]" />
                 <span>
-                  {isAr
-                    ? `قائمة العملاء الجاهزة للمتابعة الفورية (${leads.length} عميل)`
-                    : `Active Leads Ready for Follow-Up (${leads.length})`}
+                  {activeTileDef
+                    ? isAr
+                      ? `عملاء مرحلة: ${activeTileDef.labelAr} (${activeTileDef.labelEn}) — ${displayedLeads.length} عميل`
+                      : `Clients in "${activeTileDef.labelEn}" (${displayedLeads.length})`
+                    : isAr
+                    ? `قائمة العملاء الجاهزة للمتابعة الفورية (${displayedLeads.length} عميل)`
+                    : `Active Leads Ready for Follow-Up (${displayedLeads.length})`}
                 </span>
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
                 {isAr
-                  ? 'اضغط على أي عميل لفتح بياناته الكاملة وتسجيل مكالمة أو تغيير مرحلته، أو تواصل مباشرة عبر الهاتف وواتساب'
-                  : 'Click any lead to open their full profile & log calls, or reach out directly via Phone and WhatsApp'}
+                  ? 'اضغط على أي مربع أزرق في لوحة المتابعة أعلاه لفلترة العملاء فوراً، أو اضغط على العميل لفتح ملفه الكامل'
+                  : 'Click any blue tile on the follow-up board above to filter clients, or click a client card to open their profile'}
               </p>
             </div>
-            <button
-              onClick={() => onNavigate('leads')}
-              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
-            >
-              <span>
-                {isAr ? `عرض وإدارة كل الليدز (${leads.length})` : `Manage All Leads (${leads.length})`}
-              </span>
-              <ArrowUpRight className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              {activeTileDef && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedTileKey(null)}
+                  className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>{isAr ? 'عرض الكل' : 'Show All'}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => onNavigate('leads')}
+                className="px-4 py-2 rounded-xl bg-[#3B5BDB] hover:bg-[#3250C7] text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <span>
+                  {isAr
+                    ? `إدارة كل العملاء (${scopedLeads.length})`
+                    : `Manage All Leads (${scopedLeads.length})`}
+                </span>
+                <ArrowUpRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
-            {leads.slice(0, 6).map((lead) => {
-              const cleanDigits = String(lead.phone || '').replace(/[^0-9]/g, '');
-              const waPhone = cleanDigits.startsWith('0')
-                ? `20${cleanDigits.slice(1)}`
-                : cleanDigits;
-              return (
-                <div
-                  key={lead.id}
-                  onClick={() => onSelectLead(lead)}
-                  className="p-3.5 rounded-xl bg-[#F8FAFC] hover:bg-blue-50/40 border border-slate-200/80 hover:border-blue-400 transition-all flex flex-col justify-between gap-3 cursor-pointer"
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="text-sm font-bold text-slate-900 truncate">
-                          {lead.fullName}
+          {displayedLeads.length === 0 ? (
+            <div className="py-10 text-center bg-[#F8FAFC] rounded-2xl border border-dashed border-slate-200">
+              <div className="text-sm font-bold text-slate-700">
+                {isAr
+                  ? 'لا يوجد عملاء في هذا التصنيف حالياً'
+                  : 'No clients match this follow-up stage right now'}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                {isAr
+                  ? 'اختر مربعاً آخر من لوحة المتابعة الزرقاء أعلاه لعرض العملاء'
+                  : 'Select another tile from the blue follow-up board above'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
+              {displayedLeads.slice(0, selectedTileKey ? 18 : 6).map((lead) => {
+                const cleanDigits = String(lead.phone || '').replace(/[^0-9]/g, '');
+                const waPhone = cleanDigits.startsWith('0')
+                  ? `20${cleanDigits.slice(1)}`
+                  : cleanDigits;
+                const normalizedSt = normalizeLeadStatus(lead.status);
+                return (
+                  <div
+                    key={lead.id}
+                    onClick={() => onSelectLead(lead)}
+                    className="p-3.5 rounded-xl bg-[#F8FAFC] hover:bg-blue-50/40 border border-slate-200/80 hover:border-[#3B5BDB] transition-all flex flex-col justify-between gap-3 cursor-pointer"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-sm font-bold text-slate-900 truncate">
+                            {lead.fullName}
+                          </div>
+                          <div
+                            className="text-xs font-mono-tabular text-[#3B5BDB] font-semibold mt-0.5"
+                            dir="ltr"
+                          >
+                            {lead.phone}
+                          </div>
                         </div>
-                        <div className="text-xs font-mono-tabular text-blue-600 font-semibold mt-0.5" dir="ltr">
-                          {lead.phone}
-                        </div>
+                        <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[10px] font-bold shrink-0">
+                          {t.status[normalizedSt]}
+                        </span>
                       </div>
-                      <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[10px] font-bold shrink-0">
-                        {t.status[normalizeLeadStatus(lead.status)]}
+
+                      <div className="mt-2 text-[11px] text-slate-600 font-medium truncate">
+                        {lead.projectInterest}{' '}
+                        {lead.propertyType ? `· ${lead.propertyType}` : ''}
+                      </div>
+
+                      {lead.reminderDateTime && (
+                        <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-bold font-mono-tabular">
+                          <AlarmClock className="w-3 h-3 text-amber-600" />
+                          <span>
+                            {new Date(lead.reminderDateTime).toLocaleString(
+                              isAr ? 'ar-EG' : 'en-US',
+                              {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              }
+                            )}
+                          </span>
+                        </div>
+                      )}
+
+                      {Array.isArray(lead.formResponses) && lead.formResponses.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-slate-200/70 flex flex-wrap gap-1.5">
+                          {lead.formResponses.slice(0, 2).map((qa, i) => (
+                            <span
+                              key={i}
+                              className="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[10px] text-slate-700 truncate max-w-full"
+                            >
+                              <span className="text-slate-400">{qa.question}: </span>
+                              <strong className="text-slate-900">{qa.answer}</strong>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <a
+                          href={`tel:${lead.phone}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="px-2.5 py-1 rounded-lg bg-[#3B5BDB] hover:bg-[#3250C7] text-white text-[11px] font-bold inline-flex items-center gap-1"
+                        >
+                          <PhoneCall className="w-3 h-3" />
+                          <span>{isAr ? 'اتصال' : 'Call'}</span>
+                        </a>
+                        <a
+                          href={`https://wa.me/${waPhone}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold inline-flex items-center gap-1"
+                        >
+                          <span>{isAr ? 'واتساب' : 'WhatsApp'}</span>
+                        </a>
+                      </div>
+                      <span className="text-[11px] font-bold text-[#3B5BDB] hover:underline">
+                        {isAr ? 'فتح ملف العميل ←' : 'Open Client →'}
                       </span>
                     </div>
-
-                    <div className="mt-2 text-[11px] text-slate-600 font-medium truncate">
-                      {lead.projectInterest} {lead.propertyType ? `· ${lead.propertyType}` : ''}
-                    </div>
-
-                    {Array.isArray(lead.formResponses) && lead.formResponses.length > 0 && (
-                      <div className="mt-2 pt-2 border-t border-slate-200/70 flex flex-wrap gap-1.5">
-                        {lead.formResponses.slice(0, 3).map((qa, i) => (
-                          <span
-                            key={i}
-                            className="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[10px] text-slate-700 truncate max-w-full"
-                          >
-                            <span className="text-slate-400">{qa.question}: </span>
-                            <strong className="text-slate-900">{qa.answer}</strong>
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
-
-                  <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <a
-                        href={`tel:${lead.phone}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold inline-flex items-center gap-1"
-                      >
-                        <PhoneCall className="w-3 h-3" />
-                        <span>{isAr ? 'اتصال' : 'Call'}</span>
-                      </a>
-                      <a
-                        href={`https://wa.me/${waPhone}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold inline-flex items-center gap-1"
-                      >
-                        <span>{isAr ? 'واتساب' : 'WhatsApp'}</span>
-                      </a>
-                    </div>
-                    <span className="text-[11px] font-bold text-blue-600 hover:underline">
-                      {isAr ? 'فتح ملف العميل ←' : 'Open Client →'}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </section>
       )}
 
-      {/* 2. Two-Column Pipeline & Sales Velocity Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        {/* Deals & Leads Pipeline Card */}
-        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-6 flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <h2 className="text-base font-bold text-slate-900">
-                {isAr ? 'مراحل خط المبيعات والليدز (Leads Pipeline)' : 'Real Estate Leads Pipeline'}
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {isAr
-                  ? 'توزيع العملاء الحاليين عبر مراحل البيع والمعاينات الميدانية'
-                  : 'Distribution of active leads across real estate sales stages'}
-              </p>
-            </div>
-            <button
-              onClick={() => onNavigate('leads')}
-              className="text-xs font-semibold text-blue-600 hover:text-blue-700 inline-flex items-center gap-1 cursor-pointer"
-            >
-              <span>{isAr ? 'عرض كل الليدز' : 'View All Leads'}</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
-            <div>
-              <div className="flex items-center justify-between text-xs mb-1.5">
-                <span className="font-medium text-slate-700">
-                  {isAr ? 'فريش ليدز (Fresh Leads)' : 'Fresh Leads'}
-                </span>
-                <span className="font-mono-tabular font-semibold text-blue-600">
-                  {newLeadsCount} ({totalLeads ? Math.round((newLeadsCount / totalLeads) * 100) : 0}%)
-                </span>
-              </div>
-              <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                <div
-                  className="h-full bg-blue-600 rounded-full"
-                  style={{ width: `${totalLeads && newLeadsCount ? Math.round((newLeadsCount / totalLeads) * 100) : 0}%` }}
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between text-xs mb-1.5">
-                <span className="font-medium text-slate-700">
-                  {isAr ? 'متابعة / لم يرد (Follow Up & No Answer)' : 'Follow Up & No Answer'}
-                </span>
-                <span className="font-mono-tabular font-semibold text-amber-600">
-                  {contactedCount} ({totalLeads ? Math.round((contactedCount / totalLeads) * 100) : 0}%)
-                </span>
-              </div>
-              <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                <div
-                  className="h-full bg-amber-500 rounded-full"
-                  style={{ width: `${totalLeads && contactedCount ? Math.round((contactedCount / totalLeads) * 100) : 0}%` }}
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between text-xs mb-1.5">
-                <span className="font-medium text-slate-700">
-                  {isAr ? 'مهتم / معاينه / زيارة / حجز (Interested & Visits)' : 'Interested, Inspection, Visit & Reservation'}
-                </span>
-                <span className="font-mono-tabular font-semibold text-indigo-600">
-                  {qualifiedCount} ({totalLeads ? Math.round((qualifiedCount / totalLeads) * 100) : 0}%)
-                </span>
-              </div>
-              <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                <div
-                  className="h-full bg-indigo-600 rounded-full"
-                  style={{ width: `${totalLeads && qualifiedCount ? Math.round((qualifiedCount / totalLeads) * 100) : 0}%` }}
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between text-xs mb-1.5">
-                <span className="font-medium text-slate-700">
-                  {isAr ? 'تعاقد (Contracted)' : 'Contracted'}
-                </span>
-                <span className="font-mono-tabular font-semibold text-emerald-600">
-                  {wonCount} ({totalLeads ? Math.round((wonCount / totalLeads) * 100) : 0}%)
-                </span>
-              </div>
-              <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                <div
-                  className="h-full bg-emerald-600 rounded-full"
-                  style={{ width: `${totalLeads && wonCount ? Math.round((wonCount / totalLeads) * 100) : 0}%` }}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-500">
-            <div>
-              <span>{isAr ? 'مصدر الليدز الأساسي:' : 'Primary Lead Source:'}</span>{' '}
-              <span className="font-semibold text-slate-800">Google Drive · شيت CRM1 فقط</span>
-            </div>
-            <div>
-              <span>{isAr ? 'آلية التوزيع التلقائي:' : 'Auto-Routing Engine:'}</span>{' '}
-              <span className="font-semibold text-blue-600">
-                {isAr ? 'كل 15 دقيقة تلقائياً بدون تكرار' : 'Every 15 mins · Deduplicated'}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Sales Volume & Personal / Sheet Summary Card */}
-        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-6 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-bold text-slate-900">
-                {canViewSheets
-                  ? isAr
-                    ? 'ملخص المبيعات ومزامنة الشيت'
-                    : 'Sales Volume & Sheet Sync'
-                  : isAr
-                  ? 'ملخص مبيعاتي وأهدافي الشخصية'
-                  : 'My Personal Sales Summary'}
-              </h2>
-              <TrendingUp className="w-4 h-4 text-blue-600" />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 my-4">
-              <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-slate-100">
-                <div className="text-xs text-slate-500">
-                  {isAr ? 'المبيعات المحققة (Won)' : 'Closed Won Revenue'}
-                </div>
-                <div className="text-lg font-bold text-slate-900 font-mono-tabular mt-1">
-                  {formatEgp(wonDealsValue)}
-                </div>
-              </div>
-              {canViewSheets ? (
-                <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-slate-100">
-                  <div className="text-xs text-slate-500">
-                    {isAr ? 'شيتات جوجل المربوطة' : 'Connected Google Sheets'}
-                  </div>
-                  <div className="text-lg font-bold text-blue-600 font-mono-tabular mt-1">
-                    {sheetConnections.length} {isAr ? 'شيت نشط' : 'Active'}
-                  </div>
-                </div>
-              ) : (
-                <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-slate-100">
-                  <div className="text-xs text-slate-500">
-                    {isAr ? 'عملائي المؤهلون (Qualified)' : 'My Qualified Leads'}
-                  </div>
-                  <div className="text-lg font-bold text-blue-600 font-mono-tabular mt-1">
-                    {qualifiedCount} {isAr ? 'عميل' : 'Leads'}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {canViewSheets ? (
-            <div className="pt-3 border-t border-slate-100">
-              <div className="flex items-center justify-between text-xs mb-2">
-                <span className="text-slate-600 font-medium flex items-center gap-1.5">
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                  <span className="truncate max-w-[220px]">
-                    {sheetConnections[0]?.name || 'Meta Lead Ads Sheet'}
-                  </span>
-                </span>
-                <button
-                  onClick={() => onNavigate('sheetsSync')}
-                  className="text-blue-600 font-semibold hover:underline cursor-pointer"
-                >
-                  {isAr ? 'إعدادات الربط' : 'Configure'}
-                </button>
-              </div>
-              <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                <div className="h-full bg-blue-600 rounded-full w-4/5" />
-              </div>
-              <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2">
-                <span>
-                  {isAr ? 'إجمالي المستورد:' : 'Total Imported:'}{' '}
-                  <strong className="text-slate-700 font-mono-tabular">
-                    {sheetConnections[0]?.totalImportedCount || totalLeads}
-                  </strong>
-                </span>
-                <span>
-                  {isAr ? 'التوزيع التلقائي مفعل' : 'Auto-Distribution Active'}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-              <span>{isAr ? 'نطاق البيانات المصرح به:' : 'Authorized Scope:'}</span>
-              <span className="font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg">
-                {isAr ? 'العملاء المعينون لي شخصياً فقط' : 'Personally Assigned Leads Only'}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 3. Three-Column Workspace Grid */}
+      {/* 5. Three-Column Workspace Grid (Team Routing, Nearest Visits, Live Activity Stream) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Column 1: Sales Team Workload (Admins/Supervisors) OR Personal Projects Card (Sales Rep) */}
+        {/* Column 1: Sales Team Workload (Admins/Supervisors) OR Personal Summary */}
         <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 p-6 flex flex-col justify-between">
           {canViewTeamUsers ? (
             <div>
@@ -572,7 +689,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </h3>
                 <button
                   onClick={() => onNavigate('employees')}
-                  className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer"
+                  className="text-xs font-semibold text-[#3B5BDB] hover:underline cursor-pointer"
                 >
                   {isAr ? 'إدارة الفريق' : 'Manage'}
                 </button>
@@ -583,10 +700,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   const memberLeadsCount =
                     bootstrapCounts?.agentLeadCounts?.[member.id]?.total ??
                     leads.filter((l) => l.assignedTo === member.id).length;
+                  const isFilteredMember = selectedAgentFilter === member.id;
                   return (
                     <div
                       key={member.id}
-                      className="flex items-center justify-between p-2.5 rounded-xl bg-[#F8FAFC] border border-slate-100"
+                      onClick={() =>
+                        setSelectedAgentFilter((prev) =>
+                          prev === member.id ? 'ALL' : member.id
+                        )
+                      }
+                      className={`flex items-center justify-between p-2.5 rounded-xl border transition-colors cursor-pointer ${
+                        isFilteredMember
+                          ? 'bg-blue-50/70 border-[#3B5BDB]'
+                          : 'bg-[#F8FAFC] hover:bg-slate-100/80 border-slate-100'
+                      }`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <img
@@ -605,7 +732,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         </div>
                       </div>
                       <div className="text-end shrink-0 ms-2">
-                        <div className="text-xs font-bold text-blue-600 font-mono-tabular">
+                        <div className="text-xs font-bold text-[#3B5BDB] font-mono-tabular">
                           {memberLeadsCount} {isAr ? 'ليد' : 'leads'}
                         </div>
                         <div className="text-[10px] text-slate-400">
@@ -636,21 +763,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
               <div className="p-3.5 rounded-xl bg-[#F8FAFC] border border-slate-100 space-y-3">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-500">{isAr ? 'العملاء المعينون لي:' : 'My Assigned Leads:'}</span>
-                  <span className="font-mono-tabular font-bold text-blue-600">
-                    {totalLeads} {isAr ? 'عميل' : 'leads'}
+                  <span className="text-slate-500">
+                    {isAr ? 'العملاء المعينون لي:' : 'My Assigned Leads:'}
+                  </span>
+                  <span className="font-mono-tabular font-bold text-[#3B5BDB]">
+                    {totalLeadsCount} {isAr ? 'عميل' : 'leads'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-500">{isAr ? 'استقبال الليدز التلقائي:' : 'Auto-Routing Status:'}</span>
-                  <span className="font-semibold text-emerald-600">
-                    {currentUser.isActiveForRouting
-                      ? isAr
-                        ? 'مفعل'
-                        : 'Active'
-                      : isAr
-                      ? 'متوقف مؤقتاً'
-                      : 'Paused'}
+                  <span className="text-slate-500">
+                    {isAr ? 'حجم الصفقات النشطة:' : 'Active Pipeline:'}
+                  </span>
+                  <span className="font-mono-tabular font-bold text-emerald-600">
+                    {formatEgp(totalPipelineValue)}
                   </span>
                 </div>
                 <div className="pt-2 border-t border-slate-200/70">
@@ -674,9 +799,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <button
             onClick={() => onNavigate('dailyReports')}
-            className="mt-4 w-full py-2 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+            className="mt-4 w-full py-2 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-[#3B5BDB] text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
           >
-            <Users className="w-3.5 h-3.5" />
+            <TrendingUp className="w-3.5 h-3.5" />
             <span>
               {canViewTeamUsers
                 ? isAr
@@ -689,16 +814,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </button>
         </div>
 
-        {/* Column 2: Nearest Events & Site Visits (Matches Reference Image 3 Nearest Events) */}
+        {/* Column 2: Nearest Events & Site Visits */}
         <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 p-6 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-slate-900">
-                {isAr ? 'أقرب المعاينات والمواعيد (Nearest Events)' : 'Nearest Site Visits & Events'}
+                {isAr
+                  ? 'أقرب المعاينات والمواعيد (Nearest Events)'
+                  : 'Nearest Site Visits & Events'}
               </h3>
               <button
                 onClick={() => onNavigate('calendar')}
-                className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer"
+                className="text-xs font-semibold text-[#3B5BDB] hover:underline cursor-pointer"
               >
                 {isAr ? 'التقويم' : 'Calendar'}
               </button>
@@ -706,7 +833,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             {upcomingEvents.length === 0 ? (
               <div className="py-8 text-center text-xs text-slate-400">
-                {isAr ? 'لا توجد مواعيد معاينات مجدولة حالياً' : 'No upcoming site visits scheduled'}
+                {isAr
+                  ? 'لا توجد مواعيد معاينات مجدولة حالياً'
+                  : 'No upcoming site visits scheduled'}
               </div>
             ) : (
               <div className="space-y-3">
@@ -730,7 +859,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       </div>
                     </div>
                     <div className="text-end shrink-0 font-mono-tabular">
-                      <div className="text-xs font-semibold text-blue-600">{evt.time}</div>
+                      <div className="text-xs font-semibold text-[#3B5BDB]">{evt.time}</div>
                       <div className="text-[10px] text-slate-400">{evt.date}</div>
                     </div>
                   </div>
@@ -743,12 +872,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             onClick={() => onNavigate('calendar')}
             className="mt-4 w-full py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
           >
-            <Calendar className="w-3.5 h-3.5 text-blue-600" />
+            <Calendar className="w-3.5 h-3.5 text-[#3B5BDB]" />
             <span>{isAr ? 'جدولة معاينة عقارية جديدة' : 'Schedule New Site Visit'}</span>
           </button>
         </div>
 
-        {/* Column 3: Recent Lead Activity Stream (Matches Activity Stream in Image 3) */}
+        {/* Column 3: Recent Lead Activity Stream & Sheet Status */}
         <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 p-6 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -791,42 +920,47 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
 
-          <div
-            className={`mt-4 pt-3 border-t border-slate-100 grid ${
-              canViewPermissions ? 'grid-cols-4' : 'grid-cols-3'
-            } gap-2`}
-          >
-            <button
-              onClick={() => onNavigate('leads')}
-              className="py-2 px-2 rounded-lg bg-[#F8FAFC] hover:bg-blue-50 text-slate-700 hover:text-blue-700 text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+          {canViewSheets ? (
+            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+              <span className="text-slate-600 font-medium flex items-center gap-1.5 truncate">
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="truncate">
+                  {sheetConnections[0]?.name || 'Google Drive · CRM1'}
+                </span>
+              </span>
+              <span className="font-mono-tabular font-bold text-emerald-700 shrink-0">
+                {formatEgp(wonDealsValue)}
+              </span>
+            </div>
+          ) : (
+            <div
+              className={`mt-4 pt-3 border-t border-slate-100 grid ${
+                canViewPermissions ? 'grid-cols-4' : 'grid-cols-3'
+              } gap-2`}
             >
-              <PhoneCall className="w-3.5 h-3.5 text-blue-600" />
-              <span>{isAr ? 'العملاء' : 'Clients'}</span>
-            </button>
-            <button
-              onClick={() => onNavigate('properties')}
-              className="py-2 px-2 rounded-lg bg-[#F8FAFC] hover:bg-blue-50 text-slate-700 hover:text-blue-700 text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
-            >
-              <Building className="w-3.5 h-3.5 text-indigo-600" />
-              <span>{isAr ? 'الوحدات' : 'Units'}</span>
-            </button>
-            <button
-              onClick={() => onNavigate('deals')}
-              className="py-2 px-2 rounded-lg bg-[#F8FAFC] hover:bg-blue-50 text-slate-700 hover:text-blue-700 text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
-            >
-              <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
-              <span>{isAr ? 'الصفقات' : 'Deals'}</span>
-            </button>
-            {canViewPermissions && (
               <button
-                onClick={() => onNavigate('settings')}
+                onClick={() => onNavigate('leads')}
                 className="py-2 px-2 rounded-lg bg-[#F8FAFC] hover:bg-blue-50 text-slate-700 hover:text-blue-700 text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
               >
-                <CheckCircle2 className="w-3.5 h-3.5 text-purple-600" />
-                <span>{isAr ? 'الإعدادات' : 'Settings'}</span>
+                <PhoneCall className="w-3.5 h-3.5 text-[#3B5BDB]" />
+                <span>{isAr ? 'العملاء' : 'Clients'}</span>
               </button>
-            )}
-          </div>
+              <button
+                onClick={() => onNavigate('properties')}
+                className="py-2 px-2 rounded-lg bg-[#F8FAFC] hover:bg-blue-50 text-slate-700 hover:text-blue-700 text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+              >
+                <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                <span>{isAr ? 'الوحدات' : 'Units'}</span>
+              </button>
+              <button
+                onClick={() => onNavigate('deals')}
+                className="py-2 px-2 rounded-lg bg-[#F8FAFC] hover:bg-blue-50 text-slate-700 hover:text-blue-700 text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+              >
+                <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{isAr ? 'الصفقات' : 'Deals'}</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
