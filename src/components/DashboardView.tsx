@@ -44,26 +44,27 @@ interface DashboardViewProps {
   onOpenTransferModal: () => void;
   onQuickSyncSheets: () => void;
   isSyncingSheets: boolean;
+  onOpenStageInLeads?: (stageKey: FollowUpTileKey, agentId?: string) => void;
 }
 
-type FollowUpTileKey =
-  | 'fresh'
-  | 'without_stage'
-  | 'fresh_today'
-  | 'no_answer_first'
-  | 'following'
-  | 'follow_later'
-  | 'interested'
-  | 'visit'
-  | 'visit_declined'
-  | 'meeting'
-  | 'meeting_declined'
-  | 'following_after_meeting';
+export type FollowUpTileKey =
+  | 'ALL'
+  | 'DUE_REMINDERS'
+  | 'Fresh Lead'
+  | 'No Answer'
+  | 'Follow Up'
+  | 'Interested'
+  | 'Inspection'
+  | 'Visit'
+  | 'Contracted'
+  | 'Reservation'
+  | 'Not Interested';
 
 interface FollowUpTileDefinition {
   key: FollowUpTileKey;
   labelEn: string;
   labelAr: string;
+  dotColor: string;
   count: number;
   matches: (lead: Lead) => boolean;
 }
@@ -83,13 +84,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenTransferModal,
   onQuickSyncSheets,
   isSyncingSheets,
+  onOpenStageInLeads,
 }) => {
   const isAr = lang === 'ar';
   const t = translations[lang];
 
-  const [selectedTileKey, setSelectedTileKey] = useState<FollowUpTileKey | null>(null);
+  const [selectedTileKey, setSelectedTileKey] = useState<FollowUpTileKey | null>('Fresh Lead');
   const [selectedAgentFilter, setSelectedAgentFilter] = useState<string>('ALL');
-  const [showArabicLabelsOnTiles, setShowArabicLabelsOnTiles] = useState<boolean>(false);
+  const [showArabicLabelsOnTiles, setShowArabicLabelsOnTiles] = useState<boolean>(true);
+  const stageLeadsSectionRef = React.useRef<HTMLDivElement | null>(null);
 
   const canViewTeamUsers =
     currentRole.id === 'role_admin' ||
@@ -123,106 +126,102 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return leads.filter((l) => l.assignedTo === selectedAgentFilter);
   }, [leads, selectedAgentFilter]);
 
-  const todayDateStr = useMemo(() => new Date().toDateString(), []);
+  const dueRemindersCount = useMemo(
+    () =>
+      scopedLeads.filter(
+        (l) =>
+          Boolean(l.reminderDateTime) &&
+          !l.reminderNotified &&
+          new Date(l.reminderDateTime!).getTime() <= Date.now()
+      ).length,
+    [scopedLeads]
+  );
 
-  const isLeadCreatedToday = (lead: Lead): boolean => {
-    if (!lead.createdAt) return false;
-    const d = new Date(lead.createdAt);
-    if (Number.isNaN(d.getTime())) return false;
-    return d.toDateString() === todayDateStr;
-  };
-
-  const hasVisitKeywords = (lead: Lead): boolean => {
-    const noteText = String(lead.notes || '').toLowerCase();
-    if (noteText.includes('زيارة') || noteText.includes('زياره') || noteText.includes('visit')) {
-      return true;
-    }
-    return (lead.activities || []).some((a) => {
-      const s = String(a.summary || '').toLowerCase();
-      return s.includes('زيارة') || s.includes('زياره') || s.includes('visit');
-    });
-  };
-
-  // The exact 12 Royal-Blue tiles from the attached Follow-Up Board design (4 rows × 3 columns)
+  // Client Stages matching the exact stages bar in LeadsView (`مراحل العميل`)
   const followUpTiles: FollowUpTileDefinition[] = useMemo(() => {
     const defs: Omit<FollowUpTileDefinition, 'count'>[] = [
       {
-        key: 'fresh',
-        labelEn: 'Fresh',
+        key: 'ALL',
+        labelAr: 'كل العملاء',
+        labelEn: 'All Leads',
+        dotColor: 'bg-white',
+        matches: () => true,
+      },
+      {
+        key: 'DUE_REMINDERS',
+        labelAr: '⏰ تذكيرات مستحقة الآن',
+        labelEn: '⏰ Due Reminders',
+        dotColor: 'bg-amber-300',
+        matches: (l) => {
+          if (!l.reminderDateTime || l.reminderNotified) return false;
+          if (dueRemindersCount > 0 && new Date(l.reminderDateTime).getTime() > Date.now()) {
+            return false;
+          }
+          return true;
+        },
+      },
+      {
+        key: 'Fresh Lead',
         labelAr: 'فريش ليدز',
+        labelEn: 'Fresh Leads',
+        dotColor: 'bg-blue-300',
         matches: (l) => normalizeLeadStatus(l.status) === 'Fresh Lead',
       },
       {
-        key: 'without_stage',
-        labelEn: 'Without Stage',
-        labelAr: 'بدون مرحلة',
-        matches: (l) =>
-          !l.status ||
-          (normalizeLeadStatus(l.status) === 'Fresh Lead' &&
-            (!l.activities || l.activities.filter((a) => a.type === 'call').length === 0)),
-      },
-      {
-        key: 'fresh_today',
-        labelEn: 'Fresh today',
-        labelAr: 'فريش اليوم',
-        matches: (l) => isLeadCreatedToday(l),
-      },
-      {
-        key: 'no_answer_first',
-        labelEn: 'No answer first call',
-        labelAr: 'لم يرد أول مكالمة',
+        key: 'No Answer',
+        labelAr: 'لم يرد',
+        labelEn: 'No Answer',
+        dotColor: 'bg-orange-400',
         matches: (l) => normalizeLeadStatus(l.status) === 'No Answer',
       },
       {
-        key: 'following',
-        labelEn: 'Following',
+        key: 'Follow Up',
         labelAr: 'متابعة',
+        labelEn: 'Follow Up',
+        dotColor: 'bg-amber-400',
         matches: (l) => normalizeLeadStatus(l.status) === 'Follow Up',
       },
       {
-        key: 'follow_later',
-        labelEn: 'Follow later',
-        labelAr: 'متابعة لاحقاً',
-        matches: (l) =>
-          Boolean(l.reminderDateTime) ||
-          (normalizeLeadStatus(l.status) === 'Follow Up' &&
-            Boolean(l.notes || (l.activities && l.activities.length > 0))),
-      },
-      {
-        key: 'interested',
-        labelEn: 'intersted',
+        key: 'Interested',
         labelAr: 'مهتم',
+        labelEn: 'Interested',
+        dotColor: 'bg-indigo-300',
         matches: (l) => normalizeLeadStatus(l.status) === 'Interested',
       },
       {
-        key: 'visit',
-        labelEn: 'visit',
-        labelAr: 'زيارة',
-        matches: (l) => normalizeLeadStatus(l.status) === 'Visit',
-      },
-      {
-        key: 'visit_declined',
-        labelEn: 'Visit declined',
-        labelAr: 'إلغاء زيارة',
-        matches: (l) => normalizeLeadStatus(l.status) === 'Not Interested' && hasVisitKeywords(l),
-      },
-      {
-        key: 'meeting',
-        labelEn: 'meeting',
+        key: 'Inspection',
         labelAr: 'معاينه',
+        labelEn: 'Inspection',
+        dotColor: 'bg-purple-300',
         matches: (l) => normalizeLeadStatus(l.status) === 'Inspection',
       },
       {
-        key: 'meeting_declined',
-        labelEn: 'meeting declined',
-        labelAr: 'غير مهتم / إلغاء معاينة',
-        matches: (l) => normalizeLeadStatus(l.status) === 'Not Interested',
+        key: 'Visit',
+        labelAr: 'زيارة',
+        labelEn: 'Visit',
+        dotColor: 'bg-violet-300',
+        matches: (l) => normalizeLeadStatus(l.status) === 'Visit',
       },
       {
-        key: 'following_after_meeting',
-        labelEn: 'Following after meeting',
-        labelAr: 'متابعة بعد المعاينة (حجز/تعاقد)',
-        matches: (l) => ['Contracted', 'Reservation'].includes(normalizeLeadStatus(l.status)),
+        key: 'Contracted',
+        labelAr: 'تعاقد',
+        labelEn: 'Contracted',
+        dotColor: 'bg-emerald-400',
+        matches: (l) => normalizeLeadStatus(l.status) === 'Contracted',
+      },
+      {
+        key: 'Reservation',
+        labelAr: 'حجز',
+        labelEn: 'Reservation',
+        dotColor: 'bg-teal-300',
+        matches: (l) => normalizeLeadStatus(l.status) === 'Reservation',
+      },
+      {
+        key: 'Not Interested',
+        labelAr: 'غير مهتم',
+        labelEn: 'Not Interested',
+        dotColor: 'bg-rose-400',
+        matches: (l) => normalizeLeadStatus(l.status) === 'Not Interested',
       },
     ];
 
@@ -230,7 +229,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       ...d,
       count: scopedLeads.filter(d.matches).length,
     }));
-  }, [scopedLeads, todayDateStr]);
+  }, [scopedLeads, dueRemindersCount]);
 
   const totalLeadsCount =
     selectedAgentFilter === 'ALL' && bootstrapCounts
@@ -246,6 +245,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     if (!activeTileDef) return scopedLeads;
     return scopedLeads.filter(activeTileDef.matches);
   }, [scopedLeads, activeTileDef]);
+
+  const handleTileClick = (tileKey: FollowUpTileKey) => {
+    setSelectedTileKey(tileKey);
+    setTimeout(() => {
+      stageLeadsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 80);
+  };
 
   const totalPipelineValue = bootstrapCounts?.dealsSummary
     ? bootstrapCounts.dealsSummary.totalPipelineValue
@@ -315,27 +321,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       icon: ClipboardCheck,
       labelAr: 'لوحة المتابعة',
       labelEn: 'Follow-up Board',
-      isActive: selectedTileKey !== 'following_after_meeting',
-      onClick: () => setSelectedTileKey(null),
+      isActive: selectedTileKey !== 'Contracted',
+      onClick: () => handleTileClick('ALL'),
     },
     {
       id: 'completed',
       icon: CheckCircle2,
       labelAr: 'التعاقدات المكتملة',
       labelEn: 'Completed & Won',
-      isActive: selectedTileKey === 'following_after_meeting',
-      onClick: () =>
-        setSelectedTileKey((prev) =>
-          prev === 'following_after_meeting' ? null : 'following_after_meeting'
-        ),
+      isActive: selectedTileKey === 'Contracted',
+      onClick: () => handleTileClick('Contracted'),
     },
   ];
 
   return (
     <div className="space-y-6">
-      {/* MAIN FOLLOW-UP BOARD SECTION (Exact Visual Match to Attached Screenshot) */}
+      {/* MAIN FOLLOW-UP BOARD SECTION (Synced with Client Stages) */}
       <section className="bg-white rounded-3xl border border-slate-200/90 p-4 sm:p-6 lg:p-8 shadow-xs max-w-4xl mx-auto">
-        {/* 1. Top 5 Rounded-Square Light-Slate Action Icons (Exact Match to Screenshot Top Row) */}
+        {/* 1. Top 5 Rounded-Square Light-Slate Action Icons */}
         <div className="grid grid-cols-5 gap-2.5 sm:gap-4" dir="ltr">
           {topQuickIcons.map((item) => {
             const IconComponent = item.icon;
@@ -393,7 +396,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               onClick={() => setShowArabicLabelsOnTiles((prev) => !prev)}
               className="px-2.5 py-1.5 rounded-xl bg-[#F4F7FE] hover:bg-slate-200/70 border border-slate-200 text-xs font-semibold text-slate-700 transition-colors cursor-pointer"
             >
-              {showArabicLabelsOnTiles ? 'English Labels' : 'مسميات عربي / EN'}
+              {showArabicLabelsOnTiles ? 'EN / مسميات عربي' : 'مسميات عربي / EN'}
             </button>
 
             {canSyncSheets && (
@@ -420,7 +423,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             )}
           </div>
 
-          {/* Right side: Exact "Total: <count>" Display from Screenshot */}
+          {/* Right side: Exact "Total: <count>" Display */}
           <div className="text-right ms-auto">
             <span className="text-base sm:text-xl font-medium text-[#687076] font-mono-tabular tracking-tight">
               Total: {totalLeadsCount}
@@ -428,41 +431,36 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* 3. The 3×4 Royal-Blue Follow-Up Stage Grid (Exact Match to Screenshot) */}
-        <div className="grid grid-cols-3 gap-3 sm:gap-4" dir="ltr">
+        {/* 3. The Royal-Blue Client Stages Grid (Matched with مراحل العميل) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
           {followUpTiles.map((tile) => {
             const isSelected = selectedTileKey === tile.key;
             return (
               <button
                 key={tile.key}
                 type="button"
-                onClick={() =>
-                  setSelectedTileKey((prev) => (prev === tile.key ? null : tile.key))
-                }
-                className={`group relative rounded-[18px] min-h-[116px] sm:min-h-[138px] p-3 sm:p-5 flex flex-col items-center justify-center text-center transition-all cursor-pointer select-none ${
+                onClick={() => handleTileClick(tile.key)}
+                className={`group relative rounded-[18px] min-h-[116px] sm:min-h-[132px] p-3 sm:p-5 flex flex-col items-center justify-center text-center transition-all cursor-pointer select-none ${
                   isSelected
                     ? 'bg-[#2843B5] ring-4 ring-amber-400 shadow-lg scale-[1.01]'
                     : 'bg-[#3B5BDB] hover:bg-[#3250C7] active:scale-[0.99] shadow-sm'
                 }`}
               >
                 {/* Top Bold Count (Tabular Numerals) */}
-                <span className="text-2xl sm:text-[32px] font-bold text-white font-mono-tabular leading-none tracking-tight mb-2.5">
+                <span className="text-2xl sm:text-[32px] font-bold text-white font-mono-tabular leading-none tracking-tight mb-2">
                   {tile.count}
                 </span>
 
-                {/* Stage / Bucket Label matching Screenshot */}
-                <span className="text-xs sm:text-[17px] font-medium text-white leading-snug break-words max-w-full">
-                  {showArabicLabelsOnTiles ? tile.labelAr : tile.labelEn}
+                {/* Stage Label matching Client Stages in Image 2 */}
+                <span className="text-xs sm:text-[17px] font-bold text-white leading-snug break-words max-w-full flex items-center justify-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${tile.dotColor}`} />
+                  <span>{showArabicLabelsOnTiles ? tile.labelAr : tile.labelEn}</span>
                 </span>
 
-                {/* Optional bilingual subtitle when toggled or hovered */}
+                {/* Bilingual subtitle */}
                 <span
-                  className={`text-[10px] sm:text-xs text-blue-100/80 font-medium mt-1 transition-opacity ${
-                    showArabicLabelsOnTiles
-                      ? 'opacity-90'
-                      : 'opacity-80 group-hover:opacity-100'
-                  }`}
-                  dir="rtl"
+                  className="text-[10px] sm:text-xs text-blue-100/85 font-medium mt-1"
+                  dir={showArabicLabelsOnTiles ? 'ltr' : 'rtl'}
                 >
                   {showArabicLabelsOnTiles ? tile.labelEn : tile.labelAr}
                 </span>
@@ -471,119 +469,96 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           })}
         </div>
 
-        {/* Bottom Quick Action Bar under the 3x4 Grid */}
-        <div className="mt-5 pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs text-slate-600">
-            <span className="font-semibold text-slate-800">{currentUser.fullName}</span>
-            <span>·</span>
-            <span className="text-slate-500">
-              {isAr ? currentRole.nameAr : currentRole.name}
-            </span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {selectedTileKey && (
-              <button
-                type="button"
-                onClick={() => setSelectedTileKey(null)}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition-colors cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-                <span>
-                  {isAr
-                    ? `إلغاء فلتر (${activeTileDef?.labelAr})`
-                    : `Clear Filter (${activeTileDef?.labelEn})`}
-                </span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => onNavigate('leads')}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#3B5BDB] hover:bg-[#3250C7] text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>
-                {isAr
-                  ? `فتح قائمة العملاء الكاملة (${totalLeadsCount})`
-                  : `Open All Clients (${totalLeadsCount})`}
-              </span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* 4. Interactive Filtered Leads Drawer / Section (Updates Live when Clicking Any Blue Tile) */}
-      {(selectedTileKey !== null || displayedLeads.length > 0) && (
-        <section className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs">
+        {/* 4. Immediate In-Board Clients List for the Clicked Stage */}
+        <div
+          ref={stageLeadsSectionRef}
+          className="mt-6 pt-5 border-t border-slate-200/90"
+        >
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div>
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <h2 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
                 <Users className="w-4 h-4 text-[#3B5BDB]" />
                 <span>
                   {activeTileDef
                     ? isAr
-                      ? `عملاء مرحلة: ${activeTileDef.labelAr} (${activeTileDef.labelEn}) — ${displayedLeads.length} عميل`
+                      ? `عملاء مرحلة: ${activeTileDef.labelAr} (${displayedLeads.length} عميل)`
                       : `Clients in "${activeTileDef.labelEn}" (${displayedLeads.length})`
                     : isAr
-                    ? `قائمة العملاء الجاهزة للمتابعة الفورية (${displayedLeads.length} عميل)`
-                    : `Active Leads Ready for Follow-Up (${displayedLeads.length})`}
+                    ? `كل العملاء (${displayedLeads.length} عميل)`
+                    : `All Clients (${displayedLeads.length})`}
                 </span>
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
                 {isAr
-                  ? 'اضغط على أي مربع أزرق في لوحة المتابعة أعلاه لفلترة العملاء فوراً، أو اضغط على العميل لفتح ملفه الكامل'
-                  : 'Click any blue tile on the follow-up board above to filter clients, or click a client card to open their profile'}
+                  ? 'اضغط على أي مرحلة في اللوحة أعلاه لعرض عملائها فوراً، أو اضغط على العميل لفتح ملفه الكامل'
+                  : 'Click any stage card above to view its clients immediately, or click a client to open their profile'}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              {activeTileDef && (
+
+            <div className="flex flex-wrap items-center gap-2">
+              {selectedTileKey && selectedTileKey !== 'ALL' && (
                 <button
                   type="button"
-                  onClick={() => setSelectedTileKey(null)}
-                  className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
+                  onClick={() => setSelectedTileKey('ALL')}
+                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
-                  <span>{isAr ? 'عرض الكل' : 'Show All'}</span>
+                  <span>{isAr ? 'عرض كل العملاء' : 'Show All Leads'}</span>
                 </button>
               )}
+
               <button
                 type="button"
-                onClick={() => onNavigate('leads')}
-                className="px-4 py-2 rounded-xl bg-[#3B5BDB] hover:bg-[#3250C7] text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+                onClick={() => {
+                  if (onOpenStageInLeads && selectedTileKey) {
+                    onOpenStageInLeads(selectedTileKey, selectedAgentFilter);
+                  } else {
+                    onNavigate('leads');
+                  }
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-[#3B5BDB] hover:bg-[#3250C7] text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
               >
+                <Users className="w-3.5 h-3.5" />
                 <span>
-                  {isAr
-                    ? `إدارة كل العملاء (${scopedLeads.length})`
-                    : `Manage All Leads (${scopedLeads.length})`}
+                  {activeTileDef && activeTileDef.key !== 'ALL'
+                    ? isAr
+                      ? `فتح مرحلة "${activeTileDef.labelAr}" في صفحة العملاء (${displayedLeads.length})`
+                      : `Open "${activeTileDef.labelEn}" in Leads View (${displayedLeads.length})`
+                    : isAr
+                    ? `فتح قائمة العملاء الكاملة (${totalLeadsCount})`
+                    : `Open All Clients (${totalLeadsCount})`}
                 </span>
-                <ArrowUpRight className="w-4 h-4" />
+                <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
           {displayedLeads.length === 0 ? (
-            <div className="py-10 text-center bg-[#F8FAFC] rounded-2xl border border-dashed border-slate-200">
+            <div className="py-8 text-center bg-[#F8FAFC] rounded-2xl border border-dashed border-slate-200">
               <div className="text-sm font-bold text-slate-700">
-                {isAr
+                {activeTileDef
+                  ? isAr
+                    ? `لا يوجد عملاء حالياً في مرحلة "${activeTileDef.labelAr}"`
+                    : `No clients currently in "${activeTileDef.labelEn}" stage`
+                  : isAr
                   ? 'لا يوجد عملاء في هذا التصنيف حالياً'
-                  : 'No clients match this follow-up stage right now'}
+                  : 'No clients match this stage right now'}
               </div>
               <p className="text-xs text-slate-500 mt-1">
                 {isAr
-                  ? 'اختر مربعاً آخر من لوحة المتابعة الزرقاء أعلاه لعرض العملاء'
-                  : 'Select another tile from the blue follow-up board above'}
+                  ? 'اضغط على أي مرحلة أخرى في لوحة المتابعة أعلاه لعرض العملاء المسجلين بها'
+                  : 'Select another stage card above to view its clients'}
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
-              {displayedLeads.slice(0, selectedTileKey ? 18 : 6).map((lead) => {
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[540px] overflow-y-auto pr-1">
+              {displayedLeads.map((lead) => {
                 const cleanDigits = String(lead.phone || '').replace(/[^0-9]/g, '');
                 const waPhone = cleanDigits.startsWith('0')
                   ? `20${cleanDigits.slice(1)}`
                   : cleanDigits;
                 const normalizedSt = normalizeLeadStatus(lead.status);
+                const assignedUser = users.find((u) => u.id === lead.assignedTo);
                 return (
                   <div
                     key={lead.id}
@@ -608,9 +583,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         </span>
                       </div>
 
-                      <div className="mt-2 text-[11px] text-slate-600 font-medium truncate">
-                        {lead.projectInterest}{' '}
-                        {lead.propertyType ? `· ${lead.propertyType}` : ''}
+                      <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-600 font-medium">
+                        <span className="truncate">
+                          {lead.projectInterest}{' '}
+                          {lead.propertyType ? `· ${lead.propertyType}` : ''}
+                        </span>
+                        {assignedUser && (
+                          <span className="text-[10px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200 shrink-0">
+                            {assignedUser.fullName.split(' ').slice(0, 2).join(' ')}
+                          </span>
+                        )}
                       </div>
 
                       {lead.reminderDateTime && (
@@ -674,8 +656,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               })}
             </div>
           )}
-        </section>
-      )}
+        </div>
+      </section>
 
       {/* 5. Three-Column Workspace Grid (Team Routing, Nearest Visits, Live Activity Stream) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

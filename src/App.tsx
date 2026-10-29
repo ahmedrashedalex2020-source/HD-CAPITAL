@@ -93,6 +93,11 @@ export default function App() {
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferInitialFromUser, setTransferInitialFromUser] = useState<string>('');
   const [transferInitialToUser, setTransferInitialToUser] = useState<string>('');
+  const [initialLeadsStatusFilter, setInitialLeadsStatusFilter] = useState<string>('');
+  const [initialLeadsFollowUpQueue, setInitialLeadsFollowUpQueue] = useState<
+    'ALL' | 'URGENT_NEW' | 'TODAY_FOLLOWUP' | 'DUE_REMINDERS' | 'VIP_BUDGET' | ''
+  >('');
+  const [initialLeadsAgentFilter, setInitialLeadsAgentFilter] = useState<string>('');
   const [showNotificationsDrawer, setShowNotificationsDrawer] = useState(false);
   const [isSyncingSheets, setIsSyncingSheets] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -1003,6 +1008,21 @@ export default function App() {
                   setActiveTab('leads');
                 }
               }}
+              onOpenStageInLeads={(stageKey, agentId) => {
+                if (navItems.some((n) => n.id === 'leads')) {
+                  if (stageKey === 'DUE_REMINDERS') {
+                    setInitialLeadsStatusFilter('ALL');
+                    setInitialLeadsFollowUpQueue('DUE_REMINDERS');
+                  } else {
+                    setInitialLeadsStatusFilter(stageKey);
+                    setInitialLeadsFollowUpQueue('ALL');
+                  }
+                  if (agentId) {
+                    setInitialLeadsAgentFilter(agentId);
+                  }
+                  setActiveTab('leads');
+                }
+              }}
               onQuickSyncSheets={handleQuickSyncSheets}
               isSyncingSheets={isSyncingSheets}
             />
@@ -1027,6 +1047,14 @@ export default function App() {
               onResetTransferInitialUsers={() => {
                 setTransferInitialFromUser('');
                 setTransferInitialToUser('');
+              }}
+              initialStatusFilter={initialLeadsStatusFilter || undefined}
+              initialFollowUpQueue={initialLeadsFollowUpQueue || undefined}
+              initialAgentFilter={initialLeadsAgentFilter || undefined}
+              onClearInitialStageFilter={() => {
+                setInitialLeadsStatusFilter('');
+                setInitialLeadsFollowUpQueue('');
+                setInitialLeadsAgentFilter('');
               }}
               onToast={triggerToast}
               onQuickSyncSheets={handleQuickSyncSheets}

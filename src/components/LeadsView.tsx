@@ -66,6 +66,10 @@ interface LeadsViewProps {
   initialTransferFromUser?: string;
   initialTransferToUser?: string;
   onResetTransferInitialUsers?: () => void;
+  initialStatusFilter?: string;
+  initialFollowUpQueue?: 'ALL' | 'URGENT_NEW' | 'TODAY_FOLLOWUP' | 'DUE_REMINDERS' | 'VIP_BUDGET';
+  initialAgentFilter?: string;
+  onClearInitialStageFilter?: () => void;
 }
 
 export const ALL_LEAD_STATUSES: LeadStatus[] = [
@@ -439,6 +443,10 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
   initialTransferFromUser,
   initialTransferToUser,
   onResetTransferInitialUsers,
+  initialStatusFilter,
+  initialFollowUpQueue,
+  initialAgentFilter,
+  onClearInitialStageFilter,
 }) => {
   const isAr = lang === 'ar';
   const t = translations[lang];
@@ -449,12 +457,21 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
   const [boardColumnsMode, setBoardColumnsMode] = useState<'meta_5' | 'full_8'>('full_8');
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [agentFilter, setAgentFilter] = useState<string>('ALL');
+  const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter || 'ALL');
+  const [agentFilter, setAgentFilter] = useState<string>(initialAgentFilter || 'ALL');
   const [projectFilter, setProjectFilter] = useState<string>('ALL');
   const [followUpQueue, setFollowUpQueue] = useState<
     'ALL' | 'URGENT_NEW' | 'TODAY_FOLLOWUP' | 'DUE_REMINDERS' | 'VIP_BUDGET'
-  >('ALL');
+  >(initialFollowUpQueue || 'ALL');
+
+  useEffect(() => {
+    if (initialStatusFilter || initialFollowUpQueue || initialAgentFilter) {
+      if (initialStatusFilter) setStatusFilter(initialStatusFilter);
+      if (initialFollowUpQueue) setFollowUpQueue(initialFollowUpQueue);
+      if (initialAgentFilter) setAgentFilter(initialAgentFilter);
+      onClearInitialStageFilter?.();
+    }
+  }, [initialStatusFilter, initialFollowUpQueue, initialAgentFilter, onClearInitialStageFilter]);
 
   // Drag & Drop State (`نقل بالإمساك`)
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
@@ -2811,15 +2828,43 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                       <div className="text-[11px] text-slate-500 font-mono-tabular">
                         {lead.nextFollowUpAt || todayStr}
                       </div>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        {assignedAgent && (
+                          <img
+                            src={assignedAgent.avatarUrl}
+                            alt={assignedAgent.fullName}
+                            referrerPolicy="no-referrer"
+                            className="w-5 h-5 rounded-full object-cover shrink-0"
+                          />
+                        )}
+                        {canTransfer ? (
+                          <select
+                            value={lead.assignedTo}
+                            onChange={(e) => handleInlineAssignChange(lead, e.target.value)}
+                            className="text-[11px] font-semibold text-slate-700 hover:text-blue-600 bg-transparent cursor-pointer focus:outline-none truncate max-w-[130px]"
+                            title={isAr ? 'نقل العميل لسيلز آخر' : 'Transfer to another rep'}
+                          >
+                            {users.map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.fullName.split(' ').slice(0, 2).join(' ')}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-[11px] font-semibold text-slate-700 truncate">
+                            {assignedAgent?.fullName.split(' ')[0]}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="lg:col-span-2">
+                    <div className="lg:col-span-1">
                       <select
                         value={lead.status}
                         onChange={(e) =>
                           handleQuickStatusChange(lead, e.target.value as LeadStatus)
                         }
-                        className={`w-full sm:w-auto px-2.5 py-1.5 rounded-lg text-xs font-bold cursor-pointer focus:outline-none ${stMeta.bg} ${stMeta.text}`}
+                        className={`w-full px-2 py-1.5 rounded-lg text-xs font-bold cursor-pointer focus:outline-none ${stMeta.bg} ${stMeta.text}`}
                       >
                         {ALL_LEAD_STATUSES.map((st) => (
                           <option key={st} value={st} className="bg-white text-slate-800">
@@ -2829,48 +2874,20 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                       </select>
                     </div>
 
-                    <div className="lg:col-span-3 flex flex-wrap items-center justify-between lg:justify-end gap-1.5">
-                      <div className="flex items-center gap-1.5">
-                        {assignedAgent && (
-                          <img
-                            src={assignedAgent.avatarUrl}
-                            alt={assignedAgent.fullName}
-                            referrerPolicy="no-referrer"
-                            className="w-6 h-6 rounded-full object-cover"
-                          />
-                        )}
-                        {canTransfer ? (
-                          <select
-                            value={lead.assignedTo}
-                            onChange={(e) => handleInlineAssignChange(lead, e.target.value)}
-                            className="text-xs font-semibold text-slate-700 bg-transparent cursor-pointer"
-                          >
-                            {users.map((u) => (
-                              <option key={u.id} value={u.id}>
-                                {u.fullName.split(' ').slice(0, 2).join(' ')}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span className="text-xs font-semibold text-slate-700">
-                            {assignedAgent?.fullName.split(' ')[0]}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-1">
+                    <div className="lg:col-span-4 flex items-center justify-start lg:justify-end overflow-x-auto no-scrollbar">
+                      <div className="inline-flex items-center gap-1.5 flex-nowrap bg-slate-50/80 p-1 rounded-xl border border-slate-200/80">
                         {(() => {
                           const remMeta = getLeadReminderMeta(lead);
                           return (
                             <button
                               type="button"
                               onClick={(e) => openReminderModal(lead, e)}
-                              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors ${
+                              className={`h-8 px-2.5 rounded-lg text-[11px] font-bold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-all ${
                                 remMeta.isDueNow
                                   ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse shadow-xs'
                                   : remMeta.hasActive
                                   ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
-                                  : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/70'
+                                  : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/80'
                               }`}
                               title={
                                 lead.reminderNote
@@ -2879,16 +2896,22 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                               }
                             >
                               <AlarmClock className="w-3.5 h-3.5 shrink-0" />
-                              <span>{remMeta.shortLabel}</span>
+                              <span>
+                                {remMeta.hasActive
+                                  ? remMeta.shortLabel
+                                  : isAr
+                                  ? 'تذكير'
+                                  : 'Remind'}
+                              </span>
                             </button>
                           );
                         })()}
                         <a
                           href={`tel:${cleanPhone}`}
-                          className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1"
+                          className="h-8 px-2.5 rounded-lg bg-white hover:bg-slate-100 text-slate-800 border border-slate-200/90 text-[11px] font-bold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors shadow-2xs"
                           title={isAr ? 'اتصال هاتفي مباشر' : 'Call Now'}
                         >
-                          <Phone className="w-3.5 h-3.5 text-blue-600" />
+                          <Phone className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                           <span>{isAr ? 'اتصال' : 'Call'}</span>
                         </a>
                         <a
@@ -2896,39 +2919,43 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                           target="_blank"
                           rel="noreferrer"
                           onClick={() => handleQuickWhatsAppFollowUp(lead)}
-                          className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold flex items-center gap-1"
+                          className="h-8 px-2.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 text-[11px] font-bold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
                           title={isAr ? 'فتح محادثة واتساب' : 'Open WhatsApp'}
                         >
-                          <MessageSquare className="w-3.5 h-3.5" />
-                          <span>{waCount > 0 ? waCount : isAr ? 'واتساب' : 'WA'}</span>
+                          <MessageSquare className="w-3.5 h-3.5 shrink-0" />
+                          <span>{waCount > 0 ? `${isAr ? 'واتساب' : 'WA'} (${waCount})` : isAr ? 'واتساب' : 'WA'}</span>
                         </a>
                         <button
+                          type="button"
                           onClick={() => {
                             setQuickNoteLead(lead);
                             setQuickNoteText('');
                           }}
-                          className="px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                          className="h-8 px-2.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 text-[11px] font-bold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors"
                           title={isAr ? 'إضافة ملاحظة سريعة للعميل' : 'Add Quick Note'}
                         >
-                          <FileText className="w-3.5 h-3.5" />
+                          <FileText className="w-3.5 h-3.5 shrink-0" />
                           <span>{isAr ? 'ملاحظة' : 'Note'}</span>
                         </button>
                         <button
+                          type="button"
                           onClick={() => {
                             setDrawerTab('profile_data');
                             onSelectLead(lead);
                           }}
-                          className="px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1 cursor-pointer"
+                          className="h-8 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors shadow-2xs"
                         >
-                          <FileText className="w-3.5 h-3.5" />
+                          <FileText className="w-3.5 h-3.5 shrink-0" />
                           <span>{isAr ? 'متابعة' : 'Open'}</span>
                         </button>
                         {canDelete && (
                           <button
+                            type="button"
                             onClick={() => setDeleteConfirmLead(lead)}
-                            className="p-1.5 rounded-xl hover:bg-red-50 text-red-500 cursor-pointer"
+                            title={isAr ? 'حذف العميل' : 'Delete Lead'}
+                            className="h-8 w-8 rounded-lg bg-white hover:bg-rose-50 text-rose-500 hover:text-rose-600 border border-slate-200/90 hover:border-rose-200 inline-flex items-center justify-center shrink-0 cursor-pointer transition-colors"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3.5 h-3.5 shrink-0" />
                           </button>
                         )}
                       </div>
