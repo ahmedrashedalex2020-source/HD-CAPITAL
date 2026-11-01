@@ -38,6 +38,7 @@ import {
   LeadStatus,
   normalizeLeadStatus,
   PropertyUnit,
+  RealEstateProject,
   Role,
   UserProfile,
 } from '../types/crm';
@@ -53,6 +54,7 @@ interface LeadsViewProps {
   leads: Lead[];
   properties?: PropertyUnit[];
   projects: string[];
+  projectsCatalog?: RealEstateProject[];
   selectedLead: Lead | null;
   onSelectLead: (lead: Lead | null) => void;
   onRefresh: () => void;
@@ -430,6 +432,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
   leads,
   properties = [],
   projects,
+  projectsCatalog = [],
   selectedLead,
   onSelectLead,
   onRefresh,
@@ -649,7 +652,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
     email: '',
     source: 'حملة اعلانية',
     campaignName: '',
-    projectInterest: projects[0] || '',
+    projectInterest: projectsCatalog[0]?.name || properties[0]?.projectName || projects[0] || '',
     propertyType: 'Villa' as Lead['propertyType'],
     budgetMin: 0,
     budgetMax: 0,
@@ -659,6 +662,158 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
     notes: '',
     nextFollowUpAt: new Date().toISOString().slice(0, 10),
   });
+
+  // Inline Quick-Add Project/Unit inside Lead Drawer or Add Lead Modal
+  const [showInlineAddProject, setShowInlineAddProject] = useState(false);
+  const [inlineNewProjectName, setInlineNewProjectName] = useState('');
+  const [isSavingInlineProject, setIsSavingInlineProject] = useState(false);
+
+  // Build structured options from Real Estate Projects (`projectsCatalog`) and Property Units (`properties`)
+  const catalogProjectOptions = React.useMemo(() => {
+    const map = new Map<
+      string,
+      { value: string; label: string; project?: RealEstateProject }
+    >();
+    projectsCatalog.forEach((proj) => {
+      const name = String(proj.name || '').trim();
+      if (!name) return;
+      const details: string[] = [];
+      if (proj.location) details.push(proj.location);
+      if (proj.developer) details.push(proj.developer);
+      map.set(name, {
+        value: name,
+        label: `🏢 ${isAr ? 'مشروع' : 'Project'}: ${name}${
+          details.length > 0 ? ` — (${details.join(' · ')})` : ''
+        }`,
+        project: proj,
+      });
+    });
+
+    properties.forEach((unit) => {
+      const pName = String(unit.projectName || '').trim();
+      if (pName && !map.has(pName) && pName !== 'ليدز مغتربين') {
+        map.set(pName, {
+          value: pName,
+          label: `🏢 ${isAr ? 'مشروع' : 'Project'}: ${pName}`,
+        });
+      }
+    });
+
+    return Array.from(map.values());
+  }, [projectsCatalog, properties, isAr]);
+
+  const propertyUnitOptions = React.useMemo(() => {
+    return properties
+      .map((unit) => {
+        const unitTitle = String(
+          (isAr ? unit.titleAr || unit.title : unit.title || unit.titleAr) || ''
+        ).trim();
+        const projName = String(unit.projectName || '').trim();
+        if (!unitTitle && !projName) return null;
+        const value = `${projName ? `${projName} - ` : ''}${unitTitle || unit.code || 'Unit'}${
+          unit.code && unitTitle ? ` (${unit.code})` : ''
+        }`;
+        const metaParts: string[] = [];
+        if (unit.code) metaParts.push(`${isAr ? 'كود' : 'Code'}: ${unit.code}`);
+        if (unit.type) metaParts.push(unit.type);
+        if (unit.areaSqm && unit.areaSqm > 0)
+          metaParts.push(`${unit.areaSqm} ${isAr ? 'م²' : 'sqm'}`);
+        if (unit.price && unit.price > 0)
+          metaParts.push(`${Number(unit.price).toLocaleString()} ${isAr ? 'ج.م' : 'EGP'}`);
+
+        const label = `🏠 ${isAr ? 'وحدة' : 'Unit'}: ${
+          projName ? `[${projName}] ` : ''
+        }${unitTitle || unit.code}${metaParts.length > 0 ? ` — ${metaParts.join(' · ')}` : ''}`;
+
+        return {
+          value,
+          label,
+          unit,
+        };
+      })
+      .filter(Boolean) as { value: string; label: string; unit: PropertyUnit }[];
+  }, [properties, isAr]);
+
+  const extraProjectOptions = React.useMemo(() => {
+    const knownValues = new Set<string>([
+      ...catalogProjectOptions.map((o) => o.value),
+      ...propertyUnitOptions.map((o) => o.value),
+    ]);
+    const extras = new Set<string>();
+    projects.forEach((p) => {
+      const clean = String(p || '').trim();
+      if (clean && !knownValues.has(clean)) extras.add(clean);
+    });
+    leads.forEach((l) => {
+      const clean = String(l.projectInterest || '').trim();
+      if (clean && !knownValues.has(clean)) extras.add(clean);
+    });
+    return Array.from(extras);
+  }, [projects, leads, catalogProjectOptions, propertyUnitOptions]);
+
+  const handleSelectProjectOrUnit = (
+    selectedValue: string,
+    target: 'panel' | 'modal'
+  ) => {
+    const matchedUnit = propertyUnitOptions.find((u) => u.value === selectedValue)?.unit;
+    const matchedProj = catalogProjectOptions.find((p) => p.value === selectedValue)?.project;
+
+    if (target === 'panel') {
+      setClientPanelForm((prev) => ({
+        ...prev,
+        projectInterest: selectedValue,
+        ...(matchedUnit?.type ? { propertyType: matchedUnit.type as any } : {}),
+        ...(matchedUnit?.price && matchedUnit.price > 0 && (!prev.budgetMax || prev.budgetMax === 0)
+          ? { budgetMax: matchedUnit.price }
+          : matchedProj?.priceMin && matchedProj.priceMin > 0 && (!prev.budgetMax || prev.budgetMax === 0)
+          ? { budgetMax: matchedProj.priceMin }
+          : {}),
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        projectInterest: selectedValue,
+        ...(matchedUnit?.type ? { propertyType: matchedUnit.type as any } : {}),
+        ...(matchedUnit?.price && matchedUnit.price > 0 && (!prev.budgetMax || prev.budgetMax === 0)
+          ? { budgetMax: matchedUnit.price }
+          : matchedProj?.priceMin && matchedProj.priceMin > 0 && (!prev.budgetMax || prev.budgetMax === 0)
+          ? { budgetMax: matchedProj.priceMin }
+          : {}),
+      }));
+    }
+  };
+
+  const handleQuickCreateInlineProject = async (target: 'panel' | 'modal') => {
+    const cleanName = inlineNewProjectName.trim();
+    if (!cleanName) return;
+    setIsSavingInlineProject(true);
+    try {
+      await apiRequest('/api/projects-catalog', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: cleanName,
+          status: 'Active',
+        }),
+      });
+      if (target === 'panel') {
+        setClientPanelForm((prev) => ({ ...prev, projectInterest: cleanName }));
+      } else {
+        setFormData((prev) => ({ ...prev, projectInterest: cleanName }));
+      }
+      setInlineNewProjectName('');
+      setShowInlineAddProject(false);
+      onToast(
+        isAr
+          ? `تمت إضافة المشروع "${cleanName}" إلى المشروعات والوحدات واختياره للعميل ✓`
+          : `Added project "${cleanName}" and selected it for lead ✓`
+      );
+      onRefresh();
+    } catch (err: any) {
+      onToast(err.message || (isAr ? 'تعذر إضافة المشروع' : 'Failed to add project'));
+    } finally {
+      setIsSavingInlineProject(false);
+    }
+  };
 
   // Permissions checks
   const canAdd = currentRole.id === 'role_admin' || currentRole.permissions?.leads?.add !== 'none';
@@ -1430,6 +1585,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
 
   const openCreateModal = (initialStatus: LeadStatus = 'Fresh Lead') => {
     setEditingLead(null);
+    setShowInlineAddProject(false);
     setFormData({
       fullName: '',
       phone: '',
@@ -1437,7 +1593,11 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
       email: '',
       source: 'حملة اعلانية',
       campaignName: '',
-      projectInterest: projects[0] || '',
+      projectInterest:
+        catalogProjectOptions[0]?.value ||
+        propertyUnitOptions[0]?.value ||
+        projects[0] ||
+        '',
       propertyType: 'Villa',
       budgetMin: 0,
       budgetMax: 0,
@@ -2064,12 +2224,48 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
             onChange={(e) => setProjectFilter(e.target.value)}
             className="px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-[#F8FAFC] focus:bg-white focus:outline-none focus:border-blue-600"
           >
-            <option value="ALL">{isAr ? 'كل المشاريع العقارية' : 'All Real Estate Projects'}</option>
-            {projects.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
+            <option value="ALL">
+              {isAr ? 'كل المشروعات والوحدات العقارية' : 'All Real Estate Projects & Units'}
+            </option>
+            {catalogProjectOptions.length > 0 && (
+              <optgroup
+                label={
+                  isAr
+                    ? '🏢 المشروعات العقارية (من المشروعات والوحدات)'
+                    : '🏢 Real Estate Projects'
+                }
+              >
+                {catalogProjectOptions.map((opt) => (
+                  <option key={`filter_proj_${opt.value}`} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {propertyUnitOptions.length > 0 && (
+              <optgroup
+                label={
+                  isAr
+                    ? '🏠 الوحدات العقارية (من المشروعات والوحدات)'
+                    : '🏠 Property Units'
+                }
+              >
+                {propertyUnitOptions.map((opt) => (
+                  <option key={`filter_unit_${opt.value}`} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {extraProjectOptions.length > 0 && (
+              <optgroup label={isAr ? '📌 مشروعات / حملات أخرى' : '📌 Other Projects / Campaigns'}>
+                {extraProjectOptions.map((p) => (
+                  <option key={`filter_extra_${p}`} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
 
           <select
@@ -3521,26 +3717,154 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                     </div>
 
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">
-                        {isAr ? 'المشروع العقاري المهتم به' : 'Real Estate Project'}
-                      </label>
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <label className="block font-semibold text-slate-700">
+                          {isAr
+                            ? 'المشروع / الوحدة العقارية المهتم بها'
+                            : 'Interested Project / Property Unit'}
+                        </label>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => setShowInlineAddProject((prev) => !prev)}
+                            className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 cursor-pointer"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>
+                              {isAr ? 'إضافة مشروع سريع' : 'Quick Add Project'}
+                            </span>
+                          </button>
+                        )}
+                      </div>
                       <select
                         value={clientPanelForm.projectInterest}
                         onChange={(e) =>
-                          setClientPanelForm({
-                            ...clientPanelForm,
-                            projectInterest: e.target.value,
-                          })
+                          handleSelectProjectOrUnit(e.target.value, 'panel')
                         }
                         disabled={!canEdit}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-[#F8FAFC] focus:bg-white"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-[#F8FAFC] focus:bg-white font-semibold text-slate-800"
                       >
-                        {projects.map((p) => (
-                          <option key={p} value={p}>
-                            {p}
-                          </option>
-                        ))}
+                        <option value="">
+                          {isAr
+                            ? '-- اختر من المشروعات والوحدات المسجلة --'
+                            : '-- Select from Projects & Units --'}
+                        </option>
+                        {catalogProjectOptions.length > 0 && (
+                          <optgroup
+                            label={
+                              isAr
+                                ? '🏢 المشروعات العقارية (قسم المشروعات والوحدات)'
+                                : '🏢 Real Estate Projects'
+                            }
+                          >
+                            {catalogProjectOptions.map((opt) => (
+                              <option key={`panel_proj_${opt.value}`} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {propertyUnitOptions.length > 0 && (
+                          <optgroup
+                            label={
+                              isAr
+                                ? '🏠 الوحدات العقارية المتاحة (قسم المشروعات والوحدات)'
+                                : '🏠 Available Property Units'
+                            }
+                          >
+                            {propertyUnitOptions.map((opt) => (
+                              <option key={`panel_unit_${opt.value}`} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {extraProjectOptions.length > 0 && (
+                          <optgroup
+                            label={
+                              isAr
+                                ? '📌 القيمة الحالية / حملات ومشروعات أخرى'
+                                : '📌 Current / Other Campaigns'
+                            }
+                          >
+                            {extraProjectOptions.map((p) => (
+                              <option key={`panel_extra_${p}`} value={p}>
+                                {p}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {clientPanelForm.projectInterest &&
+                          !catalogProjectOptions.some(
+                            (o) => o.value === clientPanelForm.projectInterest
+                          ) &&
+                          !propertyUnitOptions.some(
+                            (o) => o.value === clientPanelForm.projectInterest
+                          ) &&
+                          !extraProjectOptions.includes(clientPanelForm.projectInterest) && (
+                            <option value={clientPanelForm.projectInterest}>
+                              {clientPanelForm.projectInterest}
+                            </option>
+                          )}
                       </select>
+
+                      {catalogProjectOptions.length === 0 &&
+                        propertyUnitOptions.length === 0 &&
+                        !showInlineAddProject && (
+                          <div className="mt-1 text-[10px] text-amber-700 bg-amber-50/80 border border-amber-200 rounded-lg px-2.5 py-1 flex items-center justify-between gap-2">
+                            <span>
+                              {isAr
+                                ? 'لم يتم إدخال مشروعات أو وحدات بعد في قسم "المشروعات والوحدات".'
+                                : 'No projects or units added yet in Projects & Units.'}
+                            </span>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => setShowInlineAddProject(true)}
+                                className="font-bold underline text-blue-700 shrink-0 cursor-pointer"
+                              >
+                                {isAr ? '+ أضف مشروعاً الآن' : '+ Add Now'}
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                      {showInlineAddProject && canEdit && (
+                        <div className="mt-2 p-2.5 rounded-xl bg-blue-50/70 border border-blue-200 flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={inlineNewProjectName}
+                            onChange={(e) => setInlineNewProjectName(e.target.value)}
+                            placeholder={
+                              isAr
+                                ? 'اكتب اسم المشروع أو الوحدة الجديدة...'
+                                : 'Type new project or unit name...'
+                            }
+                            className="flex-1 px-2.5 py-1.5 rounded-lg border border-blue-200 bg-white text-xs text-slate-900 focus:outline-none focus:border-blue-600"
+                          />
+                          <button
+                            type="button"
+                            disabled={isSavingInlineProject || !inlineNewProjectName.trim()}
+                            onClick={() => handleQuickCreateInlineProject('panel')}
+                            className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-[11px] font-bold cursor-pointer shrink-0"
+                          >
+                            {isSavingInlineProject
+                              ? isAr
+                                ? 'جاري الإضافة...'
+                                : 'Saving...'
+                              : isAr
+                              ? 'حفظ واختيار'
+                              : 'Save & Select'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowInlineAddProject(false)}
+                            className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -4428,20 +4752,114 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  {isAr ? 'المشروع المهتم به' : 'Project Interest'}
-                </label>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <label className="block font-semibold text-slate-700">
+                    {isAr
+                      ? 'المشروع / الوحدة العقارية المهتم بها'
+                      : 'Project / Unit Interest'}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowInlineAddProject((prev) => !prev)}
+                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>{isAr ? 'إضافة مشروع سريع' : 'Quick Add Project'}</span>
+                  </button>
+                </div>
                 <select
                   value={formData.projectInterest}
-                  onChange={(e) => setFormData({ ...formData, projectInterest: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white"
+                  onChange={(e) => handleSelectProjectOrUnit(e.target.value, 'modal')}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white font-semibold text-slate-800"
                 >
-                  {projects.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
+                  <option value="">
+                    {isAr
+                      ? '-- اختر من المشروعات والوحدات المسجلة --'
+                      : '-- Select from Projects & Units --'}
+                  </option>
+                  {catalogProjectOptions.length > 0 && (
+                    <optgroup
+                      label={
+                        isAr
+                          ? '🏢 المشروعات العقارية (قسم المشروعات والوحدات)'
+                          : '🏢 Real Estate Projects'
+                      }
+                    >
+                      {catalogProjectOptions.map((opt) => (
+                        <option key={`modal_proj_${opt.value}`} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {propertyUnitOptions.length > 0 && (
+                    <optgroup
+                      label={
+                        isAr
+                          ? '🏠 الوحدات العقارية المتاحة (قسم المشروعات والوحدات)'
+                          : '🏠 Available Property Units'
+                      }
+                    >
+                      {propertyUnitOptions.map((opt) => (
+                        <option key={`modal_unit_${opt.value}`} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {extraProjectOptions.length > 0 && (
+                    <optgroup
+                      label={
+                        isAr ? '📌 مشروعات / حملات أخرى' : '📌 Other Projects / Campaigns'
+                      }
+                    >
+                      {extraProjectOptions.map((p) => (
+                        <option key={`modal_extra_${p}`} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {formData.projectInterest &&
+                    !catalogProjectOptions.some(
+                      (o) => o.value === formData.projectInterest
+                    ) &&
+                    !propertyUnitOptions.some(
+                      (o) => o.value === formData.projectInterest
+                    ) &&
+                    !extraProjectOptions.includes(formData.projectInterest) && (
+                      <option value={formData.projectInterest}>
+                        {formData.projectInterest}
+                      </option>
+                    )}
                 </select>
+                {showInlineAddProject && (
+                  <div className="mt-2 p-2 rounded-xl bg-blue-50/70 border border-blue-200 flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={inlineNewProjectName}
+                      onChange={(e) => setInlineNewProjectName(e.target.value)}
+                      placeholder={
+                        isAr ? 'اسم المشروع أو الوحدة الجديدة...' : 'New project or unit...'
+                      }
+                      className="flex-1 px-2.5 py-1.5 rounded-lg border border-blue-200 bg-white text-xs text-slate-900 focus:outline-none focus:border-blue-600"
+                    />
+                    <button
+                      type="button"
+                      disabled={isSavingInlineProject || !inlineNewProjectName.trim()}
+                      onClick={() => handleQuickCreateInlineProject('modal')}
+                      className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-[11px] font-bold cursor-pointer shrink-0"
+                    >
+                      {isSavingInlineProject
+                        ? isAr
+                          ? 'حفظ...'
+                          : 'Saving...'
+                        : isAr
+                        ? 'حفظ واختيار'
+                        : 'Save'}
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>

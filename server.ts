@@ -196,7 +196,9 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
         const a = String(fr.answer || '').trim();
         if (q === 'campaign_name' || q.includes('المشروع') || q.includes('حملة')) {
           if (a && !FAKE_PROJECT_NAMES.has(a)) {
-            l.projectInterest = a;
+            if (!l.projectInterest || FAKE_PROJECT_NAMES.has(l.projectInterest)) {
+              l.projectInterest = a;
+            }
           }
         } else if (q.includes('المساحة') || q.includes('نوع الوحدة')) {
           if (a && (!l.propertyType || l.propertyType === 'Villa')) {
@@ -211,11 +213,18 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
         }
       }
 
-      l.notes = l.formResponses.map((fr: any) => `${fr.question}: ${fr.answer}`).join(' | ');
+      if (!l.notes || String(l.notes).toLowerCase().includes('dummy data')) {
+        l.notes = l.formResponses.map((fr: any) => `${fr.question}: ${fr.answer}`).join(' | ');
+      }
     }
 
     if (!l.projectInterest || FAKE_PROJECT_NAMES.has(l.projectInterest)) {
-      l.projectInterest = 'ليدز مغتربين';
+      const firstCatalogProject = Array.isArray(parsedDb.projectsCatalog) && parsedDb.projectsCatalog[0]?.name
+        ? String(parsedDb.projectsCatalog[0].name).trim()
+        : Array.isArray(parsedDb.properties) && parsedDb.properties[0]?.projectName
+        ? String(parsedDb.properties[0].projectName).trim()
+        : 'ليدز مغتربين';
+      l.projectInterest = firstCatalogProject;
     }
     discoveredSheetProjects.add(l.projectInterest);
   });
@@ -228,6 +237,30 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
     parsedDb.projectsCatalog = [];
   }
 
+  const enteredProjectsAndUnits = new Set<string>();
+  parsedDb.projectsCatalog.forEach((p: any) => {
+    const name = String(p?.name || '').trim();
+    if (name && !FAKE_PROJECT_NAMES.has(name)) {
+      enteredProjectsAndUnits.add(name);
+      discoveredSheetProjects.add(name);
+    }
+  });
+
+  if (Array.isArray(parsedDb.properties)) {
+    parsedDb.properties.forEach((prop: any) => {
+      const name = String(prop?.projectName || '').trim();
+      if (name && !FAKE_PROJECT_NAMES.has(name)) {
+        enteredProjectsAndUnits.add(name);
+        discoveredSheetProjects.add(name);
+      }
+      const unitTitle = String(prop?.titleAr || prop?.title || '').trim();
+      if (unitTitle && !FAKE_PROJECT_NAMES.has(unitTitle)) {
+        const unitOption = `${name ? `${name} - ` : ''}${unitTitle}${prop?.code ? ` (${prop.code})` : ''}`;
+        enteredProjectsAndUnits.add(unitOption);
+      }
+    });
+  }
+
   if (Array.isArray(parsedDb.projects)) {
     parsedDb.projects.forEach((p: any) => {
       const name = String(p || '').trim();
@@ -237,24 +270,10 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
     });
   }
 
-  parsedDb.projectsCatalog.forEach((p: any) => {
-    const name = String(p?.name || '').trim();
-    if (name && !FAKE_PROJECT_NAMES.has(name)) {
-      discoveredSheetProjects.add(name);
-    }
-  });
-
-  if (Array.isArray(parsedDb.properties)) {
-    parsedDb.properties.forEach((prop: any) => {
-      const name = String(prop?.projectName || '').trim();
-      if (name && !FAKE_PROJECT_NAMES.has(name)) {
-        discoveredSheetProjects.add(name);
-      }
-    });
-  }
-
-  const cleanProjectsList =
-    discoveredSheetProjects.size > 0 ? Array.from(discoveredSheetProjects) : ['ليدز مغتربين'];
+  const combinedProjects = Array.from(
+    new Set([...Array.from(enteredProjectsAndUnits), ...Array.from(discoveredSheetProjects)])
+  );
+  const cleanProjectsList = combinedProjects.length > 0 ? combinedProjects : ['ليدز مغتربين'];
   parsedDb.projects = cleanProjectsList;
 
   if (Array.isArray(parsedDb.users)) {
@@ -798,6 +817,8 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     );
   }
 
+  let roundRobinCounter = 0;
+
   function selectNextSalesAgent(
     projectInterest: string,
     routingMode: string,
@@ -833,12 +854,17 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
 
       if (pool.length > 0) {
         const sortedPool = [...pool].sort((a: any, b: any) => {
+          const seqA = typeof a._rrSeq === 'number' ? a._rrSeq : 0;
+          const seqB = typeof b._rrSeq === 'number' ? b._rrSeq : 0;
+          if (seqA !== seqB) return seqA - seqB;
           const timeA = a.lastAssignedAt ? new Date(a.lastAssignedAt).getTime() : 0;
           const timeB = b.lastAssignedAt ? new Date(b.lastAssignedAt).getTime() : 0;
           return timeA - timeB;
         });
         const chosenAgent = sortedPool[0];
-        chosenAgent.lastAssignedAt = new Date().toISOString();
+        roundRobinCounter += 1;
+        chosenAgent._rrSeq = roundRobinCounter;
+        chosenAgent.lastAssignedAt = new Date(Date.now() + roundRobinCounter).toISOString();
         return chosenAgent;
       }
     }

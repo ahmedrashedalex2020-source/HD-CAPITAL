@@ -236,7 +236,9 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
           const a = String(fr.answer || '').trim();
           if (q === 'campaign_name' || q.includes('المشروع') || q.includes('حملة')) {
             if (a && !FAKE_PROJECT_NAMES.has(a)) {
-              copy.projectInterest = a;
+              if (!copy.projectInterest || FAKE_PROJECT_NAMES.has(copy.projectInterest)) {
+                copy.projectInterest = a;
+              }
             }
           } else if (q.includes('المساحة') || q.includes('نوع الوحدة')) {
             if (a && (!copy.propertyType || copy.propertyType === 'Villa')) {
@@ -251,12 +253,20 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
           }
         }
 
-        copy.notes = copy.formResponses.map((fr: any) => `${fr.question}: ${fr.answer}`).join(' | ');
+        if (!copy.notes || String(copy.notes).toLowerCase().includes('dummy data')) {
+          copy.notes = copy.formResponses.map((fr: any) => `${fr.question}: ${fr.answer}`).join(' | ');
+        }
       }
 
       if (!copy.projectInterest || FAKE_PROJECT_NAMES.has(copy.projectInterest)) {
         if (FAKE_PROJECT_NAMES.has(copy.projectInterest)) hadFakeData = true;
-        copy.projectInterest = 'ليدز مغتربين';
+        const firstCatalogProject =
+          Array.isArray(rawSnap.projectsCatalog) && rawSnap.projectsCatalog[0]?.name
+            ? String(rawSnap.projectsCatalog[0].name).trim()
+            : Array.isArray(rawSnap.properties) && rawSnap.properties[0]?.projectName
+            ? String(rawSnap.properties[0].projectName).trim()
+            : 'ليدز مغتربين';
+        copy.projectInterest = firstCatalogProject;
       }
       discoveredProjects.add(copy.projectInterest);
       return copy;
@@ -268,6 +278,28 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
       )
     : [];
 
+  const enteredProjectsAndUnits = new Set<string>();
+  rawProjectsCatalog.forEach((p: any) => {
+    const name = String(p?.name || '').trim();
+    if (name && !FAKE_PROJECT_NAMES.has(name)) {
+      enteredProjectsAndUnits.add(name);
+      discoveredProjects.add(name);
+    }
+  });
+  if (Array.isArray(rawSnap.properties)) {
+    rawSnap.properties.forEach((prop: any) => {
+      const name = String(prop?.projectName || '').trim();
+      if (name && !FAKE_PROJECT_NAMES.has(name)) {
+        enteredProjectsAndUnits.add(name);
+        discoveredProjects.add(name);
+      }
+      const unitTitle = String(prop?.titleAr || prop?.title || '').trim();
+      if (unitTitle && !FAKE_PROJECT_NAMES.has(unitTitle)) {
+        const unitOption = `${name ? `${name} - ` : ''}${unitTitle}${prop?.code ? ` (${prop.code})` : ''}`;
+        enteredProjectsAndUnits.add(unitOption);
+      }
+    });
+  }
   if (Array.isArray(rawSnap.projects)) {
     rawSnap.projects.forEach((p: any) => {
       const name = String(p || '').trim();
@@ -276,23 +308,12 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
       }
     });
   }
-  rawProjectsCatalog.forEach((p: any) => {
-    const name = String(p?.name || '').trim();
-    if (name && !FAKE_PROJECT_NAMES.has(name)) {
-      discoveredProjects.add(name);
-    }
-  });
-  if (Array.isArray(rawSnap.properties)) {
-    rawSnap.properties.forEach((prop: any) => {
-      const name = String(prop?.projectName || '').trim();
-      if (name && !FAKE_PROJECT_NAMES.has(name)) {
-        discoveredProjects.add(name);
-      }
-    });
-  }
 
+  const combinedProjects = Array.from(
+    new Set([...Array.from(enteredProjectsAndUnits), ...Array.from(discoveredProjects)])
+  );
   const cleanProjects =
-    discoveredProjects.size > 0 ? Array.from(discoveredProjects) : [...DEFAULT_PROJECTS];
+    combinedProjects.length > 0 ? combinedProjects : [...DEFAULT_PROJECTS];
 
   cleanUsers.forEach((u: any) => {
     if (Array.isArray(u.assignedProjects)) {

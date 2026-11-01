@@ -1057,6 +1057,7 @@ export default function App() {
               leads={leads}
               properties={properties}
               projects={projects}
+              projectsCatalog={projectsCatalog}
               selectedLead={selectedLead}
               onSelectLead={setSelectedLead}
               onRefresh={loadBootstrapData}
