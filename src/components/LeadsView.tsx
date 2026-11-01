@@ -33,6 +33,10 @@ import {
   BellRing,
 } from 'lucide-react';
 import {
+  CRM1_AREA_AND_UNIT_OPTIONS,
+  CRM1_PAYMENT_PLAN_OPTIONS,
+  extractLeadPaymentPlan,
+  formatCrm1Value,
   Lead,
   LEAD_SOURCES,
   LeadStatus,
@@ -517,7 +521,8 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
     source: '',
     campaignName: '',
     projectInterest: '',
-    propertyType: 'Villa' as Lead['propertyType'],
+    propertyType: '175م' as Lead['propertyType'],
+    paymentPlan: '',
     budgetMin: 0,
     budgetMax: 0,
     status: 'Fresh Lead' as LeadStatus,
@@ -541,6 +546,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
         campaignName: selectedLead.campaignName || '',
         projectInterest: selectedLead.projectInterest || '',
         propertyType: selectedLead.propertyType || 'Apartment',
+        paymentPlan: extractLeadPaymentPlan(selectedLead),
         budgetMin: Number(selectedLead.budgetMin) || 0,
         budgetMax: Number(selectedLead.budgetMax) || 0,
         status: optimisticStatuses[selectedLead.id] || normalizeLeadStatus(selectedLead.status),
@@ -653,7 +659,8 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
     source: 'حملة اعلانية',
     campaignName: '',
     projectInterest: projectsCatalog[0]?.name || properties[0]?.projectName || projects[0] || '',
-    propertyType: 'Villa' as Lead['propertyType'],
+    propertyType: '175م' as Lead['propertyType'],
+    paymentPlan: 'تسهيلات فى السداد على 12 شهر',
     budgetMin: 0,
     budgetMax: 0,
     status: 'Fresh Lead' as LeadStatus,
@@ -1598,7 +1605,8 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
         propertyUnitOptions[0]?.value ||
         projects[0] ||
         '',
-      propertyType: 'Villa',
+      propertyType: '175م',
+      paymentPlan: 'تسهيلات فى السداد على 12 شهر',
       budgetMin: 0,
       budgetMax: 0,
       status: initialStatus,
@@ -2633,7 +2641,9 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                                   <span className="font-bold text-slate-800 truncate">
                                     {lead.projectInterest}
                                   </span>
-                                  <span className="text-slate-500 shrink-0">{lead.propertyType}</span>
+                                  <span className="text-slate-600 font-semibold shrink-0">
+                                    {formatCrm1Value(lead.propertyType)}
+                                  </span>
                                 </div>
                                 <div className="flex items-center justify-between gap-1 text-[11px]">
                                   <span className="font-mono-tabular font-bold text-blue-600">
@@ -2660,6 +2670,12 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                                   </span>
                                 </div>
 
+                                {extractLeadPaymentPlan(lead) && (
+                                  <div className="text-[10px] text-emerald-700 bg-emerald-50/80 border border-emerald-200/60 px-1.5 py-0.5 rounded font-semibold truncate">
+                                    💳 {extractLeadPaymentPlan(lead)}
+                                  </div>
+                                )}
+
                                 {/* Preview of Form Questions Answered in CRM1 Sheet */}
                                 {lead.formResponses && lead.formResponses.length > 0 && (
                                   <div className="pt-1.5 border-t border-slate-200/70 space-y-1">
@@ -2667,12 +2683,14 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                                       <div
                                         key={qaIdx}
                                         className="text-[10px] text-slate-600 leading-snug truncate"
-                                        title={`${qa.question}: ${qa.answer}`}
+                                        title={`${formatCrm1Value(qa.question)}: ${formatCrm1Value(qa.answer)}`}
                                       >
                                         <span className="font-semibold text-slate-500">
-                                          {qa.question}:{' '}
+                                          {formatCrm1Value(qa.question)}:{' '}
                                         </span>
-                                        <span className="font-bold text-slate-800">{qa.answer}</span>
+                                        <span className="font-bold text-slate-800">
+                                          {formatCrm1Value(qa.answer)}
+                                        </span>
                                       </div>
                                     ))}
                                   </div>
@@ -2986,7 +3004,9 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                         {lead.projectInterest}
                       </div>
                       <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-slate-500 mt-0.5">
-                        <span>{lead.propertyType}</span>
+                        <span className="font-semibold text-slate-700">
+                          {formatCrm1Value(lead.propertyType)}
+                        </span>
                         <span
                           className={`inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-bold ${
                             lead.source === 'بروكر'
@@ -3015,6 +3035,11 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                           {lead.priority}
                         </span>
                       </div>
+                      {extractLeadPaymentPlan(lead) && (
+                        <div className="text-[10px] text-emerald-700 font-semibold mt-0.5 truncate">
+                          💳 {extractLeadPaymentPlan(lead)}
+                        </div>
+                      )}
                     </div>
 
                     <div className="lg:col-span-2">
@@ -3166,8 +3191,12 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                           key={idx}
                           className="inline-flex items-center gap-1 text-[11px] bg-slate-50 border border-slate-200/80 text-slate-700 px-2 py-0.5 rounded-lg"
                         >
-                          <span className="text-slate-400 font-medium">{qa.question}:</span>
-                          <span className="font-bold text-slate-800">{qa.answer}</span>
+                          <span className="text-slate-400 font-medium">
+                            {formatCrm1Value(qa.question)}:
+                          </span>
+                          <span className="font-bold text-slate-800">
+                            {formatCrm1Value(qa.answer)}
+                          </span>
                         </span>
                       ))}
                     </div>
@@ -3245,8 +3274,13 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                     </h3>
                     <p className="text-xs text-slate-500 font-mono-tabular mt-0.5">{lead.phone}</p>
                     <p className="text-[11px] font-semibold text-slate-700 mt-1 truncate">
-                      {lead.projectInterest} · {lead.propertyType}
+                      {lead.projectInterest} · {formatCrm1Value(lead.propertyType)}
                     </p>
+                    {extractLeadPaymentPlan(lead) && (
+                      <p className="text-[10px] font-semibold text-emerald-700 mt-0.5 truncate">
+                        💳 {extractLeadPaymentPlan(lead)}
+                      </p>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-3 gap-2 p-3 rounded-xl bg-[#F8FAFC] border border-slate-100 text-center my-3">
@@ -3869,7 +3903,9 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
 
                     <div>
                       <label className="block font-semibold text-slate-700 mb-1">
-                        {isAr ? 'نوع الوحدة المطلوبة' : 'Property Unit Type'}
+                        {isAr
+                          ? 'المساحة المناسبة / نوع الوحدة (شيت CRM1)'
+                          : 'Preferred Area / Unit Type (CRM1)'}
                       </label>
                       <select
                         value={clientPanelForm.propertyType}
@@ -3880,20 +3916,44 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                           })
                         }
                         disabled={!canEdit}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-[#F8FAFC] focus:bg-white"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-[#F8FAFC] focus:bg-white font-semibold text-slate-800"
                       >
-                        <option value="Villa">Villa (فيلا)</option>
-                        <option value="Apartment">Apartment (شقة)</option>
-                        <option value="Townhouse">Townhouse (تاون هاوس)</option>
-                        <option value="Penthouse">Penthouse (بنتهاوس)</option>
-                        <option value="Admin Office">Admin Office (مقر إداري)</option>
-                        <option value="Commercial">Commercial (تجاري)</option>
+                        <optgroup
+                          label={
+                            isAr
+                              ? '📐 المساحات المطلوبة في شيت CRM 1'
+                              : '📐 CRM 1 Preferred Areas'
+                          }
+                        >
+                          {CRM1_AREA_AND_UNIT_OPTIONS.slice(0, 4).map((opt) => (
+                            <option key={`panel_area_${opt.value}`} value={opt.value}>
+                              {isAr ? opt.labelAr : opt.labelEn}
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup
+                          label={isAr ? '🏠 أنواع الوحدات العقارية' : '🏠 Property Unit Types'}
+                        >
+                          {CRM1_AREA_AND_UNIT_OPTIONS.slice(4).map((opt) => (
+                            <option key={`panel_type_${opt.value}`} value={opt.value}>
+                              {isAr ? opt.labelAr : opt.labelEn}
+                            </option>
+                          ))}
+                        </optgroup>
+                        {clientPanelForm.propertyType &&
+                          !CRM1_AREA_AND_UNIT_OPTIONS.some(
+                            (o) => o.value === clientPanelForm.propertyType
+                          ) && (
+                            <option value={clientPanelForm.propertyType}>
+                              {formatCrm1Value(clientPanelForm.propertyType)}
+                            </option>
+                          )}
                       </select>
                     </div>
 
                     <div>
                       <label className="block font-semibold text-slate-700 mb-1">
-                        {isAr ? 'الميزانية القصوى (EGP)' : 'Max Budget (EGP)'}
+                        {isAr ? 'السعر المناسب / الميزانية القصوى (EGP)' : 'Suitable Budget (EGP)'}
                       </label>
                       <input
                         type="number"
@@ -3907,6 +3967,40 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                         disabled={!canEdit}
                         className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-[#F8FAFC] focus:bg-white font-mono-tabular"
                       />
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        {isAr ? 'نظام السداد المفضل (شيت CRM1)' : 'Payment Plan (CRM1)'}
+                      </label>
+                      <select
+                        value={clientPanelForm.paymentPlan || ''}
+                        onChange={(e) =>
+                          setClientPanelForm({
+                            ...clientPanelForm,
+                            paymentPlan: e.target.value,
+                          })
+                        }
+                        disabled={!canEdit}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-[#F8FAFC] focus:bg-white font-semibold text-slate-800"
+                      >
+                        <option value="">
+                          {isAr ? '-- اختر نظام السداد --' : '-- Select Payment Plan --'}
+                        </option>
+                        {CRM1_PAYMENT_PLAN_OPTIONS.map((plan) => (
+                          <option key={`panel_plan_${plan}`} value={plan}>
+                            {plan}
+                          </option>
+                        ))}
+                        {clientPanelForm.paymentPlan &&
+                          !(CRM1_PAYMENT_PLAN_OPTIONS as readonly string[]).includes(
+                            clientPanelForm.paymentPlan
+                          ) && (
+                            <option value={clientPanelForm.paymentPlan}>
+                              {formatCrm1Value(clientPanelForm.paymentPlan)}
+                            </option>
+                          )}
+                      </select>
                     </div>
 
                     <div>
@@ -4864,27 +4958,51 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  {isAr ? 'نوع الوحدة' : 'Property Type'}
+                  {isAr ? 'المساحة المناسبة / نوع الوحدة (CRM1)' : 'Preferred Area / Unit Type'}
                 </label>
                 <select
                   value={formData.propertyType}
                   onChange={(e) =>
                     setFormData({ ...formData, propertyType: e.target.value as any })
                   }
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white font-semibold text-slate-800"
                 >
-                  <option value="Villa">Villa (فيلا)</option>
-                  <option value="Apartment">Apartment (شقة)</option>
-                  <option value="Townhouse">Townhouse (تاون هاوس)</option>
-                  <option value="Penthouse">Penthouse (بنتهاوس)</option>
-                  <option value="Admin Office">Admin Office (مقر إداري)</option>
-                  <option value="Commercial">Commercial (تجاري)</option>
+                  <optgroup
+                    label={
+                      isAr
+                        ? '📐 المساحات المطلوبة في شيت CRM 1'
+                        : '📐 CRM 1 Preferred Areas'
+                    }
+                  >
+                    {CRM1_AREA_AND_UNIT_OPTIONS.slice(0, 4).map((opt) => (
+                      <option key={`modal_area_${opt.value}`} value={opt.value}>
+                        {isAr ? opt.labelAr : opt.labelEn}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup
+                    label={isAr ? '🏠 أنواع الوحدات العقارية' : '🏠 Property Unit Types'}
+                  >
+                    {CRM1_AREA_AND_UNIT_OPTIONS.slice(4).map((opt) => (
+                      <option key={`modal_type_${opt.value}`} value={opt.value}>
+                        {isAr ? opt.labelAr : opt.labelEn}
+                      </option>
+                    ))}
+                  </optgroup>
+                  {formData.propertyType &&
+                    !CRM1_AREA_AND_UNIT_OPTIONS.some(
+                      (o) => o.value === formData.propertyType
+                    ) && (
+                      <option value={formData.propertyType}>
+                        {formatCrm1Value(formData.propertyType)}
+                      </option>
+                    )}
                 </select>
               </div>
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  {isAr ? 'الميزانية القصوى (EGP)' : 'Max Budget (EGP)'}
+                  {isAr ? 'السعر المناسب / الميزانية القصوى (EGP)' : 'Suitable Budget (EGP)'}
                 </label>
                 <input
                   type="number"
@@ -4894,6 +5012,34 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
                   }
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 font-mono-tabular"
                 />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  {isAr ? 'نظام السداد المفضل (CRM1)' : 'Payment Plan (CRM1)'}
+                </label>
+                <select
+                  value={formData.paymentPlan || ''}
+                  onChange={(e) => setFormData({ ...formData, paymentPlan: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white font-semibold text-slate-800"
+                >
+                  <option value="">
+                    {isAr ? '-- اختر نظام السداد --' : '-- Select Payment Plan --'}
+                  </option>
+                  {CRM1_PAYMENT_PLAN_OPTIONS.map((plan) => (
+                    <option key={`modal_plan_${plan}`} value={plan}>
+                      {plan}
+                    </option>
+                  ))}
+                  {formData.paymentPlan &&
+                    !(CRM1_PAYMENT_PLAN_OPTIONS as readonly string[]).includes(
+                      formData.paymentPlan
+                    ) && (
+                      <option value={formData.paymentPlan}>
+                        {formatCrm1Value(formData.paymentPlan)}
+                      </option>
+                    )}
+                </select>
               </div>
 
               <div>

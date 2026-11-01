@@ -99,6 +99,15 @@ export function isDummyOrFakeLead(leadOrName: string, phoneStr: string, notesStr
   return false;
 }
 
+export function getRecordTimestampMs(rec: any): number {
+  if (!rec || typeof rec !== 'object') return 0;
+  const candidate =
+    rec.updatedAt || rec.lastContactedAt || rec.lastAssignedAt || rec.createdAt || '';
+  if (!candidate) return 0;
+  const parsed = Date.parse(String(candidate));
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 export function upgradeExistingDbForCrm1(parsedDb: any) {
   const FAKE_LEAD_IDS = new Set([
     'lead_101',
@@ -232,13 +241,16 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
     parsedDb.projectsCatalog = [];
   }
 
-  // Enrich all CRM1 leads directly from their actual CRM1 formResponses and remove fake project names
+  // Enrich all CRM1 leads directly from their actual CRM1 formResponses without overwriting manual edits
   const discoveredSheetProjects = new Set<string>();
   parsedDb.leads.forEach((l: any) => {
     l.status = normalizeLeadStatus(l.status);
     if (l.assignedBy === 'usr_admin') {
       l.assignedBy = 'usr_admin2';
     }
+    const isUneditedImport =
+      !l.lastContactedAt && (!l.updatedAt || l.updatedAt === l.createdAt);
+
     if (Array.isArray(l.formResponses)) {
       l.formResponses = l.formResponses.filter((fr: any) => {
         const q = String(fr?.question || '').trim().toLowerCase();
@@ -253,6 +265,7 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
       for (const fr of l.formResponses) {
         const q = String(fr.question || '').trim();
         const a = String(fr.answer || '').trim();
+        const cleanAnswer = a.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
         if (q === 'campaign_name' || q.includes('المشروع') || q.includes('حملة')) {
           if (a && !isInvalidProjectName(a)) {
             if (!l.projectInterest || isInvalidProjectName(l.projectInterest)) {
@@ -260,14 +273,23 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
             }
           }
         } else if (q.includes('المساحة') || q.includes('نوع الوحدة')) {
-          if (a && (!l.propertyType || l.propertyType === 'Villa')) {
-            l.propertyType = a.replace(/_/g, ' ');
+          if (cleanAnswer && (!l.propertyType || (l.propertyType === 'Villa' && isUneditedImport))) {
+            l.propertyType = cleanAnswer;
           }
         } else if (q.includes('السعر') || q.includes('الميزانية')) {
           const parsedBudget = parseCrm1PriceValue(a);
           if (parsedBudget > 0 && (!l.budgetMax || l.budgetMax === 0)) {
             l.budgetMax = parsedBudget;
             l.budgetMin = Math.round(parsedBudget * 0.85);
+          }
+        } else if (
+          q.includes('نظام_السداد') ||
+          q.includes('نظام السداد') ||
+          q.includes('سداد') ||
+          q.toLowerCase().includes('payment')
+        ) {
+          if (cleanAnswer && !l.paymentPlan) {
+            l.paymentPlan = cleanAnswer;
           }
         }
       }
@@ -696,7 +718,10 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
           changed = true;
         } else {
           const localUser = db.users[existingIdx];
+          const cloudTs = getRecordTimestampMs(cu);
+          const localTs = getRecordTimestampMs(localUser);
           if (
+            cloudTs > localTs &&
             cu.accessPassword &&
             cu.accessPassword !== localUser.accessPassword &&
             cu.id !== 'usr_admin2'
@@ -707,6 +732,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
               localUser.username,
               cu.accessPassword
             );
+            localUser.updatedAt = cu.updatedAt || localUser.updatedAt;
             changed = true;
           }
         }
@@ -1457,6 +1483,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       routingWeight: Math.min(Math.max(Number(routingWeight) || 1, 1), 10),
       preferredLang: 'ar',
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
     if (Array.isArray(db.deletedUserIds)) {
@@ -1566,6 +1593,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       existing.routingWeight = Math.min(Math.max(Number(routingWeight) || 1, 1), 10);
     }
     if (preferredLang !== undefined) existing.preferredLang = preferredLang;
+    existing.updatedAt = new Date().toISOString();
 
     db.users[idx] = existing;
     saveDb(db);
@@ -1673,6 +1701,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       campaignName,
       projectInterest,
       propertyType,
+      paymentPlan,
       budgetMin,
       budgetMax,
       status,
@@ -1731,6 +1760,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       campaignName: campaignName || 'Direct Inbound',
       projectInterest: projectInterest || DEFAULT_PROJECTS[0],
       propertyType: propertyType || 'Apartment',
+      paymentPlan: paymentPlan ? String(paymentPlan).replace(/_/g, ' ').trim() : '',
       budgetMin: Number(budgetMin) || 0,
       budgetMax: Number(budgetMax) || 0,
       status: normalizeLeadStatus(status || 'Fresh Lead'),
@@ -1863,6 +1893,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       'campaignName',
       'projectInterest',
       'propertyType',
+      'paymentPlan',
       'budgetMin',
       'budgetMax',
       'status',
@@ -1879,7 +1910,11 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     updatableFields.forEach((field) => {
       if (req.body[field] !== undefined) {
         lead[field] =
-          field === 'status' ? normalizeLeadStatus(req.body[field]) : req.body[field];
+          field === 'status'
+            ? normalizeLeadStatus(req.body[field])
+            : field === 'paymentPlan'
+            ? String(req.body[field] || '').replace(/_/g, ' ').trim()
+            : req.body[field];
       }
     });
 
@@ -2953,6 +2988,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
             ? conn.defaultProject
             : 'ليدز مغتربين';
         let inferredType = '';
+        let inferredPaymentPlan = '';
         let inferredBudget = 0;
         let inferredEmail = '';
 
@@ -2996,7 +3032,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
             lowerH.includes('unit') ||
             lowerH.includes('type')
           ) {
-            inferredType = answer.replace(/_/g, ' ');
+            inferredType = answer.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
           } else if (
             header.includes('السعر') ||
             header.includes('الميزانية') ||
@@ -3007,6 +3043,13 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
             if (parsedPrice > 0) {
               inferredBudget = parsedPrice;
             }
+          } else if (
+            header.includes('نظام_السداد') ||
+            header.includes('نظام السداد') ||
+            header.includes('سداد') ||
+            lowerH.includes('payment')
+          ) {
+            inferredPaymentPlan = answer.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
           }
 
           if (!inferredBudget) {
@@ -3035,6 +3078,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
           campaignName: conn.campaignTag || 'CRM1_Lead_Form',
           projectInterest: inferredProject,
           propertyType: inferredType,
+          paymentPlan: inferredPaymentPlan,
           budgetMin: inferredBudget > 0 ? Math.round(inferredBudget * 0.8) : 0,
           budgetMax: inferredBudget,
           status: 'Fresh Lead',
@@ -3258,6 +3302,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       notes: req.body.notes ? String(req.body.notes).trim() : '',
       status: req.body.status || 'Active',
       createdAt: nowIso,
+      updatedAt: nowIso,
     };
 
     db.projectsCatalog.unshift(newProject);
@@ -3300,6 +3345,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       ...req.body,
       id: req.params.id,
       name: updatedName,
+      updatedAt: new Date().toISOString(),
     };
 
     if (!Array.isArray(db.projects)) {
@@ -3411,7 +3457,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     res.json({ ok: true });
   });
 
-  // Bidirectional Workspace Sync Endpoint (persists any Control Panel additions/updates from client fallback into server disk DB)
+  // Bidirectional Workspace Sync Endpoint (persists any Control Panel additions/updates from client fallback into server disk DB using timestamp-aware comparison)
   app.post('/api/workspace/sync', (req: Request, res: Response) => {
     const { user, authenticated } = getAuthContext(req);
     if (!authenticated || !user) {
@@ -3426,6 +3472,30 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       const beforeLen = db.users.length;
       db.users = db.users.filter((u: any) => !delSet.has(String(u.id)) || u.id === 'usr_admin2');
       if (db.users.length !== beforeLen) changed = true;
+    }
+
+    if (Array.isArray(incoming.deletedProjectIds)) {
+      const delSet = new Set<string>([...(db.deletedProjectIds || []), ...incoming.deletedProjectIds.map(String)]);
+      db.deletedProjectIds = Array.from(delSet);
+      const beforeLen = (db.projectsCatalog || []).length;
+      db.projectsCatalog = (db.projectsCatalog || []).filter((p: any) => !delSet.has(String(p.id)));
+      if ((db.projectsCatalog || []).length !== beforeLen) changed = true;
+    }
+
+    if (Array.isArray(incoming.deletedPropertyIds)) {
+      const delSet = new Set<string>([...(db.deletedPropertyIds || []), ...incoming.deletedPropertyIds.map(String)]);
+      db.deletedPropertyIds = Array.from(delSet);
+      const beforeLen = (db.properties || []).length;
+      db.properties = (db.properties || []).filter((p: any) => !delSet.has(String(p.id)));
+      if ((db.properties || []).length !== beforeLen) changed = true;
+    }
+
+    if (Array.isArray(incoming.deletedLeadIds)) {
+      const delSet = new Set<string>([...(db.deletedLeadIds || []), ...incoming.deletedLeadIds.map(String)]);
+      db.deletedLeadIds = Array.from(delSet);
+      const beforeLen = (db.leads || []).length;
+      db.leads = (db.leads || []).filter((l: any) => !delSet.has(String(l.id)));
+      if ((db.leads || []).length !== beforeLen) changed = true;
     }
 
     if (Array.isArray(incoming.users)) {
@@ -3449,18 +3519,22 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
           changed = true;
         } else if (iu.id !== 'usr_admin2') {
           const existing = db.users[idx];
-          const nextPass = iu.accessPassword || existing.accessPassword || '123456';
-          db.users[idx] = {
-            ...existing,
-            ...iu,
-            accessPassword: nextPass,
-            passwordHash:
-              nextPass !== existing.accessPassword
-                ? hashPasswordSecure(nextPass)
-                : existing.passwordHash || hashPasswordSecure(nextPass),
-            clientAuthDigest: computeClientAuthDigest(iu.username || existing.username, nextPass),
-          };
-          changed = true;
+          const incomingTs = getRecordTimestampMs(iu);
+          const existingTs = getRecordTimestampMs(existing);
+          if (incomingTs >= existingTs) {
+            const nextPass = iu.accessPassword || existing.accessPassword || '123456';
+            db.users[idx] = {
+              ...existing,
+              ...iu,
+              accessPassword: nextPass,
+              passwordHash:
+                nextPass !== existing.accessPassword
+                  ? hashPasswordSecure(nextPass)
+                  : existing.passwordHash || hashPasswordSecure(nextPass),
+              clientAuthDigest: computeClientAuthDigest(iu.username || existing.username, nextPass),
+            };
+            changed = true;
+          }
         }
       }
     }
@@ -3473,7 +3547,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
         if (idx === -1) {
           db.projectsCatalog.unshift(ip);
           changed = true;
-        } else {
+        } else if (getRecordTimestampMs(ip) >= getRecordTimestampMs(db.projectsCatalog[idx])) {
           db.projectsCatalog[idx] = { ...db.projectsCatalog[idx], ...ip };
           changed = true;
         }
@@ -3488,8 +3562,23 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
         if (idx === -1) {
           db.properties.unshift(prop);
           changed = true;
-        } else {
+        } else if (getRecordTimestampMs(prop) >= getRecordTimestampMs(db.properties[idx])) {
           db.properties[idx] = { ...db.properties[idx], ...prop };
+          changed = true;
+        }
+      }
+    }
+
+    if (Array.isArray(incoming.leads)) {
+      const delLeads = new Set<string>(db.deletedLeadIds || []);
+      for (const il of incoming.leads) {
+        if (!il || !il.id || delLeads.has(String(il.id))) continue;
+        const idx = db.leads.findIndex((l: any) => l.id === il.id);
+        if (idx === -1) {
+          db.leads.unshift(il);
+          changed = true;
+        } else if (getRecordTimestampMs(il) > getRecordTimestampMs(db.leads[idx])) {
+          db.leads[idx] = { ...db.leads[idx], ...il };
           changed = true;
         }
       }

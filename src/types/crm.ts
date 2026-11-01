@@ -50,6 +50,7 @@ export interface UserProfile {
   lastAssignedAt?: string;
   preferredLang: 'ar' | 'en';
   createdAt: string;
+  updatedAt?: string;
 }
 
 export type LeadStatus =
@@ -79,6 +80,65 @@ export const LEAD_STATUS_ORDER = ALL_LEAD_STATUS_LIST;
 
 export const LEAD_SOURCES = ['حملة اعلانية', 'اورجانيك', 'بروكر'] as const;
 export type LeadSource = (typeof LEAD_SOURCES)[number];
+
+export const CRM1_AREA_AND_UNIT_OPTIONS = [
+  { value: '175م', labelAr: '175م (مساحة شيت CRM1)', labelEn: '175 sqm (CRM1 Area)' },
+  { value: '215م', labelAr: '215م (مساحة شيت CRM1)', labelEn: '215 sqm (CRM1 Area)' },
+  { value: 'اقل من 175', labelAr: 'أقل من 175م (مساحة شيت CRM1)', labelEn: 'Under 175 sqm (CRM1 Area)' },
+  { value: 'أكثر من 215م', labelAr: 'أكثر من 215م (مساحة شيت CRM1)', labelEn: 'Over 215 sqm (CRM1 Area)' },
+  { value: 'Apartment', labelAr: 'Apartment (شقة سكنية)', labelEn: 'Apartment' },
+  { value: 'Villa', labelAr: 'Villa (فيلا مستقلة)', labelEn: 'Villa' },
+  { value: 'Townhouse', labelAr: 'Townhouse (تاون هاوس)', labelEn: 'Townhouse' },
+  { value: 'Penthouse', labelAr: 'Penthouse (بنتهاوس)', labelEn: 'Penthouse' },
+  { value: 'Admin Office', labelAr: 'Admin Office (مقر إداري)', labelEn: 'Admin Office' },
+  { value: 'Commercial', labelAr: 'Commercial (وحدة تجارية)', labelEn: 'Commercial' },
+] as const;
+
+export const CRM1_PAYMENT_PLAN_OPTIONS = [
+  'تسهيلات فى السداد على 12 شهر',
+  'كاش مع خصم',
+  'تقسيط حتى 3 سنوات',
+  'تقسيط حتى 5 سنوات',
+  'مقدم تعاقد وتقسيط مرن',
+] as const;
+
+export function formatCrm1Value(raw?: string | null): string {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  return s.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+export function extractLeadPaymentPlan(lead?: {
+  paymentPlan?: string;
+  formResponses?: FormQuestionResponse[];
+  notes?: string;
+} | null): string {
+  if (!lead) return '';
+  if (lead.paymentPlan && String(lead.paymentPlan).trim()) {
+    return formatCrm1Value(lead.paymentPlan);
+  }
+  if (Array.isArray(lead.formResponses)) {
+    const matched = lead.formResponses.find((fr) => {
+      const q = String(fr?.question || '').trim().toLowerCase();
+      return (
+        q.includes('نظام_السداد') ||
+        q.includes('نظام السداد') ||
+        q.includes('سداد') ||
+        q.includes('payment')
+      );
+    });
+    if (matched?.answer) {
+      return formatCrm1Value(matched.answer);
+    }
+  }
+  if (lead.notes) {
+    const noteMatch = String(lead.notes).match(/نظام[_ ]السداد\s*:\s*([^|]+)/i);
+    if (noteMatch && noteMatch[1]) {
+      return formatCrm1Value(noteMatch[1]);
+    }
+  }
+  return '';
+}
 
 export function normalizeLeadStatus(rawStatus?: string | null): LeadStatus {
   const s = String(rawStatus || '').trim();
@@ -146,7 +206,8 @@ export interface Lead {
   source: string;
   campaignName: string;
   projectInterest: string;
-  propertyType: 'Apartment' | 'Villa' | 'Townhouse' | 'Commercial' | 'Admin Office' | 'Penthouse';
+  propertyType: 'Apartment' | 'Villa' | 'Townhouse' | 'Commercial' | 'Admin Office' | 'Penthouse' | string;
+  paymentPlan?: string;
   budgetMin: number;
   budgetMax: number;
   status: LeadStatus;
@@ -191,6 +252,7 @@ export interface RealEstateProject {
   notes?: string; // ملاحظات إضافية عامة
   status?: 'Active' | 'Launching Soon' | 'Sold Out'; // حالة الطرح
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface PropertyUnit {
@@ -201,7 +263,7 @@ export interface PropertyUnit {
   projectName: string;
   developer: string;
   location: string;
-  type: 'Apartment' | 'Villa' | 'Townhouse' | 'Commercial' | 'Admin Office' | 'Penthouse';
+  type: 'Apartment' | 'Villa' | 'Townhouse' | 'Commercial' | 'Admin Office' | 'Penthouse' | string;
   areaSqm: number;
   bedrooms: number;
   bathrooms: number;
@@ -210,6 +272,7 @@ export interface PropertyUnit {
   installmentYears: number;
   status: 'Available' | 'Reserved' | 'Sold';
   deliveryYear: number;
+  updatedAt?: string;
 }
 
 export interface Deal {
@@ -226,6 +289,7 @@ export interface Deal {
   commissionPercent: number;
   expectedCloseDate: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface CalendarEvent {
@@ -242,6 +306,7 @@ export interface CalendarEvent {
   description: string;
   completed: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface ColumnMapping {

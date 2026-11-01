@@ -295,6 +295,9 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
       if (copy.status !== normalizedSt) {
         copy.status = normalizedSt;
       }
+      const isUneditedImport =
+        !copy.lastContactedAt && (!copy.updatedAt || copy.updatedAt === copy.createdAt);
+
       if (Array.isArray(copy.formResponses)) {
         copy.formResponses = copy.formResponses.filter((fr: any) => {
           const q = String(fr?.question || '').trim().toLowerCase();
@@ -316,6 +319,7 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
         for (const fr of copy.formResponses) {
           const q = String(fr.question || '').trim();
           const a = String(fr.answer || '').trim();
+          const cleanAnswer = a.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
           if (q === 'campaign_name' || q.includes('المشروع') || q.includes('حملة')) {
             if (a && !isInvalidProjectName(a)) {
               if (!copy.projectInterest || isInvalidProjectName(copy.projectInterest)) {
@@ -323,14 +327,23 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
               }
             }
           } else if (q.includes('المساحة') || q.includes('نوع الوحدة')) {
-            if (a && (!copy.propertyType || copy.propertyType === 'Villa')) {
-              copy.propertyType = a.replace(/_/g, ' ');
+            if (cleanAnswer && (!copy.propertyType || (copy.propertyType === 'Villa' && isUneditedImport))) {
+              copy.propertyType = cleanAnswer;
             }
           } else if (q.includes('السعر') || q.includes('الميزانية')) {
             const parsedBudget = parseCrm1Price(a);
             if (parsedBudget > 0 && (!copy.budgetMax || copy.budgetMax === 0)) {
               copy.budgetMax = parsedBudget;
               copy.budgetMin = Math.round(parsedBudget * 0.85);
+            }
+          } else if (
+            q.includes('نظام_السداد') ||
+            q.includes('نظام السداد') ||
+            q.includes('سداد') ||
+            q.toLowerCase().includes('payment')
+          ) {
+            if (cleanAnswer && !copy.paymentPlan) {
+              copy.paymentPlan = cleanAnswer;
             }
           }
         }
@@ -758,6 +771,15 @@ export function saveLocalSnapshot(bootstrapData: any): void {
   }
 }
 
+function getRecordTimestampMs(rec: any): number {
+  if (!rec || typeof rec !== 'object') return 0;
+  const candidate =
+    rec.updatedAt || rec.lastContactedAt || rec.lastAssignedAt || rec.createdAt || '';
+  if (!candidate) return 0;
+  const parsed = Date.parse(String(candidate));
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 function mergeById(baseList: any[], incomingList: any[]): any[] {
   if (!Array.isArray(baseList) || baseList.length === 0) {
     return Array.isArray(incomingList) ? [...incomingList] : [];
@@ -771,8 +793,18 @@ function mergeById(baseList: any[], incomingList: any[]): any[] {
   }
   for (const item of incomingList) {
     if (item && item.id) {
-      const prev = map.get(item.id) || {};
-      map.set(item.id, { ...prev, ...item });
+      const prev = map.get(item.id);
+      if (!prev) {
+        map.set(item.id, item);
+      } else {
+        const prevTs = getRecordTimestampMs(prev);
+        const itemTs = getRecordTimestampMs(item);
+        if (prevTs > 0 && itemTs > 0 && prevTs > itemTs) {
+          map.set(item.id, { ...item, ...prev });
+        } else {
+          map.set(item.id, { ...prev, ...item });
+        }
+      }
     }
   }
   return Array.from(map.values());
@@ -875,33 +907,33 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
         );
 
         const combinedUsers = mergeById(
-          mergeById(getDefaultCoreUsers(), base.users || []),
-          mergeById(cloud.users || [], local.users || [])
+          mergeById(getDefaultCoreUsers(), cloud.users || []),
+          mergeById(base.users || [], local.users || [])
         );
         const combinedLeads = mergeById(
-          mergeById(base.leads || [], cloud.leads || []),
+          mergeById(cloud.leads || [], base.leads || []),
           local.leads || []
         );
         const combinedDeals = mergeById(
-          mergeById(base.deals || [], cloud.deals || []),
+          mergeById(cloud.deals || [], base.deals || []),
           local.deals || []
         );
         const combinedProperties = mergeById(
-          mergeById(base.properties || [], cloud.properties || []),
+          mergeById(cloud.properties || [], base.properties || []),
           local.properties || []
         );
         const combinedEvents = mergeById(
-          mergeById(base.events || [], cloud.events || []),
+          mergeById(cloud.events || [], base.events || []),
           local.events || []
         );
         const combinedProjectsCatalog = mergeById(
-          mergeById(base.projectsCatalog || [], cloud.projectsCatalog || []),
+          mergeById(cloud.projectsCatalog || [], base.projectsCatalog || []),
           local.projectsCatalog || []
         );
 
         const rawMerged = {
-          ...base,
           ...cloud,
+          ...base,
           ...local,
           deletedUserIds,
           deletedProjectIds,
@@ -1007,6 +1039,7 @@ async function persistState(snap: any): Promise<void> {
         deletedUserIds: cleaned.deletedUserIds,
         deletedProjectIds: cleaned.deletedProjectIds,
         deletedPropertyIds: cleaned.deletedPropertyIds,
+        deletedLeadIds: cleaned.deletedLeadIds,
       }),
     }).catch(() => {});
   }
@@ -1351,6 +1384,7 @@ export async function handleLocalFallbackRequest(
       formResponses: Array.isArray(body.formResponses) ? body.formResponses : [],
       projectInterest: body.projectInterest || DEFAULT_PROJECTS[0],
       propertyType: body.propertyType || body.unitType || 'Villa',
+      paymentPlan: body.paymentPlan ? String(body.paymentPlan).replace(/_/g, ' ').trim() : '',
       budgetMin: Number(body.budgetMin) || 0,
       budgetMax: Number(body.budgetMax || body.budgetEgp) || 0,
       status: normalizeLeadStatus(body.status || 'Fresh Lead'),
@@ -1854,6 +1888,7 @@ export async function handleLocalFallbackRequest(
       routingWeight: Math.min(Math.max(Number(body.routingWeight) || 1, 1), 10),
       preferredLang: 'ar',
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
     if (Array.isArray(snap.deletedUserIds)) {
       snap.deletedUserIds = snap.deletedUserIds.filter((id: string) => id !== newUser.id);
@@ -1871,7 +1906,11 @@ export async function handleLocalFallbackRequest(
     const userId = pathname.split('/')[3];
     const idx = snap.users.findIndex((u: any) => u.id === userId);
     if (idx === -1) throw new Error('المستخدم غير موجود');
-    const existing = { ...snap.users[idx], ...body };
+    const existing = {
+      ...snap.users[idx],
+      ...body,
+      updatedAt: new Date().toISOString(),
+    };
     if (body.username) {
       existing.username = String(body.username).trim().toLowerCase();
     }
@@ -2551,6 +2590,7 @@ export async function handleLocalFallbackRequest(
         const formResponses: { question: string; answer: string }[] = [];
         let inferredProject = primaryConn.defaultProject || DEFAULT_PROJECTS[0];
         let inferredType = '';
+        let inferredPaymentPlan = '';
         let inferredBudget = 0;
         let inferredEmail = '';
 
@@ -2585,7 +2625,7 @@ export async function handleLocalFallbackRequest(
             lowerH.includes('unit') ||
             lowerH.includes('type')
           ) {
-            inferredType = answer.replace(/_/g, ' ');
+            inferredType = answer.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
           } else if (
             header.includes('السعر') ||
             header.includes('الميزانية') ||
@@ -2594,6 +2634,13 @@ export async function handleLocalFallbackRequest(
           ) {
             const parsedPrice = parseCrm1Price(answer);
             if (parsedPrice > 0) inferredBudget = parsedPrice;
+          } else if (
+            header.includes('نظام_السداد') ||
+            header.includes('نظام السداد') ||
+            header.includes('سداد') ||
+            lowerH.includes('payment')
+          ) {
+            inferredPaymentPlan = answer.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
           }
           if (!inferredBudget) {
             const fallbackPrice = parseCrm1Price(answer);
@@ -2630,6 +2677,7 @@ export async function handleLocalFallbackRequest(
           campaignName: primaryConn.campaignTag || 'CRM1_GoogleDrive_Form',
           projectInterest: inferredProject,
           propertyType: inferredType || 'Villa',
+          paymentPlan: inferredPaymentPlan,
           budgetMin: inferredBudget > 0 ? Math.round(inferredBudget * 0.8) : 0,
           budgetMax: inferredBudget,
           status: 'Fresh Lead',

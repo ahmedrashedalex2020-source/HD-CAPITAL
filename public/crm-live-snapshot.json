@@ -488,27 +488,6 @@
   ],
   "users": [
     {
-      "id": "usr_admin",
-      "username": "admin",
-      "fullName": "أحمد راشد (Ahmed Rashed)",
-      "roleId": "role_admin",
-      "jobTitle": "CEO & System Administrator",
-      "jobTitleAr": "المدير التنفيذي ومدير النظام",
-      "avatarUrl": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22120%22%20height%3D%22120%22%20viewBox%3D%220%200%20120%20120%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%25%22%20y1%3D%220%25%22%20x2%3D%22100%25%22%20y2%3D%22100%25%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%231D4ED8%22%20%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%233B82F6%22%20%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22120%22%20height%3D%22120%22%20rx%3D%2260%22%20fill%3D%22url(%23g)%22%20%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2260%22%20cy%3D%2244%22%20r%3D%2220%22%20fill%3D%22rgba(255%2C255%2C255%2C0.22)%22%20%2F%3E%0A%20%20%20%20%3Cpath%20d%3D%22M24%20106%20C24%2078%2C%2096%2078%2C%2096%20106%22%20fill%3D%22rgba(255%2C255%2C255%2C0.22)%22%20%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20fill%3D%22%23ffffff%22%20font-family%3D%22Plus%20Jakarta%20Sans%2C%20Cairo%2C%20sans-serif%22%20font-weight%3D%22700%22%20font-size%3D%2234%22%3EAR%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
-      "email": "ahmedrashedalex2020@gmail.com",
-      "phone": "",
-      "location": "القاهرة الجديدة · التجمع الخامس",
-      "assignedProjects": [
-        "ليدز مغتربين"
-      ],
-      "isActiveForRouting": false,
-      "routingWeight": 1,
-      "preferredLang": "ar",
-      "createdAt": "2026-01-10T09:00:00.000Z",
-      "clientAuthDigest": "d652c898cd889faef35a152374f008bcbe8fbb7edb157c92e044b1ee7d70c76d",
-      "accessPassword": "admin123"
-    },
-    {
       "id": "usr_1793010490703_1p0c",
       "username": "omarahmed1",
       "fullName": "عمر احمد",
@@ -551,6 +530,48 @@
       "createdAt": "2026-01-15T09:00:00.000Z",
       "accessPassword": "HD_CAPITAL",
       "lastAssignedAt": "2026-11-01T12:54:33.030Z"
+    },
+    {
+      "id": "usr_1793444322819_o73a",
+      "username": "ali",
+      "clientAuthDigest": "f2fee1e6a26e35f51ff3772d77fcc8cc203d9d400477b5820d0ec1168f893574",
+      "accessPassword": "hd123",
+      "fullName": "ali mohamed",
+      "roleId": "role_employee",
+      "jobTitle": "Property Sales Consultant",
+      "jobTitleAr": "مسؤول مبيعات عقارية",
+      "avatarUrl": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22120%22%20height%3D%22120%22%20viewBox%3D%220%200%20120%20120%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%25%22%20y1%3D%220%25%22%20x2%3D%22100%25%22%20y2%3D%22100%25%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%232563EB%22%20%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%2360A5FA%22%20%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22120%22%20height%3D%22120%22%20rx%3D%2260%22%20fill%3D%22url(%23g)%22%20%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2260%22%20cy%3D%2244%22%20r%3D%2220%22%20fill%3D%22rgba(255%2C255%2C255%2C0.22)%22%20%2F%3E%0A%20%20%20%20%3Cpath%20d%3D%22M24%20106%20C24%2078%2C%2096%2078%2C%2096%20106%22%20fill%3D%22rgba(255%2C255%2C255%2C0.22)%22%20%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20fill%3D%22%23ffffff%22%20font-family%3D%22Plus%20Jakarta%20Sans%2C%20Cairo%2C%20sans-serif%22%20font-weight%3D%22700%22%20font-size%3D%2234%22%3EAM%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+      "email": "ali@propsphere.eg",
+      "phone": "",
+      "location": "القاهرة الجديدة",
+      "assignedProjects": [
+        "ليدز مغتربين"
+      ],
+      "isActiveForRouting": true,
+      "routingWeight": 1,
+      "preferredLang": "ar",
+      "createdAt": "2026-10-31T10:58:42.819Z"
+    },
+    {
+      "id": "usr_1793444555504_yc9q",
+      "username": "asmaa",
+      "clientAuthDigest": "f9c617cb0d02d07a87f57271744c5f7144c667dfb1c311422c88c728535c9476",
+      "accessPassword": "hd123",
+      "fullName": "asmaa mohamed",
+      "roleId": "role_employee",
+      "jobTitle": "Property Sales Consultant",
+      "jobTitleAr": "مسؤول مبيعات عقارية",
+      "avatarUrl": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22120%22%20height%3D%22120%22%20viewBox%3D%220%200%20120%20120%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%25%22%20y1%3D%220%25%22%20x2%3D%22100%25%22%20y2%3D%22100%25%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%232563EB%22%20%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%2360A5FA%22%20%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22120%22%20height%3D%22120%22%20rx%3D%2260%22%20fill%3D%22url(%23g)%22%20%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%2260%22%20cy%3D%2244%22%20r%3D%2220%22%20fill%3D%22rgba(255%2C255%2C255%2C0.22)%22%20%2F%3E%0A%20%20%20%20%3Cpath%20d%3D%22M24%20106%20C24%2078%2C%2096%2078%2C%2096%20106%22%20fill%3D%22rgba(255%2C255%2C255%2C0.22)%22%20%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20dominant-baseline%3D%22middle%22%20text-anchor%3D%22middle%22%20fill%3D%22%23ffffff%22%20font-family%3D%22Plus%20Jakarta%20Sans%2C%20Cairo%2C%20sans-serif%22%20font-weight%3D%22700%22%20font-size%3D%2234%22%3EAM%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+      "email": "asmaa@propsphere.eg",
+      "phone": "",
+      "location": "القاهرة الجديدة",
+      "assignedProjects": [
+        "ليدز مغتربين"
+      ],
+      "isActiveForRouting": true,
+      "routingWeight": 1,
+      "preferredLang": "ar",
+      "createdAt": "2026-10-31T11:02:35.504Z"
     }
   ],
   "leads": [
@@ -569,7 +590,7 @@
       "status": "Interested",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 175م | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -596,7 +617,7 @@
         {
           "id": "act_1793550605539_st",
           "leadId": "lead_1793537673030_67",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "أحمد راشد (Ahmed Rashed)",
           "type": "status_change",
           "summary": "تغيير حالة العميل من (Fresh Lead) إلى (Interested)",
@@ -605,14 +626,15 @@
         {
           "id": "act_1793537673030_67",
           "leadId": "lead_1793537673030_67",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
       ],
-      "lastContactedAt": "2026-11-01T16:30:05.539Z"
+      "lastContactedAt": "2026-11-01T16:30:05.539Z",
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793537673025_66",
@@ -629,7 +651,7 @@
       "status": "Interested",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 215م | السعر_المناسب: 4.5_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -656,7 +678,7 @@
         {
           "id": "act_1793550615857_st",
           "leadId": "lead_1793537673025_66",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "أحمد راشد (Ahmed Rashed)",
           "type": "status_change",
           "summary": "تغيير حالة العميل من (Fresh Lead) إلى (Interested)",
@@ -665,14 +687,15 @@
         {
           "id": "act_1793537673025_66",
           "leadId": "lead_1793537673025_66",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
       ],
-      "lastContactedAt": "2026-11-01T16:30:15.857Z"
+      "lastContactedAt": "2026-11-01T16:30:15.857Z",
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793537673022_65",
@@ -689,7 +712,7 @@
       "status": "Fresh Lead",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -716,13 +739,14 @@
         {
           "id": "act_1793537673022_65",
           "leadId": "lead_1793537673022_65",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793537673018_64",
@@ -739,7 +763,7 @@
       "status": "Fresh Lead",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 245م | السعر_المناسب: 10_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -766,13 +790,14 @@
         {
           "id": "act_1793537673018_64",
           "leadId": "lead_1793537673018_64",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793537673013_63",
@@ -789,7 +814,7 @@
       "status": "Fresh Lead",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 175م | السعر_المناسب: 4.5_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -816,13 +841,14 @@
         {
           "id": "act_1793537673013_63",
           "leadId": "lead_1793537673013_63",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793537673009_62",
@@ -839,7 +865,7 @@
       "status": "Fresh Lead",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 185م | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -866,13 +892,14 @@
         {
           "id": "act_1793537673009_62",
           "leadId": "lead_1793537673009_62",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793537673005_61",
@@ -889,7 +916,7 @@
       "status": "Fresh Lead",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 175م | السعر_المناسب: 4.5_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -916,13 +943,14 @@
         {
           "id": "act_1793537673005_61",
           "leadId": "lead_1793537673005_61",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793537673001_60",
@@ -939,7 +967,7 @@
       "status": "Fresh Lead",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 245م | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -966,13 +994,14 @@
         {
           "id": "act_1793537673001_60",
           "leadId": "lead_1793537673001_60",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793537672992_59",
@@ -989,7 +1018,7 @@
       "status": "Fresh Lead",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 185م | السعر_المناسب: 6_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -1016,13 +1045,14 @@
         {
           "id": "act_1793537672992_59",
           "leadId": "lead_1793537672992_59",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793537672988_58",
@@ -1039,7 +1069,7 @@
       "status": "Fresh Lead",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 245م | السعر_المناسب: 7_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -1066,13 +1096,14 @@
         {
           "id": "act_1793537672988_58",
           "leadId": "lead_1793537672988_58",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793537672985_57",
@@ -1082,20 +1113,16 @@
       "email": "",
       "source": "Google Drive - شيت CRM1",
       "campaignName": "CRM1_GoogleDrive_Form",
-      "projectInterest": "You don't have enough permission. Please refer to this help: https://www.facebook.com/business/help/766393076839635",
+      "projectInterest": "ليدز مغتربين",
       "propertyType": "175م",
       "budgetMin": 3600000,
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: You don't have enough permission. Please refer to this help: https://www.facebook.com/business/help/766393076839635 | ما_المساحة_المناسبة_؟: 175م | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
-        {
-          "question": "campaign_name",
-          "answer": "You don't have enough permission. Please refer to this help: https://www.facebook.com/business/help/766393076839635"
-        },
         {
           "question": "ما_المساحة_المناسبة_؟",
           "answer": "175م"
@@ -1116,13 +1143,14 @@
         {
           "id": "act_1793537672985_57",
           "leadId": "lead_1793537672985_57",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793537672982_56",
@@ -1139,7 +1167,7 @@
       "status": "Fresh Lead",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -1166,13 +1194,14 @@
         {
           "id": "act_1793537672982_56",
           "leadId": "lead_1793537672982_56",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793537672979_55",
@@ -1189,7 +1218,7 @@
       "status": "Fresh Lead",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 175م | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -1216,13 +1245,14 @@
         {
           "id": "act_1793537672979_55",
           "leadId": "lead_1793537672979_55",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793537672976_54",
@@ -1239,7 +1269,7 @@
       "status": "Fresh Lead",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 175م | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -1266,13 +1296,14 @@
         {
           "id": "act_1793537672976_54",
           "leadId": "lead_1793537672976_54",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793537672973_53",
@@ -1289,7 +1320,7 @@
       "status": "Fresh Lead",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 245م | السعر_المناسب: 4.5_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -1316,13 +1347,14 @@
         {
           "id": "act_1793537672973_53",
           "leadId": "lead_1793537672973_53",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793537672969_52",
@@ -1339,7 +1371,7 @@
       "status": "Fresh Lead",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 245م | السعر_المناسب: 7_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -1366,13 +1398,14 @@
         {
           "id": "act_1793537672969_52",
           "leadId": "lead_1793537672969_52",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793537672966_51",
@@ -1389,7 +1422,7 @@
       "status": "Fresh Lead",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 245م | السعر_المناسب: 6_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -1416,13 +1449,14 @@
         {
           "id": "act_1793537672966_51",
           "leadId": "lead_1793537672966_51",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793537672963_50",
@@ -1439,7 +1473,7 @@
       "status": "Fresh Lead",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 185م | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -1466,13 +1500,14 @@
         {
           "id": "act_1793537672963_50",
           "leadId": "lead_1793537672963_50",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793537672960_49",
@@ -1489,7 +1524,7 @@
       "status": "Fresh Lead",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -1516,13 +1551,14 @@
         {
           "id": "act_1793537672960_49",
           "leadId": "lead_1793537672960_49",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793537672957_48",
@@ -1539,7 +1575,7 @@
       "status": "Fresh Lead",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 215م | السعر_المناسب: 6_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -1566,13 +1602,14 @@
         {
           "id": "act_1793537672957_48",
           "leadId": "lead_1793537672957_48",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793537672939_47",
@@ -1589,7 +1626,7 @@
       "status": "Fresh Lead",
       "priority": "High",
       "assignedTo": "usr_admin2",
-      "assignedBy": "usr_admin",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 215م | السعر_المناسب: 7_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -1616,13 +1653,14 @@
         {
           "id": "act_1793537672939_47",
           "leadId": "lead_1793537672939_47",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
           "summary": "تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + 4 إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-11-01T12:54:32.937Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793090142065_46",
@@ -1638,8 +1676,8 @@
       "budgetMax": 6000000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 245م | السعر_المناسب: 6_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -1661,18 +1699,28 @@
       ],
       "nextFollowUpAt": "2026-10-27",
       "createdAt": "2026-10-27T08:35:42.025Z",
-      "updatedAt": "2026-10-27T08:35:42.025Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366112_jrth",
+          "leadId": "lead_1793090142065_46",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793090142065_46",
           "leadId": "lead_1793090142065_46",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-27T08:35:42.025Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793090142060_45",
@@ -1688,8 +1736,8 @@
       "budgetMax": 6000000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 215م | السعر_المناسب: 6_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -1711,18 +1759,28 @@
       ],
       "nextFollowUpAt": "2026-10-27",
       "createdAt": "2026-10-27T08:35:42.025Z",
-      "updatedAt": "2026-10-27T08:35:42.025Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366112_b7mw",
+          "leadId": "lead_1793090142060_45",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793090142060_45",
           "leadId": "lead_1793090142060_45",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-27T08:35:42.025Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793090142055_44",
@@ -1738,8 +1796,8 @@
       "budgetMax": 6000000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 225م | السعر_المناسب: 6_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -1761,18 +1819,28 @@
       ],
       "nextFollowUpAt": "2026-10-27",
       "createdAt": "2026-10-27T08:35:42.025Z",
-      "updatedAt": "2026-10-27T08:35:42.025Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366112_e2lh",
+          "leadId": "lead_1793090142055_44",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793090142055_44",
           "leadId": "lead_1793090142055_44",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-27T08:35:42.025Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793090142051_43",
@@ -1788,8 +1856,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -1811,18 +1879,28 @@
       ],
       "nextFollowUpAt": "2026-10-27",
       "createdAt": "2026-10-27T08:35:42.025Z",
-      "updatedAt": "2026-10-27T08:35:42.025Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366112_gp67",
+          "leadId": "lead_1793090142051_43",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793090142051_43",
           "leadId": "lead_1793090142051_43",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-27T08:35:42.025Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793090142045_42",
@@ -1838,8 +1916,8 @@
       "budgetMax": 6000000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 225م | السعر_المناسب: 6_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -1861,18 +1939,28 @@
       ],
       "nextFollowUpAt": "2026-10-27",
       "createdAt": "2026-10-27T08:35:42.025Z",
-      "updatedAt": "2026-10-27T08:35:42.025Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366112_tmom",
+          "leadId": "lead_1793090142045_42",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793090142045_42",
           "leadId": "lead_1793090142045_42",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-27T08:35:42.025Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793090142040_41",
@@ -1888,8 +1976,8 @@
       "budgetMax": 6000000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 6_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -1911,18 +1999,28 @@
       ],
       "nextFollowUpAt": "2026-10-27",
       "createdAt": "2026-10-27T08:35:42.025Z",
-      "updatedAt": "2026-10-27T08:35:42.025Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366112_m3ib",
+          "leadId": "lead_1793090142040_41",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793090142040_41",
           "leadId": "lead_1793090142040_41",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-27T08:35:42.025Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793090142036_40",
@@ -1938,8 +2036,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -1961,18 +2059,28 @@
       ],
       "nextFollowUpAt": "2026-10-27",
       "createdAt": "2026-10-27T08:35:42.025Z",
-      "updatedAt": "2026-10-27T08:35:42.025Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366112_b7gy",
+          "leadId": "lead_1793090142036_40",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793090142036_40",
           "leadId": "lead_1793090142036_40",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-27T08:35:42.025Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793090142030_39",
@@ -1988,8 +2096,8 @@
       "budgetMax": 6000000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 215م | السعر_المناسب: 6_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -2011,18 +2119,28 @@
       ],
       "nextFollowUpAt": "2026-10-27",
       "createdAt": "2026-10-27T08:35:42.025Z",
-      "updatedAt": "2026-10-27T08:35:42.025Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366112_7fho",
+          "leadId": "lead_1793090142030_39",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793090142030_39",
           "leadId": "lead_1793090142030_39",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-27T08:35:42.025Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793004176296_38",
@@ -2037,8 +2155,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 185م | السعر_المناسب: 4.5_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -2060,12 +2178,21 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T11:29:11.472Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366112_tpfx",
+          "leadId": "lead_1793004176296_38",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793014151472_tr",
           "leadId": "lead_1793004176296_38",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "أحمد راشد (Ahmed Rashed)",
           "type": "transfer",
           "summary": "تم نقل الليد إلى أحمد راشد (Ahmed Rashed) بواسطة أحمد راشد (Ahmed Rashed)",
@@ -2074,13 +2201,14 @@
         {
           "id": "act_1793004176296_38",
           "leadId": "lead_1793004176296_38",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793004176295_37",
@@ -2095,8 +2223,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -2118,18 +2246,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_c7fc",
+          "leadId": "lead_1793004176295_37",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176295_37",
           "leadId": "lead_1793004176295_37",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793004176294_36",
@@ -2144,8 +2282,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -2167,18 +2305,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_9qxf",
+          "leadId": "lead_1793004176294_36",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176294_36",
           "leadId": "lead_1793004176294_36",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793004176293_35",
@@ -2193,8 +2341,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -2216,18 +2364,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_7y3d",
+          "leadId": "lead_1793004176293_35",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176293_35",
           "leadId": "lead_1793004176293_35",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793004176292_34",
@@ -2242,8 +2400,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 185م | السعر_المناسب: 4.5_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -2265,18 +2423,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_ltm3",
+          "leadId": "lead_1793004176292_34",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176292_34",
           "leadId": "lead_1793004176292_34",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793004176291_33",
@@ -2291,8 +2459,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -2314,18 +2482,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_3r5b",
+          "leadId": "lead_1793004176291_33",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176291_33",
           "leadId": "lead_1793004176291_33",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793004176290_32",
@@ -2340,8 +2518,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 175م | السعر_المناسب: 4.5_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -2363,18 +2541,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_cq99",
+          "leadId": "lead_1793004176290_32",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176290_32",
           "leadId": "lead_1793004176290_32",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793004176289_31",
@@ -2389,8 +2577,8 @@
       "budgetMax": 6000000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 185م | السعر_المناسب: 6_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -2412,18 +2600,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_tv1h",
+          "leadId": "lead_1793004176289_31",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176289_31",
           "leadId": "lead_1793004176289_31",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793004176288_30",
@@ -2438,8 +2636,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 175م | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -2461,18 +2659,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_ff1i",
+          "leadId": "lead_1793004176288_30",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176288_30",
           "leadId": "lead_1793004176288_30",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793004176287_29",
@@ -2487,8 +2695,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -2510,18 +2718,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_mn6r",
+          "leadId": "lead_1793004176287_29",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176287_29",
           "leadId": "lead_1793004176287_29",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793004176286_28",
@@ -2536,8 +2754,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 4.5_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -2559,18 +2777,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_skpf",
+          "leadId": "lead_1793004176286_28",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176286_28",
           "leadId": "lead_1793004176286_28",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793004176285_27",
@@ -2585,8 +2813,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 175م | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -2608,18 +2836,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_r5ui",
+          "leadId": "lead_1793004176285_27",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176285_27",
           "leadId": "lead_1793004176285_27",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793004176284_26",
@@ -2634,8 +2872,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 175م | السعر_المناسب: 4.5_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -2657,18 +2895,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_w6rt",
+          "leadId": "lead_1793004176284_26",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176284_26",
           "leadId": "lead_1793004176284_26",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793004176283_25",
@@ -2683,8 +2931,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 215م | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -2706,18 +2954,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_vi7h",
+          "leadId": "lead_1793004176283_25",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176283_25",
           "leadId": "lead_1793004176283_25",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793004176282_24",
@@ -2732,8 +2990,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -2755,18 +3013,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_6kmd",
+          "leadId": "lead_1793004176282_24",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176282_24",
           "leadId": "lead_1793004176282_24",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793004176281_23",
@@ -2781,8 +3049,8 @@
       "budgetMax": 6000000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 245م | السعر_المناسب: 6_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -2804,18 +3072,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_ssd4",
+          "leadId": "lead_1793004176281_23",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176281_23",
           "leadId": "lead_1793004176281_23",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793004176280_22",
@@ -2830,8 +3108,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 4.5_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -2853,18 +3131,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_8yi4",
+          "leadId": "lead_1793004176280_22",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176280_22",
           "leadId": "lead_1793004176280_22",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793004176279_21",
@@ -2879,8 +3167,8 @@
       "budgetMax": 6000000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 215م | السعر_المناسب: 6_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -2902,18 +3190,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_njro",
+          "leadId": "lead_1793004176279_21",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176279_21",
           "leadId": "lead_1793004176279_21",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793004176279_20",
@@ -2928,8 +3226,8 @@
       "budgetMax": 7000000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 7_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -2951,18 +3249,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_63oc",
+          "leadId": "lead_1793004176279_20",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176279_20",
           "leadId": "lead_1793004176279_20",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793004176278_19",
@@ -2977,8 +3285,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 175م | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -3000,18 +3308,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_br06",
+          "leadId": "lead_1793004176278_19",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176278_19",
           "leadId": "lead_1793004176278_19",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793004176277_18",
@@ -3026,8 +3344,8 @@
       "budgetMax": 6000000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 185م | السعر_المناسب: 6_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -3049,18 +3367,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_iv5h",
+          "leadId": "lead_1793004176277_18",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176277_18",
           "leadId": "lead_1793004176277_18",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793004176276_17",
@@ -3075,8 +3403,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 185م | السعر_المناسب: 4.5_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -3098,18 +3426,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_3qd4",
+          "leadId": "lead_1793004176276_17",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176276_17",
           "leadId": "lead_1793004176276_17",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793004176276_16",
@@ -3124,8 +3462,8 @@
       "budgetMax": 6000000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 6_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -3147,18 +3485,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_d2uc",
+          "leadId": "lead_1793004176276_16",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176276_16",
           "leadId": "lead_1793004176276_16",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793004176275_15",
@@ -3173,8 +3521,8 @@
       "budgetMax": 6000000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 175م | السعر_المناسب: 6_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -3196,18 +3544,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_fgjw",
+          "leadId": "lead_1793004176275_15",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176275_15",
           "leadId": "lead_1793004176275_15",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793004176275_14",
@@ -3222,8 +3580,8 @@
       "budgetMax": 6000000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 215م | السعر_المناسب: 6_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -3245,18 +3603,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_vubz",
+          "leadId": "lead_1793004176275_14",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176275_14",
           "leadId": "lead_1793004176275_14",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793004176274_13",
@@ -3271,8 +3639,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 215م | السعر_المناسب: 4.5_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -3294,18 +3662,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_8kem",
+          "leadId": "lead_1793004176274_13",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176274_13",
           "leadId": "lead_1793004176274_13",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793004176273_12",
@@ -3320,8 +3698,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 215م | السعر_المناسب: 4.5_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -3343,18 +3721,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_4nes",
+          "leadId": "lead_1793004176273_12",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176273_12",
           "leadId": "lead_1793004176273_12",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793004176273_11",
@@ -3369,8 +3757,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 215م | السعر_المناسب: 4.5_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -3392,18 +3780,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_rbbs",
+          "leadId": "lead_1793004176273_11",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176273_11",
           "leadId": "lead_1793004176273_11",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793004176272_10",
@@ -3418,8 +3816,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 4.5_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -3441,18 +3839,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_sytx",
+          "leadId": "lead_1793004176272_10",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176272_10",
           "leadId": "lead_1793004176272_10",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793004176272_9",
@@ -3467,8 +3875,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 185م | السعر_المناسب: 4.5_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -3490,18 +3898,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_qiam",
+          "leadId": "lead_1793004176272_9",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176272_9",
           "leadId": "lead_1793004176272_9",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793004176271_8",
@@ -3516,8 +3934,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -3539,18 +3957,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_tagf",
+          "leadId": "lead_1793004176271_8",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176271_8",
           "leadId": "lead_1793004176271_8",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793004176271_7",
@@ -3565,8 +3993,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -3588,18 +4016,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_fsg7",
+          "leadId": "lead_1793004176271_7",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176271_7",
           "leadId": "lead_1793004176271_7",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793004176269_6",
@@ -3614,8 +4052,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 185م | السعر_المناسب: 4.5_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -3637,18 +4075,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_5ixu",
+          "leadId": "lead_1793004176269_6",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176269_6",
           "leadId": "lead_1793004176269_6",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793004176269_5",
@@ -3663,8 +4111,8 @@
       "budgetMax": 7000000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 245م | السعر_المناسب: 7_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -3686,18 +4134,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_l0yc",
+          "leadId": "lead_1793004176269_5",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176269_5",
           "leadId": "lead_1793004176269_5",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793004176268_4",
@@ -3712,8 +4170,8 @@
       "budgetMax": 6000000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 215م | السعر_المناسب: 6_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -3735,18 +4193,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_9u74",
+          "leadId": "lead_1793004176268_4",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176268_4",
           "leadId": "lead_1793004176268_4",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793004176267_2",
@@ -3761,8 +4229,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 4.5_مليون | نظام_السداد: كاش_مع_خصم",
       "formResponses": [
         {
@@ -3784,18 +4252,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_fq50",
+          "leadId": "lead_1793004176267_2",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176267_2",
           "leadId": "lead_1793004176267_2",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "كاش مع خصم"
     },
     {
       "id": "lead_1793004176266_1",
@@ -3810,8 +4288,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: اقل_من_175 | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -3833,18 +4311,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_tjeh",
+          "leadId": "lead_1793004176266_1",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176266_1",
           "leadId": "lead_1793004176266_1",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     },
     {
       "id": "lead_1793004176265_0",
@@ -3859,8 +4347,8 @@
       "budgetMax": 4500000,
       "status": "Fresh Lead",
       "priority": "High",
-      "assignedTo": "usr_1793010490703_1p0c",
-      "assignedBy": "usr_admin",
+      "assignedTo": "usr_admin2",
+      "assignedBy": "usr_admin2",
       "notes": "campaign_name: ليدز مغتربين | ما_المساحة_المناسبة_؟: 215م | السعر_المناسب: 4.5_مليون | نظام_السداد: تسهيلات_فى_السداد_على_12_شهر",
       "formResponses": [
         {
@@ -3882,18 +4370,28 @@
       ],
       "nextFollowUpAt": "2026-10-26",
       "createdAt": "2026-10-26T08:42:56.263Z",
-      "updatedAt": "2026-10-26T08:42:56.263Z",
+      "updatedAt": "2026-11-01T16:59:26.112Z",
       "activities": [
+        {
+          "id": "act_1793552366113_bjqe",
+          "leadId": "lead_1793004176265_0",
+          "userId": "usr_admin2",
+          "userName": "حسن شحاتة (Hassan Shehata)",
+          "type": "transfer",
+          "summary": "نقل الليد من (عمر احمد) إلى (حسن شحاتة (Hassan Shehata)) بواسطة حسن شحاتة (Hassan Shehata)",
+          "createdAt": "2026-11-01T16:59:26.112Z"
+        },
         {
           "id": "act_1793004176265_0",
           "leadId": "lead_1793004176265_0",
-          "userId": "usr_admin",
+          "userId": "usr_admin2",
           "userName": "CRM1 Auto-Sync (كل 15 دقيقة)",
           "type": "sheet_import",
-          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتوجيهه إلى عمر احمد.",
+          "summary": "تم استيراد العميل من شيت CRM1 (4 إجابات من الفورم) وتعيينه إلى حسن شحاتة (Hassan Shehata).",
           "createdAt": "2026-10-26T08:42:56.263Z"
         }
-      ]
+      ],
+      "paymentPlan": "تسهيلات فى السداد على 12 شهر"
     }
   ],
   "properties": [],
@@ -3923,12 +4421,1800 @@
         "budgetMax": "ما هي الميزانية التقريبية أو المقدم المتاح؟",
         "notes": "ملاحظات إضافية"
       },
-      "lastSyncedAt": "2026-11-01T16:43:21.727Z",
+      "lastSyncedAt": "2026-11-01T17:08:44.140Z",
       "totalImportedCount": 67,
       "createdAt": "2026-10-26T08:31:51.096Z"
     }
   ],
   "syncLogs": [
+    {
+      "id": "slog_1793552924142",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:08:44.140Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552915782",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:08:35.781Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552911819",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:08:31.819Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552907816",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:08:27.816Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552904032",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:08:24.031Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552900169",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:08:20.168Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552896639",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:08:16.639Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552893211",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:08:13.210Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552889349",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:08:09.349Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552885385",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:08:05.384Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552881213",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:08:01.213Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552877308",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:07:57.307Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552877034",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:07:57.033Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552873569",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:07:53.568Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552869573",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:07:49.572Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552865832",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:07:45.831Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552861449",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:07:41.448Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552857581",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:07:37.580Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552853906",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:07:33.906Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552850204",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:07:30.203Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552846402",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:07:26.401Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552838459",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:07:18.458Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552829174",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:07:09.174Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552825648",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:07:05.648Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552821713",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:07:01.712Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552818135",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:06:58.134Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552814512",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:06:54.512Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552811029",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:06:51.029Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552807386",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:06:47.385Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552803833",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:06:43.832Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552800285",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:06:40.285Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552796388",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:06:36.387Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552792228",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:06:32.228Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552788485",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:06:28.485Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552784789",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:06:24.789Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552781153",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:06:21.153Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552777532",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:06:17.531Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552773954",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:06:13.954Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552770280",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:06:10.279Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552766775",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:06:06.774Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552763253",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:06:03.252Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552759673",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:05:59.672Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552757093",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:05:57.093Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552755242",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:05:55.242Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552751613",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:05:51.612Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552747974",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:05:47.974Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552744111",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:05:44.111Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552740705",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:05:40.704Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552737340",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:05:37.340Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552733949",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:05:33.949Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552730685",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:05:30.685Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552727276",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:05:27.276Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552724266",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:05:24.265Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552721267",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:05:21.267Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552718265",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:05:18.265Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552715269",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:05:15.269Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552712265",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:05:12.264Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552709270",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:05:09.270Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552706357",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:05:06.356Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552703263",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:05:03.263Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552700291",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:05:00.290Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552696348",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:04:56.347Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552692316",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:04:52.315Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552689294",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:04:49.293Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552685281",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:04:45.280Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552682259",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:04:42.258Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552678303",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:04:38.302Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552675307",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:04:35.306Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552666465",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:04:26.465Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552662170",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:04:22.170Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552658500",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:04:18.499Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552654883",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:04:14.883Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552651642",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:04:11.642Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552648316",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:04:08.316Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552645272",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:04:05.272Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552641289",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:04:01.288Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552638273",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:03:58.273Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552637036",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:03:57.035Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552635321",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:03:55.320Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552631259",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:03:51.259Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552628294",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:03:48.293Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552625279",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:03:45.279Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552622282",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:03:42.281Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552618287",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:03:38.287Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552614294",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:03:34.294Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552611280",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:03:31.280Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552608278",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:03:28.277Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552605270",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:03:25.270Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552601302",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:03:21.302Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552598284",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:03:18.284Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552595292",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:03:15.292Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552591297",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:03:11.296Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552587273",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:03:07.273Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552583281",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:03:03.281Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552579288",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:02:59.288Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552575279",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:02:55.279Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552569331",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:02:49.330Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552565320",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:02:45.320Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552558719",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:02:38.719Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552554437",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:02:34.436Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552550519",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:02:30.518Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552546908",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:02:26.907Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552542963",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:02:22.962Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552539489",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:02:19.489Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552535827",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:02:15.826Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552532110",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:02:12.109Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552528460",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:02:08.459Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552525279",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:02:05.279Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552521290",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:02:01.290Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552517019",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:01:57.019Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552515826",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:01:55.825Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552511975",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:01:51.975Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552508218",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:01:48.217Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552504407",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:01:44.407Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552500609",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:01:40.609Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552496698",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:01:36.697Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552492530",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:01:32.530Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552488498",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:01:28.497Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552482507",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:01:22.506Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552478542",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:01:18.542Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552474657",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:01:14.656Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552470812",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:01:10.811Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552466875",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:01:06.875Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552462915",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:01:02.915Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552458814",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:00:58.813Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552453944",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:00:53.944Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552449909",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:00:49.908Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552445997",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:00:45.996Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552442204",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:00:42.203Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552438238",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:00:38.238Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552434082",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:00:34.082Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552430089",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:00:30.088Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552426176",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:00:26.175Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552422376",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:00:22.375Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552418571",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:00:18.570Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552414762",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:00:14.762Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552410848",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:00:10.848Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552406830",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:00:06.829Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552402908",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T17:00:02.907Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552398686",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T16:59:58.686Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552397060",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T16:59:57.059Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552394684",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T16:59:54.683Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552390590",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T16:59:50.590Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552386183",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T16:59:46.182Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552382349",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T16:59:42.348Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552378540",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T16:59:38.540Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552374703",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T16:59:34.703Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552366607",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T16:59:26.607Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
+    {
+      "id": "slog_1793552278571",
+      "connectionId": "sheet_conn_1",
+      "connectionName": "CRM1 (المصدر الأساسي - Google Drive)",
+      "timestamp": "2026-11-01T16:57:58.569Z",
+      "rowsScanned": 68,
+      "newLeadsImported": 0,
+      "duplicatesSkipped": 67,
+      "status": "success",
+      "message": "شيت CRM1: تم فحص 68 صفوف، استيراد 0 عميل جديد (الاسم + الهاتف + إجابات الفورم)، تخطي 67 مكرر، واستبعاد 12 خانات ID غير مفيدة.",
+      "assignmentsSummary": []
+    },
     {
       "id": "slog_1793551401728",
       "connectionId": "sheet_conn_1",
@@ -16694,6 +18980,18 @@
   ],
   "notifications": [
     {
+      "id": "notif_1793552366127_bulk",
+      "userId": "usr_admin2",
+      "title": "46 Lead(s) Transferred to You",
+      "titleAr": "تم نقل 46 ليدز إلى حسابك فوراً",
+      "message": "حسن شحاتة (Hassan Shehata) transferred 46 lead(s) to your pipeline.",
+      "messageAr": "قام حسن شحاتة (Hassan Shehata) بنقل 46 عميل إلى قائمة مبيعاتك للمتابعة الفورية.",
+      "type": "lead_transferred",
+      "relatedLeadId": "lead_1793090142065_46",
+      "isRead": false,
+      "createdAt": "2026-11-01T16:59:26.112Z"
+    },
+    {
       "id": "notif_1793537673030_67",
       "userId": "usr_admin2",
       "title": "New Lead Imported from CRM1 Sheet",
@@ -17043,7 +19341,7 @@
     },
     {
       "id": "notif_1793014151472_tr",
-      "userId": "usr_admin",
+      "userId": "usr_admin2",
       "title": "Lead Transferred to You",
       "titleAr": "تم نقل ليد جديد إليك",
       "message": "أشرف محمد (Palm Hills New Cairo) was transferred to you by أحمد راشد (Ahmed Rashed).",
@@ -17511,9 +19809,12 @@
     }
   ],
   "projects": [
-    "ليدز مغتربين",
-    "You don't have enough permission. Please refer to this help: https://www.facebook.com/business/help/766393076839635"
+    "ليدز مغتربين"
   ],
   "roundRobinCursor": 47,
-  "projectsCatalog": []
+  "projectsCatalog": [],
+  "deletedUserIds": [],
+  "deletedProjectIds": [],
+  "deletedPropertyIds": [],
+  "deletedLeadIds": []
 }
