@@ -10,11 +10,19 @@ import {
   getDocs,
   deleteDoc,
   onSnapshot,
-  getDocFromServer,
+  terminate,
+  setLogLevel,
   Unsubscribe,
 } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import appletConfig from '../../firebase-applet-config.json';
+
+// Silence internal @firebase/firestore backoff and quota-exceeded console.error spam
+try {
+  setLogLevel('silent');
+} catch {
+  // ignore
+}
 
 export enum OperationType {
   CREATE = 'create',
@@ -45,6 +53,22 @@ export interface FirestoreErrorInfo {
 let firebaseApp: FirebaseApp | null = null;
 let firestoreDb: Firestore | null = null;
 let firebaseAuth: Auth | null = null;
+let clientWriteQuotaExhausted = false;
+let lastSavedWorkspaceFingerprint = '';
+let lastSavedWorkspaceAtMs = 0;
+
+async function tripClientWriteCircuitBreaker(): Promise<void> {
+  clientWriteQuotaExhausted = true;
+  const activeDb = firestoreDb;
+  firestoreDb = null;
+  if (activeDb) {
+    try {
+      await terminate(activeDb);
+    } catch {
+      // ignore termination errors
+    }
+  }
+}
 
 function getFirebaseConfig() {
   const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
@@ -67,8 +91,7 @@ export function getClientApp(): FirebaseApp | null {
     if (!cfg.projectId || !cfg.apiKey) return null;
     firebaseApp = getApps().length === 0 ? initializeApp(cfg) : getApp();
     return firebaseApp;
-  } catch (err) {
-    console.error('[Firebase] Failed to initialize Firebase App:', err);
+  } catch {
     return null;
   }
 }
@@ -88,8 +111,10 @@ export function getClientAuth(): Auth | null {
 
 export function getClientFirestore(): Firestore | null {
   if (typeof window === 'undefined') return null;
+  if (clientWriteQuotaExhausted) return null;
   if (firestoreDb) return firestoreDb;
   try {
+    setLogLevel('silent');
     const app = getClientApp();
     if (!app) return null;
     const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
@@ -109,8 +134,7 @@ export function getClientFirestore(): Firestore | null {
           : getFirestore(app);
     }
     return firestoreDb;
-  } catch (err) {
-    console.error('[Firebase] Failed to get Firestore instance:', err);
+  } catch {
     return null;
   }
 }
@@ -120,9 +144,19 @@ export function handleFirestoreError(
   operationType: OperationType,
   path: string | null
 ): never {
+  const errMsg = error instanceof Error ? error.message : String(error);
+  if (
+    errMsg.includes('resource-exhausted') ||
+    errMsg.includes('RESOURCE_EXHAUSTED') ||
+    errMsg.includes('Quota') ||
+    errMsg.includes('FIRESTORE_WRITE_TIMEOUT')
+  ) {
+    void tripClientWriteCircuitBreaker();
+    throw new Error(errMsg);
+  }
   const authInstance = getClientAuth();
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errMsg,
     authInfo: {
       userId: authInstance?.currentUser?.uid,
       email: authInstance?.currentUser?.email,
@@ -138,7 +172,6 @@ export function handleFirestoreError(
     operationType,
     path,
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
 
@@ -158,6 +191,7 @@ export function subscribeToFirestoreWorkspace(
   onUpdate: (data: any) => void,
   onError?: (err: any) => void
 ): Unsubscribe {
+  if (clientWriteQuotaExhausted) return () => {};
   const db = getClientFirestore();
   if (!db) return () => {};
   const docRef = doc(db, 'crm_state', 'workspace');
@@ -186,7 +220,6 @@ export function subscribeToFirestoreWorkspace(
       }, 3000);
     },
     (error) => {
-      console.warn('[Firestore] Real-time snapshot listener notice:', error?.message || error);
       if (onError) onError(error);
     }
   );
@@ -280,6 +313,7 @@ export function doesUserMatchLoginIdentifier(u: any, rawIdentifier: string): boo
  * Fetches the shared CRM workspace state and users collection directly from Firebase Firestore.
  */
 export async function fetchFirestoreWorkspace(): Promise<any | null> {
+  if (clientWriteQuotaExhausted) return null;
   const db = getClientFirestore();
   if (!db) return null;
 
@@ -316,8 +350,7 @@ export async function fetchFirestoreWorkspace(): Promise<any | null> {
           ? mergeRecordsById(baseUsers, collectionUsers)
           : baseUsers,
     };
-  } catch (error) {
-    console.warn('[Firestore] Error fetching workspace:', error);
+  } catch {
     return null;
   }
 }
@@ -326,6 +359,7 @@ export async function fetchFirestoreWorkspace(): Promise<any | null> {
  * Queries Firebase Firestore directly for a user by username, email, or fullName (case-insensitive & space-tolerant).
  */
 export async function queryFirestoreUserByUsername(username: string): Promise<any | null> {
+  if (clientWriteQuotaExhausted) return null;
   const db = getClientFirestore();
   if (!db) return null;
   const cleanUsername = String(username || '').trim();
@@ -352,8 +386,8 @@ export async function queryFirestoreUserByUsername(username: string): Promise<an
         if (found) return found;
       }
     }
-  } catch (error) {
-    console.warn(`[Firestore] query user ${cleanUsername} error:`, error);
+  } catch {
+    // ignore
   }
   return null;
 }
@@ -362,18 +396,27 @@ export async function queryFirestoreUserByUsername(username: string): Promise<an
  * Persists a single user record directly to the `users` collection in Firebase Firestore.
  */
 export async function saveFirestoreUser(user: any): Promise<void> {
+  if (clientWriteQuotaExhausted) return;
   const db = getClientFirestore();
   if (!db || !user || !user.id) return;
   const path = `users/${user.id}`;
   try {
     const cleanUser = JSON.parse(JSON.stringify(user));
-    await setDoc(doc(db, 'users', user.id), cleanUser, { merge: true });
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('FIRESTORE_WRITE_TIMEOUT')), 2500);
+    });
+    await Promise.race([
+      setDoc(doc(db, 'users', user.id), cleanUser, { merge: true }),
+      timeoutPromise,
+    ]);
+    if (timer) clearTimeout(timer);
   } catch (error) {
-    console.error(`[Firestore] Error saving user ${user.id}:`, error);
+    await tripClientWriteCircuitBreaker();
     try {
       handleFirestoreError(error, OperationType.WRITE, path);
     } catch {
-      // handled
+      // handled gracefully
     }
   }
 }
@@ -382,17 +425,26 @@ export async function saveFirestoreUser(user: any): Promise<void> {
  * Deletes a user record from the `users` collection in Firebase Firestore.
  */
 export async function removeFirestoreUser(userId: string): Promise<void> {
+  if (clientWriteQuotaExhausted) return;
   const db = getClientFirestore();
   if (!db || !userId) return;
   const path = `users/${userId}`;
   try {
-    await deleteDoc(doc(db, 'users', userId));
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('FIRESTORE_WRITE_TIMEOUT')), 2500);
+    });
+    await Promise.race([
+      deleteDoc(doc(db, 'users', userId)),
+      timeoutPromise,
+    ]);
+    if (timer) clearTimeout(timer);
   } catch (error) {
-    console.error(`[Firestore] Error deleting user ${userId}:`, error);
+    await tripClientWriteCircuitBreaker();
     try {
       handleFirestoreError(error, OperationType.DELETE, path);
     } catch {
-      // handled
+      // handled gracefully
     }
   }
 }
@@ -401,10 +453,23 @@ export async function removeFirestoreUser(userId: string): Promise<void> {
  * Persists the entire CRM workspace state directly to `crm_state/workspace` in Firebase Firestore.
  */
 export async function saveFirestoreWorkspace(state: any): Promise<void> {
+  if (clientWriteQuotaExhausted || !state) return;
+  const nowMs = Date.now();
+  if (nowMs - lastSavedWorkspaceAtMs < 15000) return;
+
   const db = getClientFirestore();
-  if (!db || !state) return;
+  if (!db) return;
   const pathForWrite = 'crm_state/workspace';
   try {
+    const fingerprint = JSON.stringify({
+      uCount: (state.users || []).length,
+      lCount: (state.leads || []).length,
+      lTop: state.leads?.[0]?.updatedAt || '',
+      pCount: (state.projectsCatalog || []).length,
+      propCount: (state.properties || []).length,
+    });
+    if (fingerprint === lastSavedWorkspaceFingerprint) return;
+
     const payload = JSON.parse(
       JSON.stringify({
         roles: state.roles || [],
@@ -414,20 +479,30 @@ export async function saveFirestoreWorkspace(state: any): Promise<void> {
         deals: state.deals || [],
         events: state.events || [],
         sheetConnections: state.sheetConnections || [],
-        syncLogs: (state.syncLogs || []).slice(0, 50),
-        notifications: (state.notifications || []).slice(0, 100),
+        syncLogs: (state.syncLogs || []).slice(0, 30),
+        notifications: (state.notifications || []).slice(0, 50),
         projects: state.projects || [],
         projectsCatalog: state.projectsCatalog || [],
         updatedAt: new Date().toISOString(),
       })
     );
-    await setDoc(doc(db, 'crm_state', 'workspace'), payload, { merge: true });
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('FIRESTORE_WRITE_TIMEOUT')), 2500);
+    });
+    await Promise.race([
+      setDoc(doc(db, 'crm_state', 'workspace'), payload, { merge: true }),
+      timeoutPromise,
+    ]);
+    if (timer) clearTimeout(timer);
+    lastSavedWorkspaceFingerprint = fingerprint;
+    lastSavedWorkspaceAtMs = nowMs;
   } catch (error) {
-    console.error('[Firestore] Error saving workspace:', error);
+    await tripClientWriteCircuitBreaker();
     try {
       handleFirestoreError(error, OperationType.WRITE, pathForWrite);
     } catch {
-      // handled
+      // handled gracefully
     }
   }
 }

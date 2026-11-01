@@ -769,14 +769,6 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
 
         const { cleaned: merged } = sanitizeCrm1Workspace(rawMerged);
         cachedLiveSnapshot = merged;
-        if (
-          !isCloudStoreTestMode &&
-          firestoreSnap &&
-          Array.isArray(merged.leads) &&
-          merged.leads.length > (firestoreSnap.leads?.length || 0)
-        ) {
-          void saveFirestoreWorkspace(merged).catch(() => {});
-        }
         return merged;
       }
     } catch (err) {

@@ -14,11 +14,20 @@ import {
   collection as clientCollection,
   getDocs as clientGetDocs,
   deleteDoc as clientDeleteDoc,
+  terminate as clientTerminate,
+  setLogLevel as setClientFirestoreLogLevel,
   Firestore as ClientFirestore,
 } from 'firebase/firestore';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+// Silence internal @firebase/firestore gRPC retry/quota console.error spam
+try {
+  setClientFirestoreLogLevel('silent');
+} catch {
+  // ignore
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -99,11 +108,29 @@ try {
 }
 
 let serverClientFirestore: ClientFirestore | null = null;
+let serverFirestoreWriteQuotaExhausted = false;
+let lastSyncedWorkspaceFingerprint = '';
+let lastSyncedTimestampMs = 0;
+
+async function tripServerWriteCircuitBreaker(): Promise<void> {
+  serverFirestoreWriteQuotaExhausted = true;
+  const currentDb = serverClientFirestore;
+  serverClientFirestore = null;
+  if (currentDb) {
+    try {
+      await clientTerminate(currentDb);
+    } catch {
+      // ignore termination errors
+    }
+  }
+}
 
 export function getServerWebFirestore(): ClientFirestore | null {
+  if (serverFirestoreWriteQuotaExhausted) return null;
   if (serverClientFirestore) return serverClientFirestore;
   if (!appletConfig.apiKey || !appletConfig.projectId) return null;
   try {
+    setClientFirestoreLogLevel('silent');
     const app =
       getClientApps().length === 0
         ? initClientApp({
@@ -120,8 +147,7 @@ export function getServerWebFirestore(): ClientFirestore | null {
         ? getClientFirestoreSdk(app, FIRESTORE_DATABASE_ID)
         : getClientFirestoreSdk(app);
     return serverClientFirestore;
-  } catch (err) {
-    console.warn('[Firestore] Failed to initialize server Web SDK bridge:', err);
+  } catch {
     return null;
   }
 }
@@ -145,10 +171,11 @@ function isExplicitFakeDemoUserRecord(u: any): boolean {
 }
 
 /**
- * Pulls all real employee/user accounts from live Google Firebase Cloud Firestore (`users` collection and `crm_state/workspace`),
- * and purges any fake/test accounts (`test1`, `usr_sales1`, etc.) from Firestore.
+ * Pulls real employee/user accounts from live Google Firebase Cloud Firestore (`users` collection and `crm_state/workspace`).
+ * Strictly read-only (never issues delete/write operations during reads).
  */
 export async function pullUsersFromLiveCloudFirestore(): Promise<any[]> {
+  if (serverFirestoreWriteQuotaExhausted) return [];
   const webDb = getServerWebFirestore();
   if (!webDb) return [];
   try {
@@ -174,7 +201,6 @@ export async function pullUsersFromLiveCloudFirestore(): Promise<any[]> {
       for (const d of usersSnap.docs) {
         const u = d.data();
         if (isExplicitFakeDemoUserRecord(u) || FAKE_DEMO_USER_IDS.has(d.id)) {
-          await clientDeleteDoc(clientDoc(webDb, 'users', d.id)).catch(() => {});
           continue;
         }
         if (u && u.id) {
@@ -185,67 +211,80 @@ export async function pullUsersFromLiveCloudFirestore(): Promise<any[]> {
     }
 
     return Array.from(mergedMap.values());
-  } catch (err) {
-    console.warn('[Firestore] Failed to pull users from Cloud Firestore:', err);
+  } catch {
     return [];
   }
 }
 
 export async function removeUserFromLiveCloudFirestore(userId: string): Promise<void> {
-  const webDb = getServerWebFirestore();
-  if (!webDb || !userId) return;
+  if (!firestoreDirectAvailable || serverFirestoreWriteQuotaExhausted || !userId) return;
   try {
-    await clientDeleteDoc(clientDoc(webDb, 'users', userId));
+    await adminFirestore.collection('users').doc(userId).delete();
   } catch {
-    // ignore
+    await tripServerWriteCircuitBreaker();
   }
 }
 
 /**
- * Syncs the full CRM workspace and users collection directly to live Google Firebase Cloud Firestore
- * (`crm_state/workspace` and `users/{id}`) using the provisioned database ID.
+ * Syncs the CRM workspace state to `crm_state/workspace` in Cloud Firestore with deduplication,
+ * rate-limiting, and an automatic circuit-breaker if the free-tier daily write quota is exhausted.
  */
 export async function syncStateToLiveCloudFirestore(state: any): Promise<boolean> {
-  const webDb = getServerWebFirestore();
-  if (!webDb || !state) return false;
+  if (!firestoreDirectAvailable || serverFirestoreWriteQuotaExhausted || !state) return false;
+  const nowMs = Date.now();
+  if (nowMs - lastSyncedTimestampMs < 30000) {
+    return false;
+  }
+
   try {
     const safeUsers = (state.users || [])
       .filter((u: any) => !isExplicitFakeDemoUserRecord(u))
       .map(({ passwordHash: _ph, ...u }: any) => u);
+
+    const coreData = {
+      roles: state.roles || [],
+      users: safeUsers,
+      leads: state.leads || [],
+      properties: state.properties || [],
+      deals: state.deals || [],
+      events: state.events || [],
+      sheetConnections: state.sheetConnections || [],
+      syncLogs: (state.syncLogs || []).slice(0, 30),
+      notifications: (state.notifications || []).slice(0, 50),
+      projects: state.projects || [],
+      projectsCatalog: state.projectsCatalog || [],
+    };
+
+    const fingerprint = JSON.stringify({
+      uCount: safeUsers.length,
+      lCount: coreData.leads.length,
+      lTop: coreData.leads[0]?.updatedAt || '',
+      pCount: coreData.projectsCatalog.length,
+      propCount: coreData.properties.length,
+      dCount: coreData.deals.length,
+    });
+
+    if (fingerprint === lastSyncedWorkspaceFingerprint) {
+      return true;
+    }
+
     const workspacePayload = JSON.parse(
       JSON.stringify({
-        roles: state.roles || [],
-        users: safeUsers,
-        leads: state.leads || [],
-        properties: state.properties || [],
-        deals: state.deals || [],
-        events: state.events || [],
-        sheetConnections: state.sheetConnections || [],
-        syncLogs: (state.syncLogs || []).slice(0, 50),
-        notifications: (state.notifications || []).slice(0, 100),
-        projects: state.projects || [],
-        projectsCatalog: state.projectsCatalog || [],
+        ...coreData,
         updatedAt: new Date().toISOString(),
       })
     );
-    await clientSetDoc(clientDoc(webDb, 'crm_state', 'workspace'), workspacePayload, {
-      merge: true,
-    });
-    for (const u of safeUsers) {
-      if (u && u.id) {
-        await clientSetDoc(
-          clientDoc(webDb, 'users', u.id),
-          JSON.parse(JSON.stringify(u)),
-          { merge: true }
-        );
-      }
-    }
-    for (const fakeId of FAKE_DEMO_USER_IDS) {
-      await clientDeleteDoc(clientDoc(webDb, 'users', fakeId)).catch(() => {});
-    }
+
+    await adminFirestore
+      .collection('crm_state')
+      .doc('workspace')
+      .set(workspacePayload, { merge: true });
+
+    lastSyncedWorkspaceFingerprint = fingerprint;
+    lastSyncedTimestampMs = nowMs;
     return true;
-  } catch (err) {
-    console.warn('[Firestore] Live workspace sync warning:', err);
+  } catch {
+    await tripServerWriteCircuitBreaker();
     return false;
   }
 }
