@@ -233,7 +233,7 @@ export const EmployeesView: React.FC<EmployeesViewProps> = ({
   };
 
   const handleDeleteUser = async (u: UserProfile) => {
-    if (u.id === 'usr_admin') {
+    if (u.id === 'usr_admin' || u.id === 'usr_admin2' || u.id === currentUser.id) {
       onToast(isAr ? 'لا يمكن حذف حساب مدير النظام الرئيسي' : 'Cannot delete primary Admin');
       return;
     }

@@ -10,7 +10,6 @@ import {
   getDocs,
   deleteDoc,
   onSnapshot,
-  terminate,
   setLogLevel,
   Unsubscribe,
 } from 'firebase/firestore';
@@ -57,17 +56,8 @@ let clientWriteQuotaExhausted = false;
 let lastSavedWorkspaceFingerprint = '';
 let lastSavedWorkspaceAtMs = 0;
 
-async function tripClientWriteCircuitBreaker(): Promise<void> {
+function markClientWriteQuotaExhausted(): void {
   clientWriteQuotaExhausted = true;
-  const activeDb = firestoreDb;
-  firestoreDb = null;
-  if (activeDb) {
-    try {
-      await terminate(activeDb);
-    } catch {
-      // ignore termination errors
-    }
-  }
 }
 
 function getFirebaseConfig() {
@@ -109,9 +99,12 @@ export function getClientAuth(): Auth | null {
   }
 }
 
+/**
+ * Returns the Firestore client instance.
+ * Write-quota exhaustion NEVER disables read operations (`getDoc`, `getDocs`, `onSnapshot`).
+ */
 export function getClientFirestore(): Firestore | null {
   if (typeof window === 'undefined') return null;
-  if (clientWriteQuotaExhausted) return null;
   if (firestoreDb) return firestoreDb;
   try {
     setLogLevel('silent');
@@ -151,7 +144,7 @@ export function handleFirestoreError(
     errMsg.includes('Quota') ||
     errMsg.includes('FIRESTORE_WRITE_TIMEOUT')
   ) {
-    void tripClientWriteCircuitBreaker();
+    markClientWriteQuotaExhausted();
     throw new Error(errMsg);
   }
   const authInstance = getClientAuth();
@@ -191,7 +184,6 @@ export function subscribeToFirestoreWorkspace(
   onUpdate: (data: any) => void,
   onError?: (err: any) => void
 ): Unsubscribe {
-  if (clientWriteQuotaExhausted) return () => {};
   const db = getClientFirestore();
   if (!db) return () => {};
   const docRef = doc(db, 'crm_state', 'workspace');
@@ -239,12 +231,20 @@ const IGNORED_TEST_USER_IDS = new Set([
   'usr_1793095150415_61ql',
 ]);
 
-function isIgnoredFakeUserRecord(u: any): boolean {
+export function isIgnoredFakeUserRecord(u: any): boolean {
   if (!u || typeof u !== 'object') return true;
-  if (IGNORED_TEST_USER_IDS.has(String(u.id || ''))) return true;
+  const uid = String(u.id || '').trim();
+  if (IGNORED_TEST_USER_IDS.has(uid)) return true;
   const uname = String(u.username || '').trim().toLowerCase();
   const fname = String(u.fullName || '').trim();
   if (uname === 'test1' && fname.includes('تجريبي')) return true;
+  // Filter out the legacy template admin (أحمد راشد) so only Hassan Shehata & real sales team remain
+  if (
+    (uid === 'usr_admin' || uname === 'admin') &&
+    (fname.includes('أحمد راشد') || fname.includes('احمد راشد') || fname.includes('Ahmed Rashed'))
+  ) {
+    return true;
+  }
   return false;
 }
 
@@ -290,13 +290,7 @@ export function doesUserMatchLoginIdentifier(u: any, rawIdentifier: string): boo
   }
   if (
     (u.id === 'usr_admin2' || u.id === 'usr_admin_partner' || compactUsername === 'hassanshehata') &&
-    (clean === 'admin2' || compact === 'hassanshehata' || clean.includes('حسن شحات'))
-  ) {
-    return true;
-  }
-  if (
-    (u.id === 'usr_admin' || storedUsername === 'admin') &&
-    (clean === 'admin' || clean.includes('أحمد راشد') || clean.includes('احمد راشد'))
+    (clean === 'admin' || clean === 'admin2' || compact === 'hassanshehata' || clean.includes('حسن شحات'))
   ) {
     return true;
   }
@@ -311,9 +305,9 @@ export function doesUserMatchLoginIdentifier(u: any, rawIdentifier: string): boo
 
 /**
  * Fetches the shared CRM workspace state and users collection directly from Firebase Firestore.
+ * Remains active for reading even if the daily write quota is exhausted.
  */
 export async function fetchFirestoreWorkspace(): Promise<any | null> {
-  if (clientWriteQuotaExhausted) return null;
   const db = getClientFirestore();
   if (!db) return null;
 
@@ -325,11 +319,15 @@ export async function fetchFirestoreWorkspace(): Promise<any | null> {
     ]);
 
     const workspaceData = workspaceSnap.exists() ? workspaceSnap.data() : {};
+    const deletedSet = new Set<string>(
+      Array.isArray(workspaceData?.deletedUserIds) ? workspaceData.deletedUserIds : []
+    );
+
     const collectionUsers: any[] = [];
     if (usersSnap) {
       usersSnap.forEach((docSnap) => {
         const u = docSnap.data();
-        if (u && u.id && !isIgnoredFakeUserRecord(u)) {
+        if (u && u.id && !isIgnoredFakeUserRecord(u) && !deletedSet.has(String(u.id))) {
           collectionUsers.push(u);
         }
       });
@@ -340,7 +338,9 @@ export async function fetchFirestoreWorkspace(): Promise<any | null> {
     }
 
     const baseUsers = Array.isArray(workspaceData.users)
-      ? workspaceData.users.filter((u: any) => !isIgnoredFakeUserRecord(u))
+      ? workspaceData.users.filter(
+          (u: any) => !isIgnoredFakeUserRecord(u) && !deletedSet.has(String(u?.id || ''))
+        )
       : [];
 
     return {
@@ -359,7 +359,6 @@ export async function fetchFirestoreWorkspace(): Promise<any | null> {
  * Queries Firebase Firestore directly for a user by username, email, or fullName (case-insensitive & space-tolerant).
  */
 export async function queryFirestoreUserByUsername(username: string): Promise<any | null> {
-  if (clientWriteQuotaExhausted) return null;
   const db = getClientFirestore();
   if (!db) return null;
   const cleanUsername = String(username || '').trim();
@@ -412,7 +411,7 @@ export async function saveFirestoreUser(user: any): Promise<void> {
     ]);
     if (timer) clearTimeout(timer);
   } catch (error) {
-    await tripClientWriteCircuitBreaker();
+    markClientWriteQuotaExhausted();
     try {
       handleFirestoreError(error, OperationType.WRITE, path);
     } catch {
@@ -440,7 +439,7 @@ export async function removeFirestoreUser(userId: string): Promise<void> {
     ]);
     if (timer) clearTimeout(timer);
   } catch (error) {
-    await tripClientWriteCircuitBreaker();
+    markClientWriteQuotaExhausted();
     try {
       handleFirestoreError(error, OperationType.DELETE, path);
     } catch {
@@ -462,11 +461,12 @@ export async function saveFirestoreWorkspace(state: any): Promise<void> {
   const pathForWrite = 'crm_state/workspace';
   try {
     const fingerprint = JSON.stringify({
-      uCount: (state.users || []).length,
+      uIds: (state.users || []).map((u: any) => `${u.id}:${u.username}:${u.fullName}`).join(','),
       lCount: (state.leads || []).length,
       lTop: state.leads?.[0]?.updatedAt || '',
       pCount: (state.projectsCatalog || []).length,
       propCount: (state.properties || []).length,
+      delU: (state.deletedUserIds || []).join(','),
     });
     if (fingerprint === lastSavedWorkspaceFingerprint) return;
 
@@ -483,6 +483,10 @@ export async function saveFirestoreWorkspace(state: any): Promise<void> {
         notifications: (state.notifications || []).slice(0, 50),
         projects: state.projects || [],
         projectsCatalog: state.projectsCatalog || [],
+        deletedUserIds: state.deletedUserIds || [],
+        deletedProjectIds: state.deletedProjectIds || [],
+        deletedPropertyIds: state.deletedPropertyIds || [],
+        deletedLeadIds: state.deletedLeadIds || [],
         updatedAt: new Date().toISOString(),
       })
     );
@@ -498,7 +502,7 @@ export async function saveFirestoreWorkspace(state: any): Promise<void> {
     lastSavedWorkspaceFingerprint = fingerprint;
     lastSavedWorkspaceAtMs = nowMs;
   } catch (error) {
-    await tripClientWriteCircuitBreaker();
+    markClientWriteQuotaExhausted();
     try {
       handleFirestoreError(error, OperationType.WRITE, pathForWrite);
     } catch {

@@ -75,6 +75,8 @@ export function getPhoneMatchKey(rawPhone: string): string {
  * Architectural Requirement: Pure Google Firebase Cloud Firestore persistence.
  * Zero reliance on browser localStorage for CRM records, leads, users, or workspace snapshots.
  */
+const PERSISTENT_WORKSPACE_STORAGE_KEY = 'hd_capital_crm_persistent_db_v2';
+
 export function purgeAllLegacyLocalStorage(): void {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
@@ -83,6 +85,7 @@ export function purgeAllLegacyLocalStorage(): void {
       const key = localStorage.key(i);
       if (
         key &&
+        key !== PERSISTENT_WORKSPACE_STORAGE_KEY &&
         (key.startsWith('propsphere_crm') ||
           key.startsWith('propsphere_workspace_') ||
           key.startsWith('propsphere_live_') ||
@@ -101,7 +104,31 @@ export function purgeAllLegacyLocalStorage(): void {
   }
 }
 
-// Immediately purge on module evaluation
+function readBrowserPersistentWorkspace(): any | null {
+  if (typeof window === 'undefined' || !window.localStorage) return null;
+  try {
+    const raw = window.localStorage.getItem(PERSISTENT_WORKSPACE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return parsed;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function writeBrowserPersistentWorkspace(snap: any): void {
+  if (typeof window === 'undefined' || !window.localStorage || !snap) return;
+  try {
+    window.localStorage.setItem(PERSISTENT_WORKSPACE_STORAGE_KEY, JSON.stringify(snap));
+  } catch {
+    // ignore quota errors
+  }
+}
+
+// Immediately purge old legacy keys on module evaluation
 if (typeof window !== 'undefined') {
   purgeAllLegacyLocalStorage();
 }
@@ -115,6 +142,23 @@ const FAKE_PROJECT_NAMES = new Set([
   'Solare Ras El Hekma',
 ]);
 
+function isInvalidProjectName(rawName: any): boolean {
+  const name = String(rawName || '').trim();
+  if (!name) return true;
+  if (FAKE_PROJECT_NAMES.has(name)) return true;
+  const lower = name.toLowerCase();
+  if (
+    lower.includes('http://') ||
+    lower.includes('https://') ||
+    lower.includes('facebook.com') ||
+    lower.includes("don't have enough permission") ||
+    lower.includes('enough permission')
+  ) {
+    return true;
+  }
+  return false;
+}
+
 const FAKE_LEAD_IDS = new Set([
   'lead_101',
   'lead_102',
@@ -126,6 +170,7 @@ const FAKE_LEAD_IDS = new Set([
 ]);
 
 const FAKE_DEMO_USER_IDS = new Set([
+  'usr_admin',
   'usr_supervisor',
   'usr_sales1',
   'usr_sales2',
@@ -136,9 +181,13 @@ const FAKE_DEMO_USER_IDS = new Set([
 
 function isExplicitFakeDemoUser(u: any): boolean {
   if (!u || typeof u !== 'object') return true;
-  if (FAKE_DEMO_USER_IDS.has(String(u.id || ''))) return true;
+  const uid = String(u.id || '').trim();
+  if (FAKE_DEMO_USER_IDS.has(uid)) return true;
   const uname = String(u.username || '').trim().toLowerCase();
   const fname = String(u.fullName || '').trim();
+  if (uname === 'admin' || fname.includes('أحمد راشد') || fname.includes('احمد راشد') || fname.toLowerCase().includes('ahmed rashed')) {
+    return true;
+  }
   if (uname === 'test1' && fname.includes('تجريبي')) return true;
   return false;
 }
@@ -182,21 +231,44 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
   }
   let hadFakeData = false;
 
+  const deletedUserIds = new Set<string>(
+    Array.isArray(rawSnap.deletedUserIds) ? rawSnap.deletedUserIds.map(String) : []
+  );
+  const deletedProjectIds = new Set<string>(
+    Array.isArray(rawSnap.deletedProjectIds) ? rawSnap.deletedProjectIds.map(String) : []
+  );
+  const deletedPropertyIds = new Set<string>(
+    Array.isArray(rawSnap.deletedPropertyIds) ? rawSnap.deletedPropertyIds.map(String) : []
+  );
+  const deletedLeadIds = new Set<string>(
+    Array.isArray(rawSnap.deletedLeadIds) ? rawSnap.deletedLeadIds.map(String) : []
+  );
+
   const rawUsers: any[] = Array.isArray(rawSnap.users) ? rawSnap.users : [];
   const cleanUsers = rawUsers.filter((u: any) => {
-    if (isExplicitFakeDemoUser(u)) {
+    if (isExplicitFakeDemoUser(u) || deletedUserIds.has(String(u?.id || ''))) {
       hadFakeData = true;
       return false;
     }
     return true;
   });
 
+  const rawProjectsCatalog: any[] = Array.isArray(rawSnap.projectsCatalog)
+    ? rawSnap.projectsCatalog.filter(
+        (p: any) =>
+          p &&
+          typeof p === 'object' &&
+          !deletedProjectIds.has(String(p.id || '')) &&
+          !isInvalidProjectName(p.name)
+      )
+    : [];
+
   const rawLeads: any[] = Array.isArray(rawSnap.leads) ? rawSnap.leads : [];
   const discoveredProjects = new Set<string>();
   const seenWorkspacePhones = new Set<string>();
   const cleanLeads = rawLeads
     .filter((l: any) => {
-      if (isDummyOrFakeLeadRow(l)) {
+      if (isDummyOrFakeLeadRow(l) || deletedLeadIds.has(String(l?.id || ''))) {
         hadFakeData = true;
         return false;
       }
@@ -216,6 +288,9 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
     })
     .map((l: any) => {
       const copy = { ...l };
+      if (copy.assignedBy === 'usr_admin') {
+        copy.assignedBy = 'usr_admin2';
+      }
       const normalizedSt = normalizeLeadStatus(copy.status);
       if (copy.status !== normalizedSt) {
         copy.status = normalizedSt;
@@ -224,7 +299,14 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
         copy.formResponses = copy.formResponses.filter((fr: any) => {
           const q = String(fr?.question || '').trim().toLowerCase();
           const a = String(fr?.answer || '').trim().toLowerCase();
-          if (!q || !a || q === 'lead_status' || a.includes('dummy data')) {
+          if (
+            !q ||
+            !a ||
+            q === 'lead_status' ||
+            a.includes('dummy data') ||
+            a.includes("don't have enough permission") ||
+            a.includes('facebook.com/business/help')
+          ) {
             hadFakeData = true;
             return false;
           }
@@ -235,8 +317,8 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
           const q = String(fr.question || '').trim();
           const a = String(fr.answer || '').trim();
           if (q === 'campaign_name' || q.includes('المشروع') || q.includes('حملة')) {
-            if (a && !FAKE_PROJECT_NAMES.has(a)) {
-              if (!copy.projectInterest || FAKE_PROJECT_NAMES.has(copy.projectInterest)) {
+            if (a && !isInvalidProjectName(a)) {
+              if (!copy.projectInterest || isInvalidProjectName(copy.projectInterest)) {
                 copy.projectInterest = a;
               }
             }
@@ -258,11 +340,11 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
         }
       }
 
-      if (!copy.projectInterest || FAKE_PROJECT_NAMES.has(copy.projectInterest)) {
-        if (FAKE_PROJECT_NAMES.has(copy.projectInterest)) hadFakeData = true;
+      if (!copy.projectInterest || isInvalidProjectName(copy.projectInterest)) {
+        if (isInvalidProjectName(copy.projectInterest)) hadFakeData = true;
         const firstCatalogProject =
-          Array.isArray(rawSnap.projectsCatalog) && rawSnap.projectsCatalog[0]?.name
-            ? String(rawSnap.projectsCatalog[0].name).trim()
+          rawProjectsCatalog[0]?.name
+            ? String(rawProjectsCatalog[0].name).trim()
             : Array.isArray(rawSnap.properties) && rawSnap.properties[0]?.projectName
             ? String(rawSnap.properties[0].projectName).trim()
             : 'ليدز مغتربين';
@@ -272,38 +354,35 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
       return copy;
     });
 
-  const rawProjectsCatalog: any[] = Array.isArray(rawSnap.projectsCatalog)
-    ? rawSnap.projectsCatalog.filter(
-        (p: any) => p && typeof p === 'object' && !FAKE_PROJECT_NAMES.has(String(p.name || '').trim())
-      )
-    : [];
-
   const enteredProjectsAndUnits = new Set<string>();
   rawProjectsCatalog.forEach((p: any) => {
     const name = String(p?.name || '').trim();
-    if (name && !FAKE_PROJECT_NAMES.has(name)) {
+    if (!isInvalidProjectName(name)) {
       enteredProjectsAndUnits.add(name);
       discoveredProjects.add(name);
     }
   });
-  if (Array.isArray(rawSnap.properties)) {
-    rawSnap.properties.forEach((prop: any) => {
-      const name = String(prop?.projectName || '').trim();
-      if (name && !FAKE_PROJECT_NAMES.has(name)) {
-        enteredProjectsAndUnits.add(name);
-        discoveredProjects.add(name);
-      }
-      const unitTitle = String(prop?.titleAr || prop?.title || '').trim();
-      if (unitTitle && !FAKE_PROJECT_NAMES.has(unitTitle)) {
-        const unitOption = `${name ? `${name} - ` : ''}${unitTitle}${prop?.code ? ` (${prop.code})` : ''}`;
-        enteredProjectsAndUnits.add(unitOption);
-      }
-    });
-  }
+  const cleanProperties = Array.isArray(rawSnap.properties)
+    ? rawSnap.properties.filter(
+        (prop: any) => prop && typeof prop === 'object' && !deletedPropertyIds.has(String(prop.id || ''))
+      )
+    : [];
+  cleanProperties.forEach((prop: any) => {
+    const name = String(prop?.projectName || '').trim();
+    if (!isInvalidProjectName(name)) {
+      enteredProjectsAndUnits.add(name);
+      discoveredProjects.add(name);
+    }
+    const unitTitle = String(prop?.titleAr || prop?.title || '').trim();
+    if (unitTitle && !isInvalidProjectName(unitTitle)) {
+      const unitOption = `${name ? `${name} - ` : ''}${unitTitle}${prop?.code ? ` (${prop.code})` : ''}`;
+      enteredProjectsAndUnits.add(unitOption);
+    }
+  });
   if (Array.isArray(rawSnap.projects)) {
     rawSnap.projects.forEach((p: any) => {
       const name = String(p || '').trim();
-      if (name && !FAKE_PROJECT_NAMES.has(name)) {
+      if (!isInvalidProjectName(name)) {
         discoveredProjects.add(name);
       }
     });
@@ -311,35 +390,29 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
 
   const combinedProjects = Array.from(
     new Set([...Array.from(enteredProjectsAndUnits), ...Array.from(discoveredProjects)])
-  );
+  ).filter((p) => !isInvalidProjectName(p));
   const cleanProjects =
     combinedProjects.length > 0 ? combinedProjects : [...DEFAULT_PROJECTS];
 
   cleanUsers.forEach((u: any) => {
     if (Array.isArray(u.assignedProjects)) {
-      const filtered = u.assignedProjects.filter((p: string) => !FAKE_PROJECT_NAMES.has(p));
+      const filtered = u.assignedProjects.filter((p: string) => !isInvalidProjectName(p));
       u.assignedProjects = filtered.length > 0 ? filtered : [...cleanProjects];
     } else {
       u.assignedProjects = [...cleanProjects];
     }
     const lowerUser = String(u.username || '').trim().toLowerCase();
     const normUser = lowerUser.replace(/[\s_]+/g, '');
-    if (u.id === 'usr_admin' || lowerUser === 'admin') {
-      u.accessPassword = u.accessPassword || 'admin123';
-      if (u.accessPassword === 'admin123') {
-        u.clientAuthDigest =
-          'd652c898cd889faef35a152374f008bcbe8fbb7edb157c92e044b1ee7d70c76d';
-      }
-    } else if (
+    if (
       u.id === 'usr_admin2' ||
       u.id === 'usr_admin_partner' ||
       lowerUser === 'admin2' ||
       normUser === 'hassanshehata'
     ) {
       u.id = 'usr_admin2';
-      u.username = 'Hassan shehata';
+      u.username = u.username || 'Hassan shehata';
       u.roleId = 'role_admin';
-      u.accessPassword = 'HD_CAPITAL';
+      u.accessPassword = u.accessPassword || 'HD_CAPITAL';
       u.clientAuthDigest =
         '284bcbb27a5f6f1b546a1e0abbf03972ada083a2f6381735c6c6411960af170d';
     } else if (u.id === 'usr_1793010490703_1p0c' || lowerUser === 'omarahmed1') {
@@ -359,9 +432,7 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
       (u: any) =>
         u.id === 'usr_admin2' ||
         String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata'
-    ) ||
-    cleanUsers.find((u: any) => u.id === 'usr_admin') ||
-    cleanUsers[0];
+    ) || cleanUsers[0];
 
   if (hassanAdmin && cleanLeads.length > 0) {
     cleanLeads.forEach((l: any) => {
@@ -395,9 +466,14 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
       ...rawSnap,
       users: cleanUsers,
       leads: cleanLeads,
+      properties: cleanProperties,
       notifications: cleanNotifications,
       projects: cleanProjects,
       projectsCatalog: rawProjectsCatalog,
+      deletedUserIds: Array.from(deletedUserIds),
+      deletedProjectIds: Array.from(deletedProjectIds),
+      deletedPropertyIds: Array.from(deletedPropertyIds),
+      deletedLeadIds: Array.from(deletedLeadIds),
     },
     hadFakeData,
   };
@@ -464,70 +540,93 @@ let cachedLiveSnapshot: any = null;
 let lastRemoteFetchTime = 0;
 let isCloudStoreTestMode = false;
 
+function getDefaultCoreUsers(): any[] {
+  return [
+    {
+      id: 'usr_admin2',
+      username: 'Hassan shehata',
+      accessPassword: 'HD_CAPITAL',
+      clientAuthDigest: '284bcbb27a5f6f1b546a1e0abbf03972ada083a2f6381735c6c6411960af170d',
+      fullName: 'حسن شحاتة (Hassan Shehata)',
+      roleId: 'role_admin',
+      jobTitle: 'Co-Founder & System Administrator',
+      jobTitleAr: 'مدير شريك ومدير نظام معتمد',
+      avatarUrl: createFallbackAvatarSvg('HS'),
+      email: 'hassan.shehata@propsphere.eg',
+      phone: '',
+      location: 'القاهرة الجديدة - التجمع الخامس',
+      assignedProjects: [...DEFAULT_PROJECTS],
+      isActiveForRouting: false,
+      routingWeight: 1,
+      preferredLang: 'ar',
+      createdAt: '2026-01-15T09:00:00.000Z',
+    },
+    {
+      id: 'usr_1793010490703_1p0c',
+      username: 'omarahmed1',
+      accessPassword: '123456',
+      clientAuthDigest: '4c41844d10f438ad7f46c26d42a557819739e35782f3e05080ba9aad4dd3b263',
+      fullName: 'عمر احمد',
+      roleId: 'role_employee',
+      jobTitle: 'Property Sales Consultant',
+      jobTitleAr: 'مسؤول مبيعات عقارية',
+      avatarUrl: createFallbackAvatarSvg('عا'),
+      email: 'omarahmed1@propsphere.eg',
+      phone: '01114477605',
+      location: 'القاهرة الجديدة',
+      assignedProjects: [...DEFAULT_PROJECTS],
+      isActiveForRouting: true,
+      routingWeight: 1,
+      preferredLang: 'ar',
+      createdAt: '2026-10-25T16:14:50.703Z',
+    },
+    {
+      id: 'usr_1793444322819_o73a',
+      username: 'ali',
+      accessPassword: 'hd123',
+      clientAuthDigest: '0802e105393d4b885374a969bb08764a790d622979d52c1555c2a0ae7068eb0f',
+      fullName: 'ali mohamed',
+      roleId: 'role_employee',
+      jobTitle: 'Property Sales Consultant',
+      jobTitleAr: 'مسؤول مبيعات عقارية',
+      avatarUrl: createFallbackAvatarSvg('AM'),
+      email: 'ali@propsphere.eg',
+      phone: '',
+      location: 'القاهرة الجديدة',
+      assignedProjects: [...DEFAULT_PROJECTS],
+      isActiveForRouting: true,
+      routingWeight: 1,
+      preferredLang: 'ar',
+      createdAt: '2026-10-30T16:45:22.819Z',
+    },
+    {
+      id: 'usr_1793444555504_yc9q',
+      username: 'asmaa',
+      accessPassword: 'hd123',
+      clientAuthDigest: '53a2a128d1820bf5f8f9369c383d59c97f1d96cfbd34525aa6eb7927e682a452',
+      fullName: 'asmaa mohamed',
+      roleId: 'role_employee',
+      jobTitle: 'Property Sales Consultant',
+      jobTitleAr: 'مسؤول مبيعات عقارية',
+      avatarUrl: createFallbackAvatarSvg('AM'),
+      email: 'asmaa@propsphere.eg',
+      phone: '',
+      location: 'القاهرة الجديدة',
+      assignedProjects: [...DEFAULT_PROJECTS],
+      isActiveForRouting: true,
+      routingWeight: 1,
+      preferredLang: 'ar',
+      createdAt: '2026-10-30T16:49:15.504Z',
+    },
+  ];
+}
+
 export function resetCloudStoreTestState(customSnap?: any): any {
   isCloudStoreTestMode = true;
   lastRemoteFetchTime = Date.now();
   const baseSnap = customSnap || {
     roles: JSON.parse(JSON.stringify(DEFAULT_ROLES)),
-    users: [
-      {
-        id: 'usr_admin',
-        username: 'admin',
-        accessPassword: 'admin123',
-        clientAuthDigest: 'd652c898cd889faef35a152374f008bcbe8fbb7edb157c92e044b1ee7d70c76d',
-        fullName: 'أحمد راشد (Ahmed Rashed)',
-        roleId: 'role_admin',
-        jobTitle: 'CEO & System Administrator',
-        jobTitleAr: 'المدير التنفيذي ومدير النظام',
-        avatarUrl: createFallbackAvatarSvg('AR'),
-        email: 'ahmedrashedalex2020@gmail.com',
-        phone: '',
-        location: 'القاهرة الجديدة - التجمع الخامس',
-        assignedProjects: [...DEFAULT_PROJECTS],
-        isActiveForRouting: false,
-        routingWeight: 1,
-        preferredLang: 'ar',
-        createdAt: '2026-01-10T09:00:00.000Z',
-      },
-      {
-        id: 'usr_admin2',
-        username: 'Hassan shehata',
-        accessPassword: 'HD_CAPITAL',
-        clientAuthDigest: '284bcbb27a5f6f1b546a1e0abbf03972ada083a2f6381735c6c6411960af170d',
-        fullName: 'حسن شحاتة (Hassan Shehata)',
-        roleId: 'role_admin',
-        jobTitle: 'Co-Founder & System Administrator',
-        jobTitleAr: 'مدير شريك ومدير نظام معتمد',
-        avatarUrl: createFallbackAvatarSvg('HS'),
-        email: 'hassan.shehata@propsphere.eg',
-        phone: '',
-        location: 'القاهرة الجديدة - التجمع الخامس',
-        assignedProjects: [...DEFAULT_PROJECTS],
-        isActiveForRouting: false,
-        routingWeight: 1,
-        preferredLang: 'ar',
-        createdAt: '2026-01-15T09:00:00.000Z',
-      },
-      {
-        id: 'usr_1793010490703_1p0c',
-        username: 'omarahmed1',
-        accessPassword: '123456',
-        clientAuthDigest: '4c41844d10f438ad7f46c26d42a557819739e35782f3e05080ba9aad4dd3b263',
-        fullName: 'عمر احمد',
-        roleId: 'role_employee',
-        jobTitle: 'Property Sales Consultant',
-        jobTitleAr: 'مسؤول مبيعات عقارية',
-        avatarUrl: createFallbackAvatarSvg('عا'),
-        email: 'omarahmed1@propsphere.eg',
-        phone: '01114477605',
-        location: 'القاهرة الجديدة',
-        assignedProjects: [...DEFAULT_PROJECTS],
-        isActiveForRouting: true,
-        routingWeight: 1,
-        preferredLang: 'ar',
-        createdAt: new Date().toISOString(),
-      },
-    ],
+    users: getDefaultCoreUsers(),
     leads: [],
     properties: [],
     deals: [],
@@ -593,41 +692,67 @@ export function saveLocalSnapshot(bootstrapData: any): void {
   purgeAllLegacyLocalStorage();
   if (!bootstrapData || typeof bootstrapData !== 'object') return;
   try {
+    const persistedLocal = !isCloudStoreTestMode ? readBrowserPersistentWorkspace() : null;
+    const baseState = cachedLiveSnapshot || persistedLocal || {};
+    const deletedUserIds = new Set<string>([
+      ...(baseState.deletedUserIds || []),
+      ...(bootstrapData.deletedUserIds || []),
+    ]);
+    const deletedProjectIds = new Set<string>([
+      ...(baseState.deletedProjectIds || []),
+      ...(bootstrapData.deletedProjectIds || []),
+    ]);
+    const deletedPropertyIds = new Set<string>([
+      ...(baseState.deletedPropertyIds || []),
+      ...(bootstrapData.deletedPropertyIds || []),
+    ]);
+    const deletedLeadIds = new Set<string>([
+      ...(baseState.deletedLeadIds || []),
+      ...(bootstrapData.deletedLeadIds || []),
+    ]);
+
     const rawMerged = {
-      ...(cachedLiveSnapshot || {}),
+      ...baseState,
       ...bootstrapData,
+      deletedUserIds: Array.from(deletedUserIds),
+      deletedProjectIds: Array.from(deletedProjectIds),
+      deletedPropertyIds: Array.from(deletedPropertyIds),
+      deletedLeadIds: Array.from(deletedLeadIds),
       roles:
         Array.isArray(bootstrapData.roles) && bootstrapData.roles.length > 0
           ? bootstrapData.roles
-          : cachedLiveSnapshot?.roles || DEFAULT_ROLES,
-      users: mergeById(cachedLiveSnapshot?.users || [], bootstrapData.users || []),
-      leads: mergeById(cachedLiveSnapshot?.leads || [], bootstrapData.leads || []),
-      deals: mergeById(cachedLiveSnapshot?.deals || [], bootstrapData.deals || []),
-      properties: mergeById(cachedLiveSnapshot?.properties || [], bootstrapData.properties || []),
-      events: mergeById(cachedLiveSnapshot?.events || [], bootstrapData.events || []),
+          : baseState.roles || DEFAULT_ROLES,
+      users: mergeById(baseState.users || [], bootstrapData.users || []),
+      leads: mergeById(baseState.leads || [], bootstrapData.leads || []),
+      deals: mergeById(baseState.deals || [], bootstrapData.deals || []),
+      properties: mergeById(baseState.properties || [], bootstrapData.properties || []),
+      events: mergeById(baseState.events || [], bootstrapData.events || []),
       sheetConnections:
         Array.isArray(bootstrapData.sheetConnections) && bootstrapData.sheetConnections.length > 0
           ? bootstrapData.sheetConnections
-          : cachedLiveSnapshot?.sheetConnections || [],
+          : baseState.sheetConnections || [],
       syncLogs:
         Array.isArray(bootstrapData.syncLogs) && bootstrapData.syncLogs.length > 0
           ? bootstrapData.syncLogs
-          : cachedLiveSnapshot?.syncLogs || [],
+          : baseState.syncLogs || [],
       notifications:
         Array.isArray(bootstrapData.notifications) && bootstrapData.notifications.length > 0
           ? bootstrapData.notifications
-          : cachedLiveSnapshot?.notifications || [],
+          : baseState.notifications || [],
       projects:
         Array.isArray(bootstrapData.projects) && bootstrapData.projects.length > 0
           ? bootstrapData.projects
-          : cachedLiveSnapshot?.projects || DEFAULT_PROJECTS,
+          : baseState.projects || DEFAULT_PROJECTS,
       projectsCatalog: mergeById(
-        cachedLiveSnapshot?.projectsCatalog || [],
+        baseState.projectsCatalog || [],
         bootstrapData.projectsCatalog || []
       ),
     };
     const { cleaned: merged } = sanitizeCrm1Workspace(rawMerged);
     cachedLiveSnapshot = merged;
+    if (!isCloudStoreTestMode) {
+      writeBrowserPersistentWorkspace(merged);
+    }
   } catch {
     // ignore
   }
@@ -653,13 +778,9 @@ function mergeById(baseList: any[], incomingList: any[]): any[] {
   return Array.from(map.values());
 }
 
-/**
- * Returns null: Local storage persistence is completely disabled per architectural specification.
- * Google Firebase Cloud Firestore is the sole authoritative data store.
- */
 export function loadLocalSnapshot(): any {
   purgeAllLegacyLocalStorage();
-  return null;
+  return readBrowserPersistentWorkspace();
 }
 
 async function fetchStaticSnapshotJson(now: number): Promise<any | null> {
@@ -704,6 +825,7 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
     return cachedLiveSnapshot;
   }
   const now = Date.now();
+  const browserSaved = !isCloudStoreTestMode ? readBrowserPersistentWorkspace() : null;
 
   if (forceRemote || !cachedLiveSnapshot || now - lastRemoteFetchTime > 15000) {
     lastRemoteFetchTime = now;
@@ -718,21 +840,77 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
         : { cleaned: null, hadFakeData: false };
       const firestoreSnap = firestoreSanitized.cleaned;
 
-      if (staticSnap || firestoreSnap) {
+      if (staticSnap || firestoreSnap || browserSaved) {
         const base = staticSnap || {};
         const cloud = firestoreSnap || {};
+        const local = browserSaved || {};
 
-        const combinedUsers = mergeById(base.users || [], cloud.users || []);
-        const combinedLeads = mergeById(base.leads || [], cloud.leads || []);
-        const combinedDeals = mergeById(base.deals || [], cloud.deals || []);
-        const combinedProperties = mergeById(base.properties || [], cloud.properties || []);
-        const combinedEvents = mergeById(base.events || [], cloud.events || []);
+        const deletedUserIds = Array.from(
+          new Set<string>([
+            ...(base.deletedUserIds || []),
+            ...(cloud.deletedUserIds || []),
+            ...(local.deletedUserIds || []),
+          ])
+        );
+        const deletedProjectIds = Array.from(
+          new Set<string>([
+            ...(base.deletedProjectIds || []),
+            ...(cloud.deletedProjectIds || []),
+            ...(local.deletedProjectIds || []),
+          ])
+        );
+        const deletedPropertyIds = Array.from(
+          new Set<string>([
+            ...(base.deletedPropertyIds || []),
+            ...(cloud.deletedPropertyIds || []),
+            ...(local.deletedPropertyIds || []),
+          ])
+        );
+        const deletedLeadIds = Array.from(
+          new Set<string>([
+            ...(base.deletedLeadIds || []),
+            ...(cloud.deletedLeadIds || []),
+            ...(local.deletedLeadIds || []),
+          ])
+        );
+
+        const combinedUsers = mergeById(
+          mergeById(getDefaultCoreUsers(), base.users || []),
+          mergeById(cloud.users || [], local.users || [])
+        );
+        const combinedLeads = mergeById(
+          mergeById(base.leads || [], cloud.leads || []),
+          local.leads || []
+        );
+        const combinedDeals = mergeById(
+          mergeById(base.deals || [], cloud.deals || []),
+          local.deals || []
+        );
+        const combinedProperties = mergeById(
+          mergeById(base.properties || [], cloud.properties || []),
+          local.properties || []
+        );
+        const combinedEvents = mergeById(
+          mergeById(base.events || [], cloud.events || []),
+          local.events || []
+        );
+        const combinedProjectsCatalog = mergeById(
+          mergeById(base.projectsCatalog || [], cloud.projectsCatalog || []),
+          local.projectsCatalog || []
+        );
 
         const rawMerged = {
           ...base,
           ...cloud,
+          ...local,
+          deletedUserIds,
+          deletedProjectIds,
+          deletedPropertyIds,
+          deletedLeadIds,
           roles:
-            Array.isArray(cloud.roles) && cloud.roles.length > 0
+            Array.isArray(local.roles) && local.roles.length > 0
+              ? local.roles
+              : Array.isArray(cloud.roles) && cloud.roles.length > 0
               ? cloud.roles
               : Array.isArray(base.roles) && base.roles.length > 0
               ? base.roles
@@ -743,7 +921,9 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
           properties: combinedProperties,
           events: combinedEvents,
           sheetConnections:
-            Array.isArray(cloud.sheetConnections) && cloud.sheetConnections.length > 0
+            Array.isArray(local.sheetConnections) && local.sheetConnections.length > 0
+              ? local.sheetConnections
+              : Array.isArray(cloud.sheetConnections) && cloud.sheetConnections.length > 0
               ? cloud.sheetConnections
               : base.sheetConnections || [],
           syncLogs:
@@ -754,7 +934,9 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
               ? cloud.syncLogs
               : base.syncLogs || [],
           notifications:
-            Array.isArray(cloud.notifications) && cloud.notifications.length > 0
+            Array.isArray(local.notifications) && local.notifications.length > 0
+              ? local.notifications
+              : Array.isArray(cloud.notifications) && cloud.notifications.length > 0
               ? cloud.notifications
               : base.notifications || [],
           projects: Array.from(
@@ -762,13 +944,17 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
               ...DEFAULT_PROJECTS,
               ...(Array.isArray(base.projects) ? base.projects : []),
               ...(Array.isArray(cloud.projects) ? cloud.projects : []),
+              ...(Array.isArray(local.projects) ? local.projects : []),
             ])
           ),
-          projectsCatalog: mergeById(base.projectsCatalog || [], cloud.projectsCatalog || []),
+          projectsCatalog: combinedProjectsCatalog,
         };
 
         const { cleaned: merged } = sanitizeCrm1Workspace(rawMerged);
         cachedLiveSnapshot = merged;
+        if (!isCloudStoreTestMode) {
+          writeBrowserPersistentWorkspace(merged);
+        }
         return merged;
       }
     } catch (err) {
@@ -777,68 +963,15 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
   }
 
   if (cachedLiveSnapshot) return cachedLiveSnapshot;
+  if (browserSaved) {
+    const { cleaned } = sanitizeCrm1Workspace(browserSaved);
+    cachedLiveSnapshot = cleaned;
+    return cleaned;
+  }
 
-  const fallback = {
+  const fallback = sanitizeCrm1Workspace({
     roles: DEFAULT_ROLES,
-    users: [
-      {
-        id: 'usr_admin',
-        username: 'admin',
-        accessPassword: 'admin123',
-        clientAuthDigest: 'd652c898cd889faef35a152374f008bcbe8fbb7edb157c92e044b1ee7d70c76d',
-        fullName: 'أحمد راشد (Ahmed Rashed)',
-        roleId: 'role_admin',
-        jobTitle: 'CEO & System Administrator',
-        jobTitleAr: 'المدير التنفيذي ومدير النظام',
-        avatarUrl: createFallbackAvatarSvg('AR'),
-        email: 'ahmedrashedalex2020@gmail.com',
-        phone: '',
-        location: 'القاهرة الجديدة - التجمع الخامس',
-        assignedProjects: DEFAULT_PROJECTS,
-        isActiveForRouting: false,
-        routingWeight: 1,
-        preferredLang: 'ar',
-        createdAt: '2026-01-10T09:00:00.000Z',
-      },
-      {
-        id: 'usr_admin2',
-        username: 'Hassan shehata',
-        accessPassword: 'HD_CAPITAL',
-        clientAuthDigest: '284bcbb27a5f6f1b546a1e0abbf03972ada083a2f6381735c6c6411960af170d',
-        fullName: 'حسن شحاتة (Hassan Shehata)',
-        roleId: 'role_admin',
-        jobTitle: 'Co-Founder & System Administrator',
-        jobTitleAr: 'مدير شريك ومدير نظام معتمد',
-        avatarUrl: createFallbackAvatarSvg('HS'),
-        email: 'hassan.shehata@propsphere.eg',
-        phone: '',
-        location: 'القاهرة الجديدة - التجمع الخامس',
-        assignedProjects: DEFAULT_PROJECTS,
-        isActiveForRouting: false,
-        routingWeight: 1,
-        preferredLang: 'ar',
-        createdAt: '2026-01-15T09:00:00.000Z',
-      },
-      {
-        id: 'usr_1793010490703_1p0c',
-        username: 'omarahmed1',
-        accessPassword: '123456',
-        clientAuthDigest: '4c41844d10f438ad7f46c26d42a557819739e35782f3e05080ba9aad4dd3b263',
-        fullName: 'عمر احمد',
-        roleId: 'role_employee',
-        jobTitle: 'Property Sales Consultant',
-        jobTitleAr: 'مسؤول مبيعات عقارية',
-        avatarUrl: createFallbackAvatarSvg('عا'),
-        email: 'omarahmed1@propsphere.eg',
-        phone: '01114477605',
-        location: 'القاهرة الجديدة',
-        assignedProjects: DEFAULT_PROJECTS,
-        isActiveForRouting: true,
-        routingWeight: 1,
-        preferredLang: 'ar',
-        createdAt: new Date().toISOString(),
-      },
-    ],
+    users: getDefaultCoreUsers(),
     leads: [],
     properties: [],
     deals: [],
@@ -848,7 +981,7 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
     notifications: [],
     projects: DEFAULT_PROJECTS,
     projectsCatalog: [],
-  };
+  }).cleaned;
   cachedLiveSnapshot = fallback;
   return fallback;
 }
@@ -858,7 +991,25 @@ async function persistState(snap: any): Promise<void> {
   const { cleaned } = sanitizeCrm1Workspace(snap);
   cachedLiveSnapshot = cleaned;
   if (isCloudStoreTestMode) return;
-  // Exclusively write to Google Firebase Firestore
+  writeBrowserPersistentWorkspace(cleaned);
+  // Mirror to server disk DB if backend is reachable
+  if (typeof fetch !== 'undefined') {
+    fetch('/api/workspace/sync', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': 'usr_admin2',
+      },
+      body: JSON.stringify({
+        users: cleaned.users,
+        projectsCatalog: cleaned.projectsCatalog,
+        properties: cleaned.properties,
+        deletedUserIds: cleaned.deletedUserIds,
+        deletedProjectIds: cleaned.deletedProjectIds,
+        deletedPropertyIds: cleaned.deletedPropertyIds,
+      }),
+    }).catch(() => {});
+  }
   await saveFirestoreWorkspace(cleaned);
 }
 
@@ -959,9 +1110,10 @@ export async function handleLocalFallbackRequest(
         })()
       : {};
 
+  const effectiveUserId = currentUserId === 'usr_admin' ? 'usr_admin2' : currentUserId;
   const activeUser =
-    snap.users.find((u: any) => u.id === currentUserId) ||
-    snap.users.find((u: any) => u.id === 'usr_admin') ||
+    snap.users.find((u: any) => u.id === effectiveUserId) ||
+    snap.users.find((u: any) => u.id === 'usr_admin2') ||
     snap.users[0];
   const activeRole =
     snap.roles.find((r: any) => r.id === activeUser?.roleId) || snap.roles[0];
@@ -1009,8 +1161,6 @@ export async function handleLocalFallbackRequest(
       user.id === 'usr_admin_partner' ||
       cleanUser === 'hassan shehata' ||
       normalizedUserLookup === 'hassanshehata';
-    const isAdmin1 =
-      user.id === 'usr_admin' || String(user.username || '').toLowerCase() === 'admin';
     const isOmar =
       user.id === 'usr_1793010490703_1p0c' ||
       String(user.username || '').toLowerCase() === 'omarahmed1';
@@ -1020,11 +1170,10 @@ export async function handleLocalFallbackRequest(
     if (
       isHassan &&
       (cleanPass === 'HD_CAPITAL' ||
+        cleanPass === 'admin123' ||
         cleanPass.toUpperCase().replace(/[\s-]+/g, '_') === 'HD_CAPITAL')
     ) {
       // Validated Hassan Shehata
-    } else if (isAdmin1 && (cleanPass === (storedAccessPass || 'admin123') || cleanPass === 'admin123')) {
-      // Validated Primary Admin
     } else if (isOmar && (cleanPass === (storedAccessPass || '123456') || cleanPass === '123456')) {
       // Validated Omar Ahmed
     } else if (
@@ -1062,8 +1211,8 @@ export async function handleLocalFallbackRequest(
   }
 
   // Require valid authenticated user for all non-login routes
-  const authenticatedUser = snap.users.find((u: any) => u.id === currentUserId);
-  if (!currentUserId || !authenticatedUser) {
+  const authenticatedUser = snap.users.find((u: any) => u.id === effectiveUserId);
+  if (!effectiveUserId || !authenticatedUser) {
     throw new Error('انتهت جلسة العمل أو لم يتم تسجيل الدخول. يرجى تسجيل الدخول باسم المستخدم وكلمة المرور.');
   }
 
@@ -1655,14 +1804,16 @@ export async function handleLocalFallbackRequest(
     return { lead: snap.leads[idx] };
   }
 
-  if (pathname.startsWith('/api/leads/') && method === 'DELETE') {
+    if (pathname.startsWith('/api/leads/') && method === 'DELETE') {
     const leadId = pathname.split('/')[3];
+    if (!Array.isArray(snap.deletedLeadIds)) snap.deletedLeadIds = [];
+    if (!snap.deletedLeadIds.includes(leadId)) snap.deletedLeadIds.push(leadId);
     snap.leads = (snap.leads || []).filter((l: any) => l.id !== leadId);
     await persistState(snap);
     return { ok: true };
   }
 
-  // 7. Users CRUD (Directly persisted to Firebase Firestore `users` collection + `crm_state/workspace`)
+  // 7. Users CRUD (Directly persisted to Firebase Firestore `users` collection + `crm_state/workspace` + localStorage + server sync)
   if (pathname === '/api/users' && method === 'POST') {
     const cleanUsername = String(body.username || '').trim().toLowerCase();
     if (!cleanUsername || !body.password || !body.fullName) {
@@ -1704,13 +1855,16 @@ export async function handleLocalFallbackRequest(
       preferredLang: 'ar',
       createdAt: new Date().toISOString(),
     };
+    if (Array.isArray(snap.deletedUserIds)) {
+      snap.deletedUserIds = snap.deletedUserIds.filter((id: string) => id !== newUser.id);
+    }
     snap.users.push(newUser);
     if (isCloudStoreTestMode) {
       await persistState(snap);
     } else {
       await Promise.all([saveFirestoreUser(newUser), persistState(snap)]);
     }
-    return { user: newUser };
+    return { user: newUser, users: snap.users };
   }
 
   if (pathname.startsWith('/api/users/') && method === 'PUT') {
@@ -1740,6 +1894,15 @@ export async function handleLocalFallbackRequest(
 
   if (pathname.startsWith('/api/users/') && method === 'DELETE') {
     const userId = pathname.split('/')[3];
+    if (userId === 'usr_admin' || userId === 'usr_admin2') {
+      throw new Error('لا يمكن حذف الحساب الرئيسي لمدير النظام');
+    }
+    if (!Array.isArray(snap.deletedUserIds)) {
+      snap.deletedUserIds = [];
+    }
+    if (!snap.deletedUserIds.includes(userId)) {
+      snap.deletedUserIds.push(userId);
+    }
     snap.users = snap.users.filter((u: any) => u.id !== userId);
     if (isCloudStoreTestMode) {
       await persistState(snap);
@@ -1880,9 +2043,16 @@ export async function handleLocalFallbackRequest(
 
   if (pathname.startsWith('/api/projects-catalog/') && method === 'DELETE') {
     const projId = pathname.split('/')[3];
+    if (!Array.isArray(snap.deletedProjectIds)) snap.deletedProjectIds = [];
+    if (!snap.deletedProjectIds.includes(projId)) snap.deletedProjectIds.push(projId);
+    const removedProj = (snap.projectsCatalog || []).find((p: any) => p.id === projId);
     snap.projectsCatalog = (snap.projectsCatalog || []).filter((p: any) => p.id !== projId);
+    if (removedProj?.name && Array.isArray(snap.projects)) {
+      snap.projects = snap.projects.filter((n: string) => n !== removedProj.name);
+      if (snap.projects.length === 0) snap.projects = [...DEFAULT_PROJECTS];
+    }
     await persistState(snap);
-    return { ok: true, projectsCatalog: snap.projectsCatalog };
+    return { ok: true, projectsCatalog: snap.projectsCatalog, projects: snap.projects };
   }
 
   if (pathname === '/api/properties' && method === 'POST') {

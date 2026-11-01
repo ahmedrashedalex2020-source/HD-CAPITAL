@@ -54,7 +54,16 @@ function getStorage(): Storage | null {
   }
 }
 
-let currentUserId = getStorage()?.getItem(SESSION_USER_KEY) || '';
+let rawSavedUserId = getStorage()?.getItem(SESSION_USER_KEY) || '';
+if (rawSavedUserId === 'usr_admin') {
+  rawSavedUserId = 'usr_admin2';
+  try {
+    getStorage()?.setItem(SESSION_USER_KEY, 'usr_admin2');
+  } catch {
+    // ignore
+  }
+}
+let currentUserId = rawSavedUserId;
 let rawSavedToken = getStorage()?.getItem(SESSION_TOKEN_KEY) || '';
 let lastActivityTimestamp = Number(getStorage()?.getItem(SESSION_ACTIVITY_KEY) || '0');
 

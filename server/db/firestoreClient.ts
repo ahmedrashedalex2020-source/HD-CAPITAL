@@ -9,12 +9,9 @@ import {
 import {
   getFirestore as getClientFirestoreSdk,
   doc as clientDoc,
-  setDoc as clientSetDoc,
   getDoc as clientGetDoc,
   collection as clientCollection,
   getDocs as clientGetDocs,
-  deleteDoc as clientDeleteDoc,
-  terminate as clientTerminate,
   setLogLevel as setClientFirestoreLogLevel,
   Firestore as ClientFirestore,
 } from 'firebase/firestore';
@@ -112,21 +109,15 @@ let serverFirestoreWriteQuotaExhausted = false;
 let lastSyncedWorkspaceFingerprint = '';
 let lastSyncedTimestampMs = 0;
 
-async function tripServerWriteCircuitBreaker(): Promise<void> {
+function markServerWriteQuotaExhausted(): void {
   serverFirestoreWriteQuotaExhausted = true;
-  const currentDb = serverClientFirestore;
-  serverClientFirestore = null;
-  if (currentDb) {
-    try {
-      await clientTerminate(currentDb);
-    } catch {
-      // ignore termination errors
-    }
-  }
 }
 
+/**
+ * Returns the Firebase Web SDK Firestore instance for read operations.
+ * Write-quota exhaustion NEVER disables read operations from Firestore.
+ */
 export function getServerWebFirestore(): ClientFirestore | null {
-  if (serverFirestoreWriteQuotaExhausted) return null;
   if (serverClientFirestore) return serverClientFirestore;
   if (!appletConfig.apiKey || !appletConfig.projectId) return null;
   try {
@@ -161,21 +152,28 @@ const FAKE_DEMO_USER_IDS = new Set([
   'usr_1793095150415_61ql',
 ]);
 
-function isExplicitFakeDemoUserRecord(u: any): boolean {
+export function isExplicitFakeDemoUserRecord(u: any): boolean {
   if (!u || typeof u !== 'object') return true;
-  if (FAKE_DEMO_USER_IDS.has(String(u.id || ''))) return true;
+  const uid = String(u.id || '').trim();
+  if (FAKE_DEMO_USER_IDS.has(uid)) return true;
   const uname = String(u.username || '').trim().toLowerCase();
   const fname = String(u.fullName || '').trim();
   if (uname === 'test1' && fname.includes('تجريبي')) return true;
+  // Filter out the legacy template admin (أحمد راشد) so only Hassan Shehata & real sales team remain
+  if (
+    (uid === 'usr_admin' || uname === 'admin') &&
+    (fname.includes('أحمد راشد') || fname.includes('احمد راشد') || fname.includes('Ahmed Rashed'))
+  ) {
+    return true;
+  }
   return false;
 }
 
 /**
  * Pulls real employee/user accounts from live Google Firebase Cloud Firestore (`users` collection and `crm_state/workspace`).
- * Strictly read-only (never issues delete/write operations during reads).
+ * Strictly read-only (never issues delete/write operations during reads, and remains active even if write quota is full).
  */
 export async function pullUsersFromLiveCloudFirestore(): Promise<any[]> {
-  if (serverFirestoreWriteQuotaExhausted) return [];
   const webDb = getServerWebFirestore();
   if (!webDb) return [];
   try {
@@ -216,18 +214,60 @@ export async function pullUsersFromLiveCloudFirestore(): Promise<any[]> {
   }
 }
 
+/**
+ * Pulls the full workspace document + users collection from live Cloud Firestore on server boot.
+ */
+export async function pullWorkspaceFromLiveCloudFirestore(): Promise<any | null> {
+  const webDb = getServerWebFirestore();
+  if (!webDb) return null;
+  try {
+    const [usersSnap, wsSnap] = await Promise.all([
+      clientGetDocs(clientCollection(webDb, 'users')).catch(() => null),
+      clientGetDoc(clientDoc(webDb, 'crm_state', 'workspace')).catch(() => null),
+    ]);
+
+    const wsData = wsSnap && wsSnap.exists() ? wsSnap.data() : {};
+    const mergedUsers = new Map<string, any>();
+
+    if (Array.isArray(wsData?.users)) {
+      for (const u of wsData.users) {
+        if (u && u.id && !isExplicitFakeDemoUserRecord(u)) {
+          mergedUsers.set(u.id, u);
+        }
+      }
+    }
+
+    if (usersSnap) {
+      for (const d of usersSnap.docs) {
+        const u = d.data();
+        if (u && u.id && !isExplicitFakeDemoUserRecord(u) && !FAKE_DEMO_USER_IDS.has(d.id)) {
+          const prev = mergedUsers.get(u.id) || {};
+          mergedUsers.set(u.id, { ...prev, ...u });
+        }
+      }
+    }
+
+    return {
+      ...wsData,
+      users: Array.from(mergedUsers.values()),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function removeUserFromLiveCloudFirestore(userId: string): Promise<void> {
   if (!firestoreDirectAvailable || serverFirestoreWriteQuotaExhausted || !userId) return;
   try {
     await adminFirestore.collection('users').doc(userId).delete();
   } catch {
-    await tripServerWriteCircuitBreaker();
+    markServerWriteQuotaExhausted();
   }
 }
 
 /**
  * Syncs the CRM workspace state to `crm_state/workspace` in Cloud Firestore with deduplication,
- * rate-limiting, and an automatic circuit-breaker if the free-tier daily write quota is exhausted.
+ * rate-limiting, and an automatic write circuit-breaker if the free-tier daily write quota is exhausted.
  */
 export async function syncStateToLiveCloudFirestore(state: any): Promise<boolean> {
   if (!firestoreDirectAvailable || serverFirestoreWriteQuotaExhausted || !state) return false;
@@ -253,10 +293,14 @@ export async function syncStateToLiveCloudFirestore(state: any): Promise<boolean
       notifications: (state.notifications || []).slice(0, 50),
       projects: state.projects || [],
       projectsCatalog: state.projectsCatalog || [],
+      deletedUserIds: state.deletedUserIds || [],
+      deletedProjectIds: state.deletedProjectIds || [],
+      deletedPropertyIds: state.deletedPropertyIds || [],
+      deletedLeadIds: state.deletedLeadIds || [],
     };
 
     const fingerprint = JSON.stringify({
-      uCount: safeUsers.length,
+      uIds: safeUsers.map((u: any) => `${u.id}:${u.username}:${u.fullName}`).join(','),
       lCount: coreData.leads.length,
       lTop: coreData.leads[0]?.updatedAt || '',
       pCount: coreData.projectsCatalog.length,
@@ -284,7 +328,7 @@ export async function syncStateToLiveCloudFirestore(state: any): Promise<boolean
     lastSyncedTimestampMs = nowMs;
     return true;
   } catch {
-    await tripServerWriteCircuitBreaker();
+    markServerWriteQuotaExhausted();
     return false;
   }
 }

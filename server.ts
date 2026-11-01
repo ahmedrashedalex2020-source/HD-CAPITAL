@@ -29,7 +29,9 @@ import {
   verifyFirestoreConnectivity,
   isCloudFirestoreActive,
   isLiveFirestoreConnected,
+  isExplicitFakeDemoUserRecord,
   pullUsersFromLiveCloudFirestore,
+  pullWorkspaceFromLiveCloudFirestore,
   removeUserFromLiveCloudFirestore,
   syncStateToLiveCloudFirestore,
 } from './server/db/firestoreClient';
@@ -49,6 +51,23 @@ const FAKE_PROJECT_NAMES = new Set([
   'Il Bosco New Capital',
   'Solare Ras El Hekma',
 ]);
+
+export function isInvalidProjectName(rawName: any): boolean {
+  const name = String(rawName || '').trim();
+  if (!name) return true;
+  if (FAKE_PROJECT_NAMES.has(name)) return true;
+  const lower = name.toLowerCase();
+  if (
+    lower.includes('http://') ||
+    lower.includes('https://') ||
+    lower.includes('facebook.com') ||
+    lower.includes("don't have enough permission") ||
+    lower.includes('enough permission')
+  ) {
+    return true;
+  }
+  return false;
+}
 
 export function parseCrm1PriceValue(rawAnswer: string): number {
   const text = String(rawAnswer || '').trim();
@@ -113,13 +132,29 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
     'usr_1793095150415_61ql',
   ]);
 
+  const deletedUserIds = new Set<string>(
+    Array.isArray(parsedDb.deletedUserIds) ? parsedDb.deletedUserIds.map(String) : []
+  );
+  const deletedProjectIds = new Set<string>(
+    Array.isArray(parsedDb.deletedProjectIds) ? parsedDb.deletedProjectIds.map(String) : []
+  );
+  const deletedPropertyIds = new Set<string>(
+    Array.isArray(parsedDb.deletedPropertyIds) ? parsedDb.deletedPropertyIds.map(String) : []
+  );
+  const deletedLeadIds = new Set<string>(
+    Array.isArray(parsedDb.deletedLeadIds) ? parsedDb.deletedLeadIds.map(String) : []
+  );
+  parsedDb.deletedUserIds = Array.from(deletedUserIds);
+  parsedDb.deletedProjectIds = Array.from(deletedProjectIds);
+  parsedDb.deletedPropertyIds = Array.from(deletedPropertyIds);
+  parsedDb.deletedLeadIds = Array.from(deletedLeadIds);
+
   if (Array.isArray(parsedDb.users)) {
     parsedDb.users = parsedDb.users.filter((u: any) => {
       if (!u || typeof u !== 'object') return false;
       if (FAKE_DEMO_USER_IDS.has(String(u.id || ''))) return false;
-      const uname = String(u.username || '').trim().toLowerCase();
-      const fname = String(u.fullName || '').trim();
-      if (uname === 'test1' && fname.includes('تجريبي')) return false;
+      if (deletedUserIds.has(String(u.id || ''))) return false;
+      if (isExplicitFakeDemoUserRecord(u)) return false;
       return true;
     });
   } else {
@@ -128,7 +163,9 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
 
   if (Array.isArray(parsedDb.leads)) {
     parsedDb.leads = parsedDb.leads.filter((l: any) => {
+      if (!l || typeof l !== 'object') return false;
       if (FAKE_LEAD_IDS.has(l.id)) return false;
+      if (deletedLeadIds.has(String(l.id || ''))) return false;
       if (String(l.sheetRowId || '').startsWith('meta_row_')) return false;
       if (isDummyOrFakeLead(l.fullName, l.phone, l.notes)) return false;
       const digits = String(l.phone || '').replace(/[^0-9]/g, '').slice(-10);
@@ -149,7 +186,11 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
 
   if (Array.isArray(parsedDb.properties)) {
     parsedDb.properties = parsedDb.properties.filter(
-      (p: any) => !['prop_1', 'prop_2', 'prop_3', 'prop_4', 'prop_5'].includes(p.id)
+      (p: any) =>
+        p &&
+        typeof p === 'object' &&
+        !['prop_1', 'prop_2', 'prop_3', 'prop_4', 'prop_5'].includes(p.id) &&
+        !deletedPropertyIds.has(String(p.id || ''))
     );
   } else {
     parsedDb.properties = [];
@@ -179,15 +220,33 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
     parsedDb.notifications = [];
   }
 
+  if (Array.isArray(parsedDb.projectsCatalog)) {
+    parsedDb.projectsCatalog = parsedDb.projectsCatalog.filter(
+      (p: any) =>
+        p &&
+        typeof p === 'object' &&
+        !deletedProjectIds.has(String(p.id || '')) &&
+        !isInvalidProjectName(p.name)
+    );
+  } else {
+    parsedDb.projectsCatalog = [];
+  }
+
   // Enrich all CRM1 leads directly from their actual CRM1 formResponses and remove fake project names
   const discoveredSheetProjects = new Set<string>();
   parsedDb.leads.forEach((l: any) => {
     l.status = normalizeLeadStatus(l.status);
+    if (l.assignedBy === 'usr_admin') {
+      l.assignedBy = 'usr_admin2';
+    }
     if (Array.isArray(l.formResponses)) {
       l.formResponses = l.formResponses.filter((fr: any) => {
         const q = String(fr?.question || '').trim().toLowerCase();
         const a = String(fr?.answer || '').trim().toLowerCase();
         if (!q || !a || q === 'lead_status' || a.includes('dummy data')) return false;
+        if (a.includes("don't have enough permission") || a.includes('facebook.com/business/help')) {
+          return false;
+        }
         return true;
       });
 
@@ -195,8 +254,8 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
         const q = String(fr.question || '').trim();
         const a = String(fr.answer || '').trim();
         if (q === 'campaign_name' || q.includes('المشروع') || q.includes('حملة')) {
-          if (a && !FAKE_PROJECT_NAMES.has(a)) {
-            if (!l.projectInterest || FAKE_PROJECT_NAMES.has(l.projectInterest)) {
+          if (a && !isInvalidProjectName(a)) {
+            if (!l.projectInterest || isInvalidProjectName(l.projectInterest)) {
               l.projectInterest = a;
             }
           }
@@ -218,29 +277,22 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
       }
     }
 
-    if (!l.projectInterest || FAKE_PROJECT_NAMES.has(l.projectInterest)) {
-      const firstCatalogProject = Array.isArray(parsedDb.projectsCatalog) && parsedDb.projectsCatalog[0]?.name
-        ? String(parsedDb.projectsCatalog[0].name).trim()
-        : Array.isArray(parsedDb.properties) && parsedDb.properties[0]?.projectName
-        ? String(parsedDb.properties[0].projectName).trim()
-        : 'ليدز مغتربين';
+    if (!l.projectInterest || isInvalidProjectName(l.projectInterest)) {
+      const firstCatalogProject =
+        Array.isArray(parsedDb.projectsCatalog) && parsedDb.projectsCatalog[0]?.name
+          ? String(parsedDb.projectsCatalog[0].name).trim()
+          : Array.isArray(parsedDb.properties) && parsedDb.properties[0]?.projectName
+          ? String(parsedDb.properties[0].projectName).trim()
+          : 'ليدز مغتربين';
       l.projectInterest = firstCatalogProject;
     }
     discoveredSheetProjects.add(l.projectInterest);
   });
 
-  if (Array.isArray(parsedDb.projectsCatalog)) {
-    parsedDb.projectsCatalog = parsedDb.projectsCatalog.filter(
-      (p: any) => p && typeof p === 'object' && !FAKE_PROJECT_NAMES.has(String(p.name || '').trim())
-    );
-  } else {
-    parsedDb.projectsCatalog = [];
-  }
-
   const enteredProjectsAndUnits = new Set<string>();
   parsedDb.projectsCatalog.forEach((p: any) => {
     const name = String(p?.name || '').trim();
-    if (name && !FAKE_PROJECT_NAMES.has(name)) {
+    if (!isInvalidProjectName(name)) {
       enteredProjectsAndUnits.add(name);
       discoveredSheetProjects.add(name);
     }
@@ -249,12 +301,12 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
   if (Array.isArray(parsedDb.properties)) {
     parsedDb.properties.forEach((prop: any) => {
       const name = String(prop?.projectName || '').trim();
-      if (name && !FAKE_PROJECT_NAMES.has(name)) {
+      if (!isInvalidProjectName(name)) {
         enteredProjectsAndUnits.add(name);
         discoveredSheetProjects.add(name);
       }
       const unitTitle = String(prop?.titleAr || prop?.title || '').trim();
-      if (unitTitle && !FAKE_PROJECT_NAMES.has(unitTitle)) {
+      if (unitTitle && !isInvalidProjectName(unitTitle)) {
         const unitOption = `${name ? `${name} - ` : ''}${unitTitle}${prop?.code ? ` (${prop.code})` : ''}`;
         enteredProjectsAndUnits.add(unitOption);
       }
@@ -264,7 +316,7 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
   if (Array.isArray(parsedDb.projects)) {
     parsedDb.projects.forEach((p: any) => {
       const name = String(p || '').trim();
-      if (name && !FAKE_PROJECT_NAMES.has(name)) {
+      if (!isInvalidProjectName(name)) {
         discoveredSheetProjects.add(name);
       }
     });
@@ -272,9 +324,28 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
 
   const combinedProjects = Array.from(
     new Set([...Array.from(enteredProjectsAndUnits), ...Array.from(discoveredSheetProjects)])
-  );
+  ).filter((p) => !isInvalidProjectName(p));
   const cleanProjectsList = combinedProjects.length > 0 ? combinedProjects : ['ليدز مغتربين'];
   parsedDb.projects = cleanProjectsList;
+
+  // Ensure the core Admin (Hassan Shehata) and manually entered Sales Team exist unless explicitly deleted
+  const seedUsers = getInitialDatabase().users || [];
+  for (const seedUser of seedUsers) {
+    if (!seedUser || !seedUser.id) continue;
+    if (deletedUserIds.has(String(seedUser.id))) continue;
+    const exists = parsedDb.users.some(
+      (u: any) =>
+        u.id === seedUser.id ||
+        String(u.username || '').trim().toLowerCase() ===
+          String(seedUser.username || '').trim().toLowerCase()
+    );
+    if (!exists) {
+      parsedDb.users.push({
+        ...seedUser,
+        assignedProjects: [...cleanProjectsList],
+      });
+    }
+  }
 
   if (Array.isArray(parsedDb.users)) {
     const FAKE_USER_PHONES = [
@@ -292,22 +363,17 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
       }
       if (Array.isArray(u.assignedProjects)) {
         const filteredProjects = u.assignedProjects.filter(
-          (p: string) => !FAKE_PROJECT_NAMES.has(p)
+          (p: string) => !isInvalidProjectName(p)
         );
         u.assignedProjects =
           filteredProjects.length > 0 ? filteredProjects : [...cleanProjectsList];
       } else {
         u.assignedProjects = [...cleanProjectsList];
       }
-      if (u.passwordHash && !String(u.passwordHash).startsWith('scrypt$')) {
-        if (u.username === 'admin' || u.username === 'admin2') {
-          u.passwordHash = hashPasswordSecure('admin123');
-        }
-      }
       if (typeof u.avatarUrl === 'string' && u.avatarUrl.length > 10000) {
         const initials =
-          u.id === 'usr_admin'
-            ? 'AR'
+          u.id === 'usr_admin2'
+            ? 'HS'
             : String(u.fullName || u.username || 'U')
                 .split(' ')
                 .slice(0, 2)
@@ -316,33 +382,27 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
                 .toUpperCase() || 'U';
         u.avatarUrl = createAvatarSvg(initials, '#1D4ED8', '#3B82F6');
       }
-      if (u.id === 'usr_admin' || String(u.username || '').toLowerCase() === 'admin') {
-        u.accessPassword = u.accessPassword || 'admin123';
-        if (!u.passwordHash || !String(u.passwordHash).startsWith('scrypt$')) {
-          u.passwordHash = hashPasswordSecure(u.accessPassword);
-        }
-        u.clientAuthDigest = computeClientAuthDigest('admin', u.accessPassword);
-      } else if (
+      if (
         u.id === 'usr_admin2' ||
         u.id === 'usr_admin_partner' ||
         u.username === 'admin2' ||
         String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata'
       ) {
         u.id = 'usr_admin2';
-        u.username = 'Hassan shehata';
-        u.fullName = 'حسن شحاتة (Hassan Shehata)';
+        u.username = u.username || 'Hassan shehata';
+        u.fullName = u.fullName || 'حسن شحاتة (Hassan Shehata)';
         u.roleId = 'role_admin';
-        if (u.accessPassword !== 'HD_CAPITAL' || !u.passwordHash || !String(u.passwordHash).startsWith('scrypt$')) {
-          u.passwordHash = hashPasswordSecure('HD_CAPITAL');
+        const adminPass = u.accessPassword || 'HD_CAPITAL';
+        u.accessPassword = adminPass;
+        if (!u.passwordHash || !String(u.passwordHash).startsWith('scrypt$')) {
+          u.passwordHash = hashPasswordSecure(adminPass);
         }
-        u.accessPassword = 'HD_CAPITAL';
-        u.clientAuthDigest = computeClientAuthDigest('hassan shehata', 'HD_CAPITAL');
-        u.jobTitle = 'Co-Founder & System Administrator';
-        u.jobTitleAr = 'مدير شريك ومدير نظام معتمد';
-        u.avatarUrl = createAvatarSvg('HS', '#1E40AF', '#3B82F6');
-        u.email = 'hassan.shehata@propsphere.eg';
+        u.clientAuthDigest = computeClientAuthDigest(u.username, adminPass);
+        u.jobTitle = u.jobTitle || 'Co-Founder & System Administrator';
+        u.jobTitleAr = u.jobTitleAr || 'مدير شريك ومدير نظام معتمد';
+        u.avatarUrl = u.avatarUrl || createAvatarSvg('HS', '#1E40AF', '#3B82F6');
+        u.email = u.email || 'hassan.shehata@propsphere.eg';
       } else {
-        // Ensure omarahmed1 and every employee account has a working passwordHash and clientAuthDigest
         const targetPass = u.accessPassword || '123456';
         u.accessPassword = targetPass;
         if (!u.passwordHash || !String(u.passwordHash).startsWith('scrypt$')) {
@@ -352,56 +412,25 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
       }
     });
 
-    const hasAdmin2 = parsedDb.users.some(
-      (u: any) =>
-        u.id === 'usr_admin2' ||
-        String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata'
-    );
-    if (!hasAdmin2) {
-      parsedDb.users.splice(1, 0, {
-        id: 'usr_admin2',
-        username: 'Hassan shehata',
-        accessPassword: 'HD_CAPITAL',
-        passwordHash: hashPasswordSecure('HD_CAPITAL'),
-        clientAuthDigest: computeClientAuthDigest('hassan shehata', 'HD_CAPITAL'),
-        fullName: 'حسن شحاتة (Hassan Shehata)',
-        roleId: 'role_admin',
-        jobTitle: 'Co-Founder & System Administrator',
-        jobTitleAr: 'مدير شريك ومدير نظام معتمد',
-        avatarUrl: createAvatarSvg('HS', '#1E40AF', '#3B82F6'),
-        email: 'hassan.shehata@propsphere.eg',
-        phone: '',
-        location: 'القاهرة الجديدة · التجمع الخامس',
-        assignedProjects: [...cleanProjectsList],
-        isActiveForRouting: false,
-        routingWeight: 1,
-        preferredLang: 'ar',
-        createdAt: '2026-01-15T09:00:00.000Z',
-      });
-    }
-
-    // Assign automatic/imported leads directly to the second CRM Admin: Hassan Shehata (usr_admin2)
-    // Do NOT automatically distribute leads across sales employees unless manually transferred by an admin.
     const validUserIds = new Set(parsedDb.users.map((u: any) => u.id));
     const hassanAdmin =
       parsedDb.users.find(
         (u: any) =>
           u.id === 'usr_admin2' ||
           String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata'
-      ) ||
-      parsedDb.users.find((u: any) => u.id === 'usr_admin') ||
-      parsedDb.users[0];
+      ) || parsedDb.users[0];
 
     if (Array.isArray(parsedDb.leads) && hassanAdmin) {
       parsedDb.leads.forEach((l: any) => {
-        // Retain lead assignment if it belongs to any valid user in the system.
-        // Only assign to Hassan Shehata if lead is completely unassigned or assigned to a deleted user ID.
         if (!l.assignedTo || !validUserIds.has(l.assignedTo)) {
           l.assignedTo = hassanAdmin.id;
         }
         const assignedUser = parsedDb.users.find((u: any) => u.id === l.assignedTo) || hassanAdmin;
         if (assignedUser && Array.isArray(l.activities)) {
           l.activities.forEach((act: any) => {
+            if (act.userId === 'usr_admin') {
+              act.userId = hassanAdmin.id;
+            }
             if (act.type === 'sheet_import' && !act.summary.includes(assignedUser.fullName)) {
               act.summary = `تم استيراد العميل من شيت CRM1 (${
                 (l.formResponses || []).length
@@ -437,7 +466,7 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
       primary.spreadsheetUrl =
         'https://docs.google.com/spreadsheets/d/1QnxeqejR7-xtjK2aC7qSlwxkUMEPiOCHCYn2ChdLc3A/edit?usp=drivesdk';
     }
-    if (!primary.defaultProject || FAKE_PROJECT_NAMES.has(primary.defaultProject)) {
+    if (!primary.defaultProject || isInvalidProjectName(primary.defaultProject)) {
       primary.defaultProject = cleanProjectsList[0] || 'ليدز مغتربين';
     }
     primary.totalImportedCount = Array.isArray(parsedDb.leads) ? parsedDb.leads.length : 0;
@@ -609,13 +638,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     }
     if (
       (u.id === 'usr_admin2' || u.id === 'usr_admin_partner' || compactUsername === 'hassanshehata') &&
-      (clean === 'admin2' || compact === 'hassanshehata' || clean.includes('حسن شحات'))
-    ) {
-      return true;
-    }
-    if (
-      (u.id === 'usr_admin' || storedUsername === 'admin') &&
-      (clean === 'admin' || clean.includes('أحمد راشد') || clean.includes('احمد راشد'))
+      (clean === 'admin' || clean === 'admin2' || compact === 'hassanshehata' || clean.includes('حسن شحات'))
     ) {
       return true;
     }
@@ -631,11 +654,26 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
   async function mergeCloudUsersIntoDb(): Promise<boolean> {
     if (options.dbPath) return false;
     try {
-      const cloudUsers = await pullUsersFromLiveCloudFirestore();
-      if (!Array.isArray(cloudUsers) || cloudUsers.length === 0) return false;
+      const [cloudUsers, cloudWorkspace] = await Promise.all([
+        pullUsersFromLiveCloudFirestore(),
+        pullWorkspaceFromLiveCloudFirestore(),
+      ]);
+
+      const deletedUserIds = new Set<string>(
+        Array.isArray(db.deletedUserIds) ? db.deletedUserIds.map(String) : []
+      );
+      if (Array.isArray(cloudWorkspace?.deletedUserIds)) {
+        cloudWorkspace.deletedUserIds.forEach((id: any) => deletedUserIds.add(String(id)));
+      }
+      db.deletedUserIds = Array.from(deletedUserIds);
+
       let changed = false;
-      for (const cu of cloudUsers) {
+      const incomingUsers = Array.isArray(cloudUsers) ? cloudUsers : [];
+      for (const cu of incomingUsers) {
         if (!cu || !cu.id) continue;
+        if (deletedUserIds.has(String(cu.id))) continue;
+        if (isExplicitFakeDemoUserRecord(cu)) continue;
+
         const existingIdx = db.users.findIndex(
           (u: any) =>
             u.id === cu.id ||
@@ -661,7 +699,6 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
           if (
             cu.accessPassword &&
             cu.accessPassword !== localUser.accessPassword &&
-            cu.id !== 'usr_admin' &&
             cu.id !== 'usr_admin2'
           ) {
             localUser.accessPassword = cu.accessPassword;
@@ -674,6 +711,36 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
           }
         }
       }
+
+      if (cloudWorkspace && typeof cloudWorkspace === 'object') {
+        const deletedProjIds = new Set<string>(
+          Array.isArray(db.deletedProjectIds) ? db.deletedProjectIds.map(String) : []
+        );
+        if (Array.isArray(cloudWorkspace.projectsCatalog)) {
+          for (const cp of cloudWorkspace.projectsCatalog) {
+            if (!cp || !cp.id || deletedProjIds.has(String(cp.id)) || isInvalidProjectName(cp.name)) {
+              continue;
+            }
+            if (!db.projectsCatalog.some((p: any) => p.id === cp.id)) {
+              db.projectsCatalog.push(cp);
+              changed = true;
+            }
+          }
+        }
+        const deletedPropIds = new Set<string>(
+          Array.isArray(db.deletedPropertyIds) ? db.deletedPropertyIds.map(String) : []
+        );
+        if (Array.isArray(cloudWorkspace.properties)) {
+          for (const prop of cloudWorkspace.properties) {
+            if (!prop || !prop.id || deletedPropIds.has(String(prop.id))) continue;
+            if (!db.properties.some((p: any) => p.id === prop.id)) {
+              db.properties.push(prop);
+              changed = true;
+            }
+          }
+        }
+      }
+
       if (changed) {
         upgradeExistingDbForCrm1(db);
         saveDb(db);
@@ -682,6 +749,10 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     } catch {
       return false;
     }
+  }
+
+  if (!options.dbPath && !options.disableBackgroundSync) {
+    void mergeCloudUsersIntoDb();
   }
 
   interface SseClient {
@@ -751,13 +822,23 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     return undefined;
   }
 
+  function resolveUserByIdOrLegacyAdmin(targetId: string | undefined | null): any {
+    if (!targetId) return null;
+    const direct = db.users.find((u: any) => u.id === targetId);
+    if (direct) return direct;
+    if (targetId === 'usr_admin') {
+      return db.users.find((u: any) => u.id === 'usr_admin2') || db.users[0] || null;
+    }
+    return null;
+  }
+
   function getAuthContext(req: Request): { user: any; role: any; authenticated: boolean } {
     const rawToken = extractSessionTokenFromReq(req);
 
     if (rawToken) {
       const verified = verifySessionToken(rawToken);
       if (verified) {
-        const user = db.users.find((u: any) => u.id === verified.userId);
+        const user = resolveUserByIdOrLegacyAdmin(verified.userId);
         if (user) {
           const role = db.roles.find((r: any) => r.id === user.roleId) || db.roles[0];
           return { user, role, authenticated: true };
@@ -771,7 +852,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
           );
           const targetId = parsedPayload?.id || parsedPayload?.userId;
           if (targetId) {
-            const matchedUser = db.users.find((u: any) => u.id === targetId);
+            const matchedUser = resolveUserByIdOrLegacyAdmin(targetId);
             if (matchedUser) {
               const matchedRole =
                 db.roles.find((r: any) => r.id === matchedUser.roleId) || db.roles[0];
@@ -797,7 +878,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     if (!fallbackUserId) {
       return { user: null, role: null, authenticated: false };
     }
-    const user = db.users.find((u: any) => u.id === fallbackUserId);
+    const user = resolveUserByIdOrLegacyAdmin(fallbackUserId);
     if (!user) {
       return { user: null, role: null, authenticated: false };
     }
@@ -811,9 +892,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
         (u: any) =>
           u.id === 'usr_admin2' ||
           String(u.username || '').toLowerCase().replace(/[\s_]+/g, '') === 'hassanshehata'
-      ) ||
-      db.users.find((u: any) => u.id === 'usr_admin') ||
-      db.users[0]
+      ) || db.users[0]
     );
   }
 
@@ -967,9 +1046,10 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       if (
         isHassan &&
         (cleanPass === 'HD_CAPITAL' ||
+          cleanPass === 'admin123' ||
           cleanPass.toUpperCase().replace(/[\s-]+/g, '_') === 'HD_CAPITAL')
       ) {
-        verification = { valid: true, needsUpgrade: true };
+        verification = { valid: true, needsUpgrade: false };
       } else if (storedAccessPass && cleanPass === storedAccessPass) {
         verification = { valid: true, needsUpgrade: true };
       } else if (
@@ -985,7 +1065,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
     }
 
-    const canonicalPass = isHassan ? 'HD_CAPITAL' : storedAccessPass || cleanPass;
+    const canonicalPass = isHassan ? user.accessPassword || 'HD_CAPITAL' : storedAccessPass || cleanPass;
     const expectedDigest = computeClientAuthDigest(user.username, canonicalPass);
     let dbUpdated = false;
     if (verification.needsUpgrade) {
@@ -1379,6 +1459,9 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       createdAt: new Date().toISOString(),
     };
 
+    if (Array.isArray(db.deletedUserIds)) {
+      db.deletedUserIds = db.deletedUserIds.filter((id: string) => id !== newUser.id);
+    }
     db.users.push(newUser);
     saveDb(db);
 
@@ -1502,6 +1585,12 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     const targetId = req.params.id;
     if (targetId === 'usr_admin' || targetId === 'usr_admin2') {
       return res.status(400).json({ error: 'لا يمكن حذف الحساب الرئيسي لمدير النظام' });
+    }
+    if (!Array.isArray(db.deletedUserIds)) {
+      db.deletedUserIds = [];
+    }
+    if (!db.deletedUserIds.includes(targetId)) {
+      db.deletedUserIds.push(targetId);
     }
     db.users = db.users.filter((u: any) => u.id !== targetId);
     // Re-assign leads belonging to the deleted user to the second CRM Admin (Hassan Shehata)
@@ -2258,6 +2347,12 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     ) {
       return res.status(403).json({ error: 'حذف هذا العميل غير مسموح لدورك الوظيفي طبقاً لمصفوفة الصلاحيات' });
     }
+    if (!Array.isArray(db.deletedLeadIds)) {
+      db.deletedLeadIds = [];
+    }
+    if (!db.deletedLeadIds.includes(req.params.id)) {
+      db.deletedLeadIds.push(req.params.id);
+    }
     db.leads = db.leads.filter((l: any) => l.id !== req.params.id);
     saveDb(db);
     res.json({ ok: true });
@@ -2889,9 +2984,11 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
             header.includes('حملة') ||
             lowerH.includes('project')
           ) {
-            inferredProject = answer;
-            if (!db.projects.includes(answer)) {
-              db.projects.push(answer);
+            if (!isInvalidProjectName(answer)) {
+              inferredProject = answer;
+              if (!db.projects.includes(answer)) {
+                db.projects.push(answer);
+              }
             }
           } else if (
             header.includes('المساحة') ||
@@ -2943,7 +3040,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
           status: 'Fresh Lead',
           priority: 'High',
           assignedTo: agent.id,
-          assignedBy: options.triggeredByUserId || 'usr_admin',
+          assignedBy: options.triggeredByUserId || 'usr_admin2',
           notes: formattedFormNotes,
           formResponses,
           nextFollowUpAt: nowIso.slice(0, 10),
@@ -2953,7 +3050,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
             {
               id: `act_${Date.now()}_${rowIndex}`,
               leadId,
-              userId: options.triggeredByUserId || 'usr_admin',
+              userId: options.triggeredByUserId || 'usr_admin2',
               userName: 'CRM1 Auto-Sync (كل 15 دقيقة)',
               type: 'sheet_import',
               summary: `تم استيراد العميل من شيت CRM1 (الاسم + رقم التليفون + ${formResponses.length} إجابات من الفورم بدون أي خانات ID) وتوجيهه إلى ${agent.fullName}.`,
@@ -3230,9 +3327,20 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     if (!Array.isArray(db.projectsCatalog)) {
       db.projectsCatalog = [];
     }
+    if (!Array.isArray(db.deletedProjectIds)) {
+      db.deletedProjectIds = [];
+    }
+    if (!db.deletedProjectIds.includes(req.params.id)) {
+      db.deletedProjectIds.push(req.params.id);
+    }
+    const removedProj = db.projectsCatalog.find((p: any) => p.id === req.params.id);
     db.projectsCatalog = db.projectsCatalog.filter((p: any) => p.id !== req.params.id);
+    if (removedProj?.name && Array.isArray(db.projects)) {
+      db.projects = db.projects.filter((name: string) => name !== removedProj.name);
+      if (db.projects.length === 0) db.projects = [...DEFAULT_PROJECTS];
+    }
     saveDb(db);
-    res.json({ ok: true, projectsCatalog: db.projectsCatalog });
+    res.json({ ok: true, projectsCatalog: db.projectsCatalog, projects: db.projects });
   });
 
   app.post('/api/properties', (req: Request, res: Response) => {
@@ -3292,9 +3400,106 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     if (role.permissions?.properties?.delete === 'none' && role.id !== 'role_admin') {
       return res.status(403).json({ error: 'ليس لديك صلاحية لحذف الوحدات العقارية' });
     }
+    if (!Array.isArray(db.deletedPropertyIds)) {
+      db.deletedPropertyIds = [];
+    }
+    if (!db.deletedPropertyIds.includes(req.params.id)) {
+      db.deletedPropertyIds.push(req.params.id);
+    }
     db.properties = db.properties.filter((p: any) => p.id !== req.params.id);
     saveDb(db);
     res.json({ ok: true });
+  });
+
+  // Bidirectional Workspace Sync Endpoint (persists any Control Panel additions/updates from client fallback into server disk DB)
+  app.post('/api/workspace/sync', (req: Request, res: Response) => {
+    const { user, authenticated } = getAuthContext(req);
+    if (!authenticated || !user) {
+      return res.status(401).json({ error: 'يرجى تسجيل الدخول' });
+    }
+    const incoming = req.body || {};
+    let changed = false;
+
+    if (Array.isArray(incoming.deletedUserIds)) {
+      const delSet = new Set<string>([...(db.deletedUserIds || []), ...incoming.deletedUserIds.map(String)]);
+      db.deletedUserIds = Array.from(delSet);
+      const beforeLen = db.users.length;
+      db.users = db.users.filter((u: any) => !delSet.has(String(u.id)) || u.id === 'usr_admin2');
+      if (db.users.length !== beforeLen) changed = true;
+    }
+
+    if (Array.isArray(incoming.users)) {
+      const delUsers = new Set<string>(db.deletedUserIds || []);
+      for (const iu of incoming.users) {
+        if (!iu || !iu.id || delUsers.has(String(iu.id)) || isExplicitFakeDemoUserRecord(iu)) continue;
+        const idx = db.users.findIndex(
+          (u: any) =>
+            u.id === iu.id ||
+            String(u.username || '').trim().toLowerCase() ===
+              String(iu.username || '').trim().toLowerCase()
+        );
+        if (idx === -1) {
+          const pass = iu.accessPassword || '123456';
+          db.users.push({
+            ...iu,
+            accessPassword: pass,
+            passwordHash: hashPasswordSecure(pass),
+            clientAuthDigest: computeClientAuthDigest(iu.username || '', pass),
+          });
+          changed = true;
+        } else if (iu.id !== 'usr_admin2') {
+          const existing = db.users[idx];
+          const nextPass = iu.accessPassword || existing.accessPassword || '123456';
+          db.users[idx] = {
+            ...existing,
+            ...iu,
+            accessPassword: nextPass,
+            passwordHash:
+              nextPass !== existing.accessPassword
+                ? hashPasswordSecure(nextPass)
+                : existing.passwordHash || hashPasswordSecure(nextPass),
+            clientAuthDigest: computeClientAuthDigest(iu.username || existing.username, nextPass),
+          };
+          changed = true;
+        }
+      }
+    }
+
+    if (Array.isArray(incoming.projectsCatalog)) {
+      const delProj = new Set<string>(db.deletedProjectIds || []);
+      for (const ip of incoming.projectsCatalog) {
+        if (!ip || !ip.id || delProj.has(String(ip.id)) || isInvalidProjectName(ip.name)) continue;
+        const idx = db.projectsCatalog.findIndex((p: any) => p.id === ip.id);
+        if (idx === -1) {
+          db.projectsCatalog.unshift(ip);
+          changed = true;
+        } else {
+          db.projectsCatalog[idx] = { ...db.projectsCatalog[idx], ...ip };
+          changed = true;
+        }
+      }
+    }
+
+    if (Array.isArray(incoming.properties)) {
+      const delProp = new Set<string>(db.deletedPropertyIds || []);
+      for (const prop of incoming.properties) {
+        if (!prop || !prop.id || delProp.has(String(prop.id))) continue;
+        const idx = db.properties.findIndex((p: any) => p.id === prop.id);
+        if (idx === -1) {
+          db.properties.unshift(prop);
+          changed = true;
+        } else {
+          db.properties[idx] = { ...db.properties[idx], ...prop };
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      upgradeExistingDbForCrm1(db);
+      saveDb(db);
+    }
+    res.json({ ok: true, updated: changed });
   });
 
   app.post('/api/deals', (req: Request, res: Response) => {
