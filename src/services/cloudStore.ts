@@ -787,23 +787,33 @@ function mergeById(baseList: any[], incomingList: any[]): any[] {
   if (!Array.isArray(incomingList) || incomingList.length === 0) {
     return [...baseList];
   }
+
   const map = new Map<string, any>();
+  // Start with baseList
   for (const item of baseList) {
     if (item && item.id) map.set(item.id, item);
   }
+
+  // Merge incomingList using strict updatedAt comparison
   for (const item of incomingList) {
-    if (item && item.id) {
-      const prev = map.get(item.id);
-      if (!prev) {
-        map.set(item.id, item);
+    if (!item || !item.id) continue;
+    const existing = map.get(item.id);
+    if (!existing) {
+      map.set(item.id, item);
+    } else {
+      const existingTs = getRecordTimestampMs(existing);
+      const incomingTs = getRecordTimestampMs(item);
+      // Strictly retain the record with the most recent timestamp.
+      // If both have timestamps, the later one wins.
+      // If only one has a timestamp, it wins.
+      // If neither has a timestamp, the incoming one wins by default (latest received).
+      if (existingTs > incomingTs) {
+        // Existing is newer, keep it.
+        // We do NOT merge fields to ensure we "retain the record" as requested.
+        map.set(item.id, existing);
       } else {
-        const prevTs = getRecordTimestampMs(prev);
-        const itemTs = getRecordTimestampMs(item);
-        if (prevTs > 0 && itemTs > 0 && prevTs > itemTs) {
-          map.set(item.id, { ...item, ...prev });
-        } else {
-          map.set(item.id, { ...prev, ...item });
-        }
+        // Incoming is newer or equal, use it.
+        map.set(item.id, item);
       }
     }
   }

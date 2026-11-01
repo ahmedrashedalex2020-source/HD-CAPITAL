@@ -545,7 +545,7 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
         source: selectedLead.source || 'حملة اعلانية',
         campaignName: selectedLead.campaignName || '',
         projectInterest: selectedLead.projectInterest || '',
-        propertyType: selectedLead.propertyType || 'Apartment',
+        propertyType: selectedLead.propertyType || '',
         paymentPlan: extractLeadPaymentPlan(selectedLead),
         budgetMin: Number(selectedLead.budgetMin) || 0,
         budgetMax: Number(selectedLead.budgetMax) || 0,

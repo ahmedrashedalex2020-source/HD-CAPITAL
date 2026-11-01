@@ -350,18 +350,14 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
   const cleanProjectsList = combinedProjects.length > 0 ? combinedProjects : ['ليدز مغتربين'];
   parsedDb.projects = cleanProjectsList;
 
-  // Ensure the core Admin (Hassan Shehata) and manually entered Sales Team exist unless explicitly deleted
-  const seedUsers = getInitialDatabase().users || [];
-  for (const seedUser of seedUsers) {
-    if (!seedUser || !seedUser.id) continue;
-    if (deletedUserIds.has(String(seedUser.id))) continue;
-    const exists = parsedDb.users.some(
-      (u: any) =>
-        u.id === seedUser.id ||
-        String(u.username || '').trim().toLowerCase() ===
-          String(seedUser.username || '').trim().toLowerCase()
-    );
-    if (!exists) {
+  // Ensure the core Admin (Hassan Shehata) and manually entered Sales Team exist
+  // ONLY inject seed users if the users collection is effectively empty to prevent overwriting manual edits
+  const currentUsers = Array.isArray(parsedDb.users) ? parsedDb.users : [];
+  if (currentUsers.length === 0) {
+    const seedUsers = getInitialDatabase().users || [];
+    for (const seedUser of seedUsers) {
+      if (!seedUser || !seedUser.id) continue;
+      if (deletedUserIds.has(String(seedUser.id))) continue;
       parsedDb.users.push({
         ...seedUser,
         assignedProjects: [...cleanProjectsList],
