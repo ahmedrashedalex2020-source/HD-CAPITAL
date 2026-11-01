@@ -30,7 +30,7 @@ function loadOrCreateSessionSecret(): string {
 
 const SESSION_SECRET = loadOrCreateSessionSecret();
 export const SESSION_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes inactivity timeout
-const DEFAULT_TOKEN_TTL_MS = SESSION_TIMEOUT_MS;
+const DEFAULT_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours token validity (sliding inactivity enforced on client & bootstrap)
 
 /**
  * Legacy SHA-256 hash used only for backward-compatible verification during migration.

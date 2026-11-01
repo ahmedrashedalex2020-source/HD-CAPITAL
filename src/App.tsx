@@ -433,36 +433,48 @@ export default function App() {
     setLang((prev) => (prev === 'ar' ? 'en' : 'ar'));
   };
 
-  const handleQuickSyncSheets = useCallback(async () => {
-    if (
-      !currentRole ||
-      (currentRole.id !== 'role_admin' &&
-        (!currentRole.permissions?.sheets_sync?.import ||
-          currentRole.permissions.sheets_sync.import === 'none'))
-    ) {
-      return;
-    }
-    setIsSyncingSheets(true);
-    try {
-      const connId = sheetConnections[0]?.id;
-      const res = await apiRequest('/api/sheets/sync', {
-        method: 'POST',
-        body: JSON.stringify({ connectionId: connId }),
-      });
-      triggerToast(
-        isAr
-          ? `شيت CRM1: تم استيراد ${res.newLeadsImported} عميل جديد (الاسم + رقم التليفون + إجابات الفورم) بدون تكرار وبدون ID!`
-          : `CRM1 Sync: Imported ${res.newLeadsImported} new leads (Name + Phone + Form Q&A) without duplicates or IDs!`
-      );
-      await loadBootstrapData();
-    } catch (err: any) {
-      triggerToast(err.message);
-    } finally {
-      setIsSyncingSheets(false);
-    }
-  }, [currentRole, sheetConnections, isAr, triggerToast, loadBootstrapData]);
+  const handleQuickSyncSheets = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (
+        !currentRole ||
+        (currentRole.id !== 'role_admin' &&
+          (!currentRole.permissions?.sheets_sync?.import ||
+            currentRole.permissions.sheets_sync.import === 'none'))
+      ) {
+        return;
+      }
+      const isSilent = Boolean(opts?.silent);
+      if (!isSilent) {
+        setIsSyncingSheets(true);
+      }
+      try {
+        const connId = sheetConnections[0]?.id;
+        const res = await apiRequest('/api/sheets/sync', {
+          method: 'POST',
+          body: JSON.stringify({ connectionId: connId }),
+        });
+        if (!isSilent || (res && Number(res.newLeadsImported) > 0)) {
+          triggerToast(
+            isAr
+              ? `شيت CRM1: تم استيراد ${res.newLeadsImported} عميل جديد (الاسم + رقم التليفون + إجابات الفورم) بدون تكرار!`
+              : `CRM1 Sync: Imported ${res.newLeadsImported} new leads (Name + Phone + Form Q&A) without duplicates!`
+          );
+        }
+        await loadBootstrapData();
+      } catch (err: any) {
+        if (!isSilent) {
+          triggerToast(err.message);
+        }
+      } finally {
+        if (!isSilent) {
+          setIsSyncingSheets(false);
+        }
+      }
+    },
+    [currentRole, sheetConnections, isAr, triggerToast, loadBootstrapData]
+  );
 
-  // Global 15-Minute Automatic Sync Interval for Google Drive Sheet (CRM1) - Only for roles permitted to sync
+  // Automatic Sync for Google Drive Sheet (CRM1) - Runs shortly after login + every 2 minutes
   useEffect(() => {
     if (
       !isAuthenticated ||
@@ -473,10 +485,18 @@ export default function App() {
     ) {
       return;
     }
+    const initialTimer = setTimeout(() => {
+      void handleQuickSyncSheets({ silent: true });
+    }, 2000);
+
     const interval = setInterval(() => {
-      handleQuickSyncSheets();
-    }, 15 * 60 * 1000);
-    return () => clearInterval(interval);
+      void handleQuickSyncSheets({ silent: true });
+    }, 2 * 60 * 1000);
+
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
   }, [isAuthenticated, currentRole, handleQuickSyncSheets]);
 
   const handleMarkAllNotificationsRead = async () => {

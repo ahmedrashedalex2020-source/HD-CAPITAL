@@ -325,6 +325,9 @@ export async function apiRequest<T = any>(
     if (isLoginRoute && result && result.user?.id) {
       setCurrentApiUser(result.user.id, result.token);
       touchSessionActivity();
+    } else if (result && result.sessionToken && currentUserId) {
+      setCurrentApiUser(currentUserId, result.sessionToken);
+      touchSessionActivity();
     }
     if (path === '/api/bootstrap' && result && result.currentUser) {
       saveLocalSnapshot(result);

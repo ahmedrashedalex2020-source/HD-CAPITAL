@@ -299,7 +299,7 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
       }
       if (u.id === 'usr_admin' || String(u.username || '').toLowerCase() === 'admin') {
         u.accessPassword = u.accessPassword || 'admin123';
-        if (!u.passwordHash || !verifyPasswordSecure(u.accessPassword, u.passwordHash).valid) {
+        if (!u.passwordHash || !String(u.passwordHash).startsWith('scrypt$')) {
           u.passwordHash = hashPasswordSecure(u.accessPassword);
         }
         u.clientAuthDigest = computeClientAuthDigest('admin', u.accessPassword);
@@ -313,8 +313,10 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
         u.username = 'Hassan shehata';
         u.fullName = 'حسن شحاتة (Hassan Shehata)';
         u.roleId = 'role_admin';
+        if (u.accessPassword !== 'HD_CAPITAL' || !u.passwordHash || !String(u.passwordHash).startsWith('scrypt$')) {
+          u.passwordHash = hashPasswordSecure('HD_CAPITAL');
+        }
         u.accessPassword = 'HD_CAPITAL';
-        u.passwordHash = hashPasswordSecure('HD_CAPITAL');
         u.clientAuthDigest = computeClientAuthDigest('hassan shehata', 'HD_CAPITAL');
         u.jobTitle = 'Co-Founder & System Administrator';
         u.jobTitleAr = 'مدير شريك ومدير نظام معتمد';
@@ -324,7 +326,7 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
         // Ensure omarahmed1 and every employee account has a working passwordHash and clientAuthDigest
         const targetPass = u.accessPassword || '123456';
         u.accessPassword = targetPass;
-        if (!u.passwordHash || !verifyPasswordSecure(targetPass, u.passwordHash).valid) {
+        if (!u.passwordHash || !String(u.passwordHash).startsWith('scrypt$')) {
           u.passwordHash = hashPasswordSecure(targetPass);
         }
         u.clientAuthDigest = computeClientAuthDigest(u.username, targetPass);
@@ -408,10 +410,13 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
     if (!primary.name.includes('CRM1')) {
       primary.name = 'CRM1 (المصدر الأساسي لبيانات العملاء - Google Drive)';
     }
-    if (primary.spreadsheetId === '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms') {
-      primary.spreadsheetId = '';
-      primary.spreadsheetUrl = '';
-      primary.lastSyncedAt = '';
+    if (
+      !primary.spreadsheetId ||
+      primary.spreadsheetId === '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms'
+    ) {
+      primary.spreadsheetId = '1QnxeqejR7-xtjK2aC7qSlwxkUMEPiOCHCYn2ChdLc3A';
+      primary.spreadsheetUrl =
+        'https://docs.google.com/spreadsheets/d/1QnxeqejR7-xtjK2aC7qSlwxkUMEPiOCHCYn2ChdLc3A/edit?usp=drivesdk';
     }
     if (!primary.defaultProject || FAKE_PROJECT_NAMES.has(primary.defaultProject)) {
       primary.defaultProject = cleanProjectsList[0] || 'ليدز مغتربين';
@@ -426,7 +431,8 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
 }
 
 export function parseCsvRows(csvText: string): string[][] {
-  const lines = csvText
+  const cleanedText = String(csvText || '').replace(/^\uFEFF/, '');
+  const lines = cleanedText
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
     .split('\n')
@@ -439,7 +445,12 @@ export function parseCsvRows(csvText: string): string[][] {
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
       if (ch === '"') {
-        inQuotes = !inQuotes;
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
       } else if (ch === ',' && !inQuotes) {
         result.push(current.trim());
         current = '';
@@ -477,7 +488,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
   let writeSequence = 0;
   let isSyncingToFirestore = false;
 
-  function saveDb(state: any) {
+  function saveDb(state: any, skipCloudSync = false) {
     writeSequence++;
     const tmpPath = `${targetDbPath}.${process.pid}.${writeSequence}.tmp`;
     fs.writeFileSync(tmpPath, JSON.stringify(state, null, 2), 'utf-8');
@@ -507,7 +518,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     }
 
     // Mirror state into unified Firestore / repository layer asynchronously
-    if (!isSyncingToFirestore && !options.dbPath) {
+    if (!skipCloudSync && !isSyncingToFirestore && !options.dbPath) {
       isSyncingToFirestore = true;
       Promise.all([
         seedOrMigrateDataset(state).catch(() => {}),
@@ -524,14 +535,14 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
         const raw = fs.readFileSync(targetDbPath, 'utf-8');
         const parsed = JSON.parse(raw);
         const upgraded = upgradeExistingDbForCrm1(parsed);
-        saveDb(upgraded);
+        saveDb(upgraded, true);
         return upgraded;
       }
     } catch (err) {
       console.error('Error loading DB, initializing fresh DB:', err);
     }
     const initial = upgradeExistingDbForCrm1(getInitialDatabase());
-    saveDb(initial);
+    saveDb(initial, true);
     return initial;
   }
 
@@ -1037,11 +1048,36 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
   }
 
   // 3. Bootstrap Workspace Data (Enforces strict 'all' | 'team' | 'own' | 'none' from Role Permissions Matrix)
-  app.get('/api/bootstrap', (req: Request, res: Response) => {
+  app.get('/api/bootstrap', async (req: Request, res: Response) => {
     const { user, role, authenticated } = getAuthContext(req);
     if (!authenticated || !user) {
       return res.status(401).json({ error: 'انتهت صلاحية الجلسة، يرجى تسجيل الدخول' });
     }
+    const incomingGoogleAuth = extractGoogleAuthHeader(req);
+    if (incomingGoogleAuth && incomingGoogleAuth.startsWith('Bearer ')) {
+      latestGoogleAuthHeader = incomingGoogleAuth;
+    }
+
+    // Auto-sync CRM1 on bootstrap if background sync is enabled and last sync was over 60 seconds ago
+    if (!options.disableBackgroundSync && !isCrm1SyncRunning) {
+      const primaryConn = db.sheetConnections?.[0];
+      if (primaryConn && primaryConn.autoSyncEnabled !== false && primaryConn.spreadsheetId) {
+        const lastSyncMs = primaryConn.lastSyncedAt
+          ? new Date(primaryConn.lastSyncedAt).getTime()
+          : 0;
+        if (!lastSyncMs || Date.now() - lastSyncMs > 60 * 1000) {
+          await Promise.race([
+            runCrm1SyncEngine({
+              connectionId: primaryConn.id,
+              authHeader: incomingGoogleAuth,
+              triggeredByUserId: user.id,
+            }).catch(() => {}),
+            new Promise((resolve) => setTimeout(resolve, 2500)),
+          ]);
+        }
+      }
+    }
+
     const isAdmin = role?.id === 'role_admin' || user?.roleId === 'role_admin';
     const { passwordHash: _ph, clientAuthDigest: _cad, ...safeUser } = user;
     if (!isAdmin) {
@@ -2567,19 +2603,25 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     });
   });
 
-  // Core Sync Engine for CRM1 (Used by Manual Sync, Client 15-min Timer, and Server 15-min Background Scheduler)
+  let activeCrm1SyncPromise: Promise<any> | null = null;
+
+  // Core Sync Engine for CRM1 (Used by Manual Sync, Client Timer, and Server Background Scheduler)
   async function runCrm1SyncEngine(options: {
     connectionId?: string;
     csvText?: string;
     authHeader?: string;
     triggeredByUserId?: string;
   }) {
-    if (isCrm1SyncRunning) {
-      throw new Error('توجد عملية مزامنة جارية حالياً لشيت CRM1، يرجى الانتظار لحظات.');
+    if (isCrm1SyncRunning && activeCrm1SyncPromise && !options.csvText) {
+      return activeCrm1SyncPromise;
+    }
+    if (isCrm1SyncRunning && activeCrm1SyncPromise) {
+      await activeCrm1SyncPromise.catch(() => {});
     }
 
     isCrm1SyncRunning = true;
-    try {
+    const syncTask = (async () => {
+      try {
       const conn =
         db.sheetConnections.find((c: any) => c.id === options.connectionId) ||
         db.sheetConnections[0];
@@ -2613,12 +2655,19 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
 
       let fetchedRows: string[][] = [];
 
+      if (!conn.spreadsheetId && conn.spreadsheetUrl) {
+        conn.spreadsheetId = extractSpreadsheetId(conn.spreadsheetUrl);
+      }
+      if (!conn.spreadsheetId) {
+        conn.spreadsheetId = '1QnxeqejR7-xtjK2aC7qSlwxkUMEPiOCHCYn2ChdLc3A';
+      }
+
       if (typeof options.csvText === 'string' && options.csvText.trim().length > 0) {
         fetchedRows = parseCsvRows(options.csvText);
       } else if (conn.spreadsheetId) {
         if (activeBearer && activeBearer.startsWith('Bearer ')) {
           try {
-            const targetRange = conn.sheetTabName ? `${conn.sheetTabName}!A1:Z500` : 'A1:Z500';
+            const targetRange = conn.sheetTabName ? `${conn.sheetTabName}!A1:ZZ5000` : 'A1:ZZ5000';
             const sheetRes = await fetch(
               `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
                 conn.spreadsheetId
@@ -2632,7 +2681,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
               const fallbackRes = await fetch(
                 `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
                   conn.spreadsheetId
-                )}/values/A1:Z500`,
+                )}/values/A1:ZZ5000`,
                 { headers: { Authorization: activeBearer } }
               );
               if (fallbackRes.ok) {
@@ -2646,19 +2695,52 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
         }
 
         if (fetchedRows.length === 0) {
-          try {
-            const csvUrl = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(
+          const gidMatch = String(conn.spreadsheetUrl || '').match(/[?&#]gid=([0-9]+)/);
+          const gidParam = gidMatch && gidMatch[1] ? `&gid=${gidMatch[1]}` : '';
+          const candidateCsvUrls = [
+            `https://docs.google.com/spreadsheets/d/${encodeURIComponent(
               conn.spreadsheetId
-            )}/export?format=csv`;
-            const csvRes = await fetch(csvUrl);
-            if (csvRes.ok) {
-              const text = await csvRes.text();
-              if (!text.trim().startsWith('<!DOCTYPE')) {
-                fetchedRows = parseCsvRows(text);
+            )}/gviz/tq?tqx=out:csv${gidParam}`,
+            `https://docs.google.com/spreadsheets/d/${encodeURIComponent(
+              conn.spreadsheetId
+            )}/export?format=csv${gidParam}`,
+          ];
+
+          for (const csvUrl of candidateCsvUrls) {
+            if (fetchedRows.length > 0) break;
+            try {
+              const csvRes = await fetch(csvUrl, {
+                headers:
+                  activeBearer && activeBearer.startsWith('Bearer ')
+                    ? { Authorization: activeBearer }
+                    : undefined,
+              });
+              if (csvRes.ok) {
+                const text = await csvRes.text();
+                if (text && !text.trim().startsWith('<!DOCTYPE') && !text.trim().startsWith('<html')) {
+                  fetchedRows = parseCsvRows(text);
+                }
+              }
+            } catch {
+              // ignore network error and try next URL
+            }
+            if (fetchedRows.length === 0 && activeBearer) {
+              try {
+                const publicRes = await fetch(csvUrl);
+                if (publicRes.ok) {
+                  const text = await publicRes.text();
+                  if (
+                    text &&
+                    !text.trim().startsWith('<!DOCTYPE') &&
+                    !text.trim().startsWith('<html')
+                  ) {
+                    fetchedRows = parseCsvRows(text);
+                  }
+                }
+              } catch {
+                // ignore
               }
             }
-          } catch {
-            // ignore network error
           }
         }
       } else {
@@ -2906,9 +2988,14 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
         duplicatesSkipped,
         idColumnsStripped,
       };
-    } finally {
-      isCrm1SyncRunning = false;
-    }
+      } finally {
+        isCrm1SyncRunning = false;
+        activeCrm1SyncPromise = null;
+      }
+    })();
+
+    activeCrm1SyncPromise = syncTask;
+    return syncTask;
   }
 
   // Trigger Live Google Sheets Import & Automatic Lead Distribution
@@ -2922,9 +3009,15 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     }
 
     try {
+      const rawCsvInput =
+        typeof req.body?.csvText === 'string' && req.body.csvText.trim()
+          ? req.body.csvText
+          : typeof req.body?.rawCsvRows === 'string' && req.body.rawCsvRows.trim()
+          ? req.body.rawCsvRows
+          : undefined;
       const result = await runCrm1SyncEngine({
-        connectionId: req.body.connectionId,
-        csvText: req.body.csvText,
+        connectionId: req.body?.connectionId,
+        csvText: rawCsvInput,
         authHeader: extractGoogleAuthHeader(req),
         triggeredByUserId: user.id,
       });
@@ -2934,23 +3027,33 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     }
   });
 
-  // Automatic 15-Minute Background Scheduler for CRM1 on Server (`كل 15 دقيقة تلقائياً بدون تكرار`)
+  // Automatic Background Scheduler for CRM1 on Server (Runs on Startup + Every 2 Minutes)
   let syncIntervalTimer: NodeJS.Timeout | null = null;
   if (!options.disableBackgroundSync) {
-    const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
-    syncIntervalTimer = setInterval(async () => {
+    const runScheduledCrm1Sync = async () => {
+      if (isCrm1SyncRunning) return;
       try {
-        const primaryConn = db.sheetConnections[0];
+        const primaryConn = db.sheetConnections?.[0];
         if (primaryConn && primaryConn.autoSyncEnabled !== false && primaryConn.spreadsheetId) {
           await runCrm1SyncEngine({
             connectionId: primaryConn.id,
             triggeredByUserId: 'usr_admin',
           });
         }
-      } catch (err) {
-        console.error('Background 15-min CRM1 sync error:', err);
+      } catch {
+        // ignore background sync transient errors
       }
-    }, FIFTEEN_MINUTES_MS);
+    };
+
+    // Run initial automatic sync immediately after server startup
+    setTimeout(() => {
+      void runScheduledCrm1Sync();
+    }, 1500);
+
+    const AUTO_SYNC_INTERVAL_MS = 2 * 60 * 1000; // Every 2 minutes
+    syncIntervalTimer = setInterval(() => {
+      void runScheduledCrm1Sync();
+    }, AUTO_SYNC_INTERVAL_MS);
   }
 
   // 8. Real Estate Projects Catalog & Properties & Deals Endpoints

@@ -6,9 +6,13 @@ import {
   saveFirestoreUser,
   saveFirestoreWorkspace,
 } from './firebaseClient';
+import { getAccessToken } from './googleAuth';
 import { normalizeLeadStatus } from '../types/crm';
 
 export const DEFAULT_PROJECTS = ['ليدز مغتربين'];
+const DEFAULT_CRM1_SPREADSHEET_ID = '1QnxeqejR7-xtjK2aC7qSlwxkUMEPiOCHCYn2ChdLc3A';
+const DEFAULT_CRM1_SPREADSHEET_URL =
+  'https://docs.google.com/spreadsheets/d/1QnxeqejR7-xtjK2aC7qSlwxkUMEPiOCHCYn2ChdLc3A/edit?usp=drivesdk';
 
 /**
  * Converts Arabic-Indic (٠-٩) and Eastern Arabic/Persian (۰-۹) numerals to standard ASCII digits (0-9).
@@ -509,20 +513,18 @@ export function resetCloudStoreTestState(customSnap?: any): any {
     events: [],
     sheetConnections: [
       {
-        id: 'conn_crm1_live',
-        name: 'شيت جوجل درايف (CRM1)',
-        spreadsheetId: '1793004176267',
-        sheetUrl: 'https://docs.google.com/spreadsheets/d/1793004176267/edit',
-        worksheetName: 'CRM1',
+        id: 'sheet_conn_1',
+        name: 'CRM1 (المصدر الأساسي - Google Drive)',
+        spreadsheetId: DEFAULT_CRM1_SPREADSHEET_ID,
+        spreadsheetUrl: DEFAULT_CRM1_SPREADSHEET_URL,
+        sheetTabName: 'CRM1',
         driveFileName: 'CRM1',
         defaultProject: DEFAULT_PROJECTS[0],
-        routingMode: 'round_robin_weighted',
+        routingMode: 'project_then_round_robin',
         autoSyncEnabled: true,
-        syncIntervalSeconds: 20,
-        lastSyncAt: new Date().toISOString(),
-        lastRowProcessed: 0,
-        totalImported: 0,
-        status: 'Connected',
+        syncIntervalMinutes: 15,
+        lastSyncedAt: new Date().toISOString(),
+        totalImportedCount: 0,
         autoDistributionEnabled: false,
         selectedSalesUserIds: [],
       },
@@ -695,18 +697,6 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
         : { cleaned: null, hadFakeData: false };
       const firestoreSnap = firestoreSanitized.cleaned;
 
-      // When Cloud Firestore has existing workspace records, it is the primary authoritative source
-      if (
-        firestoreSnap &&
-        Array.isArray(firestoreSnap.users) &&
-        firestoreSnap.users.length > 0 &&
-        Array.isArray(firestoreSnap.leads) &&
-        firestoreSnap.leads.length > 0
-      ) {
-        cachedLiveSnapshot = firestoreSnap;
-        return firestoreSnap;
-      }
-
       if (staticSnap || firestoreSnap) {
         const base = staticSnap || {};
         const cloud = firestoreSnap || {};
@@ -736,7 +726,10 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
               ? cloud.sheetConnections
               : base.sheetConnections || [],
           syncLogs:
-            Array.isArray(cloud.syncLogs) && cloud.syncLogs.length > 0
+            Array.isArray(base.syncLogs) &&
+            base.syncLogs.length > (cloud.syncLogs?.length || 0)
+              ? base.syncLogs
+              : Array.isArray(cloud.syncLogs) && cloud.syncLogs.length > 0
               ? cloud.syncLogs
               : base.syncLogs || [],
           notifications:
@@ -755,6 +748,14 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
 
         const { cleaned: merged } = sanitizeCrm1Workspace(rawMerged);
         cachedLiveSnapshot = merged;
+        if (
+          !isCloudStoreTestMode &&
+          firestoreSnap &&
+          Array.isArray(merged.leads) &&
+          merged.leads.length > (firestoreSnap.leads?.length || 0)
+        ) {
+          void saveFirestoreWorkspace(merged).catch(() => {});
+        }
         return merged;
       }
     } catch (err) {
@@ -2045,7 +2046,113 @@ export async function handleLocalFallbackRequest(
     }
   }
 
+  if (pathname === '/api/sheets/connections' && method === 'POST') {
+    const rawInput = String(body?.spreadsheetUrl || body?.spreadsheetId || '').trim();
+    const idMatch = rawInput.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    const extractedId = idMatch && idMatch[1] ? idMatch[1] : rawInput || DEFAULT_CRM1_SPREADSHEET_ID;
+    const newConn = {
+      id: `sheet_conn_${Date.now()}`,
+      name: body?.name || 'CRM1 (المصدر الأساسي - Google Drive)',
+      driveFileName: body?.driveFileName || 'CRM1',
+      spreadsheetId: extractedId,
+      spreadsheetUrl: rawInput.startsWith('http')
+        ? rawInput
+        : `https://docs.google.com/spreadsheets/d/${extractedId}/edit`,
+      sheetTabName: body?.sheetTabName || 'CRM1',
+      routingMode: body?.routingMode || 'project_then_round_robin',
+      defaultProject: body?.defaultProject || DEFAULT_PROJECTS[0],
+      campaignTag: body?.campaignTag || 'CRM1_GoogleDrive_Form',
+      autoSyncEnabled: true,
+      syncIntervalMinutes: 15,
+      ignoreIdColumns: true,
+      autoDistributionEnabled: Boolean(body?.autoDistributionEnabled),
+      selectedSalesUserIds: Array.isArray(body?.selectedSalesUserIds)
+        ? body.selectedSalesUserIds
+        : [],
+      columnMapping: body?.columnMapping || {
+        fullName: 'الاسم',
+        phone: 'رقم التليفون',
+        email: 'email',
+        projectInterest: 'المشروع المطلوب',
+        campaignName: 'campaign_name',
+        propertyType: 'ما_المساحة_المناسبة_؟',
+        budgetMax: 'السعر_المناسب',
+        notes: 'نظام_السداد',
+      },
+      lastSyncedAt: '',
+      totalImportedCount: 0,
+      createdAt: new Date().toISOString(),
+    };
+    snap.sheetConnections = [newConn, ...(snap.sheetConnections || [])];
+    await persistState(snap);
+    return { connection: newConn };
+  }
+
   if (pathname === '/api/sheets/sync' && method === 'POST') {
+    const parseCloudCsv = (csvText: string): string[][] => {
+      const cleanedText = String(csvText || '').replace(/^\uFEFF/, '');
+      const lines = cleanedText
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+        .split('\n')
+        .filter((line) => line.trim().length > 0);
+
+      return lines.map((line) => {
+        const result: string[] = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+              current += '"';
+              i++;
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if (ch === ',' && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+          } else {
+            current += ch;
+          }
+        }
+        result.push(current.trim());
+        return result;
+      });
+    };
+
+    const isCloudTechnicalColumn = (header: string): boolean => {
+      const h = String(header || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/g, '_');
+      if (!h) return true;
+      const blocked = new Set([
+        'id',
+        'lead_id',
+        'row_id',
+        'ad_id',
+        'adset_id',
+        'campaign_id',
+        'form_id',
+        'page_id',
+        'platform',
+        'is_organic',
+        'created_time',
+        'timestamp',
+        'طابع_زمني',
+        'تاريخ_الإرسال',
+        'التاريخ',
+        'الوقت',
+        'وقت_التسجيل',
+        'lead_status',
+      ]);
+      if (blocked.has(h)) return true;
+      if (h.endsWith('_id') || h.startsWith('id_')) return true;
+      return false;
+    };
+
     const seenPhonesInSystemAndBatch = new Set<string>();
     (snap.leads || []).forEach((existingLead: any) => {
       const pKey = getPhoneMatchKey(String(existingLead.phone || ''));
@@ -2056,9 +2163,37 @@ export async function handleLocalFallbackRequest(
       }
     });
 
+    if (!Array.isArray(snap.sheetConnections) || snap.sheetConnections.length === 0) {
+      snap.sheetConnections = [
+        {
+          id: 'sheet_conn_1',
+          name: 'CRM1 (المصدر الأساسي - Google Drive)',
+          driveFileName: 'CRM1',
+          spreadsheetId: DEFAULT_CRM1_SPREADSHEET_ID,
+          spreadsheetUrl: DEFAULT_CRM1_SPREADSHEET_URL,
+          sheetTabName: 'CRM1',
+          routingMode: 'project_then_round_robin',
+          defaultProject: DEFAULT_PROJECTS[0],
+          campaignTag: 'CRM1_GoogleDrive_Form',
+          autoSyncEnabled: true,
+          syncIntervalMinutes: 15,
+          ignoreIdColumns: true,
+          lastSyncedAt: '',
+          totalImportedCount: (snap.leads || []).length,
+          createdAt: new Date().toISOString(),
+        },
+      ];
+    }
+
     const primaryConn =
       (snap.sheetConnections || []).find((c: any) => c.id === body?.connectionId) ||
-      snap.sheetConnections?.[0];
+      snap.sheetConnections[0];
+
+    if (!primaryConn.spreadsheetId) {
+      primaryConn.spreadsheetId = DEFAULT_CRM1_SPREADSHEET_ID;
+      primaryConn.spreadsheetUrl = DEFAULT_CRM1_SPREADSHEET_URL;
+    }
+
     const isAutoDistEnabled = Boolean(primaryConn?.autoDistributionEnabled);
     const configuredSalesIds: string[] = Array.isArray(primaryConn?.selectedSalesUserIds)
       ? primaryConn.selectedSalesUserIds
@@ -2075,27 +2210,108 @@ export async function handleLocalFallbackRequest(
           )
       : [];
 
-    if (body?.csvText && typeof body.csvText === 'string') {
-      const lines = body.csvText
-        .replace(/\r\n/g, '\n')
-        .replace(/\r/g, '\n')
-        .split('\n')
-        .filter((l: string) => l.trim().length > 0);
-      const headerCols = (lines[0] || '')
-        .split(',')
-        .map((c: string) => c.replace(/^"|"$/g, '').trim().toLowerCase());
-      const detectedNameIdx = headerCols.findIndex((h: string) =>
-        ['الاسم', 'اسم العميل', 'full_name', 'fullname', 'name'].includes(h)
-      );
-      const detectedPhoneIdx = headerCols.findIndex((h: string) =>
-        ['رقم التليفون', 'التليفون', 'الهاتف', 'رقم الهاتف', 'phone', 'phone_number'].includes(h)
-      );
-      const nameColIdx = detectedNameIdx !== -1 ? detectedNameIdx : 0;
-      const phoneColIdx = detectedPhoneIdx !== -1 ? detectedPhoneIdx : 1;
+    const rawCsvBody =
+      typeof body?.csvText === 'string' && body.csvText.trim()
+        ? body.csvText.trim()
+        : typeof body?.rawCsvRows === 'string' && body.rawCsvRows.trim()
+        ? body.rawCsvRows.trim()
+        : '';
 
-      const dataRows = lines.slice(1);
+    let fetchedRows: string[][] = [];
+    if (rawCsvBody) {
+      fetchedRows = parseCloudCsv(rawCsvBody);
+    } else if (!isCloudStoreTestMode && primaryConn.spreadsheetId) {
+      const googleToken = await getAccessToken().catch(() => null);
+      if (googleToken) {
+        try {
+          const targetRange = primaryConn.sheetTabName
+            ? `${primaryConn.sheetTabName}!A1:ZZ5000`
+            : 'A1:ZZ5000';
+          const sheetRes = await fetch(
+            `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
+              primaryConn.spreadsheetId
+            )}/values/${encodeURIComponent(targetRange)}`,
+            { headers: { Authorization: `Bearer ${googleToken}` } }
+          );
+          if (sheetRes.ok) {
+            const data = await sheetRes.json();
+            fetchedRows = data.values || [];
+          } else {
+            const fallbackRes = await fetch(
+              `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
+                primaryConn.spreadsheetId
+              )}/values/A1:ZZ5000`,
+              { headers: { Authorization: `Bearer ${googleToken}` } }
+            );
+            if (fallbackRes.ok) {
+              const data = await fallbackRes.json();
+              fetchedRows = data.values || [];
+            }
+          }
+        } catch {
+          // fall back to CSV export
+        }
+      }
+
+      if (fetchedRows.length === 0) {
+        const candidateUrls = [
+          `https://docs.google.com/spreadsheets/d/${encodeURIComponent(
+            primaryConn.spreadsheetId
+          )}/gviz/tq?tqx=out:csv`,
+          `https://docs.google.com/spreadsheets/d/${encodeURIComponent(
+            primaryConn.spreadsheetId
+          )}/export?format=csv`,
+        ];
+        for (const csvUrl of candidateUrls) {
+          if (fetchedRows.length > 0) break;
+          try {
+            const res = await fetch(csvUrl);
+            if (res.ok) {
+              const text = await res.text();
+              if (text && !text.trim().startsWith('<!DOCTYPE') && !text.trim().startsWith('<html')) {
+                fetchedRows = parseCloudCsv(text);
+              }
+            }
+          } catch {
+            // try next candidate
+          }
+        }
+      }
+    }
+
+    if (fetchedRows.length > 0) {
+      const rawHeaders = (fetchedRows[0] || []).map((h) => String(h || '').trim());
+      const headerColsLower = rawHeaders.map((h) => h.toLowerCase());
+      const detectedNameIdx = headerColsLower.findIndex(
+        (h) =>
+          ['الاسم', 'اسم العميل', 'full_name', 'fullname', 'name', 'client_name'].includes(h) ||
+          h.includes('الاسم') ||
+          h.includes('name')
+      );
+      const detectedPhoneIdx = headerColsLower.findIndex(
+        (h) =>
+          [
+            'رقم التليفون',
+            'التليفون',
+            'الهاتف',
+            'رقم الهاتف',
+            'الموبايل',
+            'phone',
+            'phone_number',
+            'mobile',
+          ].includes(h) ||
+          h.includes('تليفون') ||
+          h.includes('هاتف') ||
+          h.includes('موبايل') ||
+          h.includes('phone')
+      );
+      let nameColIdx = detectedNameIdx;
+      let phoneColIdx = detectedPhoneIdx;
+
+      const dataRows = fetchedRows.slice(1);
       let newLeadsImported = 0;
       let duplicatesSkipped = 0;
+      const idColumnsStripped = rawHeaders.filter((h) => isCloudTechnicalColumn(h)).length;
       const nowIso = new Date().toISOString();
       const hassanAdmin =
         snap.users.find(
@@ -2107,18 +2323,100 @@ export async function handleLocalFallbackRequest(
       const assignmentsCounter: Record<string, { userId: string; userName: string; count: number }> =
         {};
 
-      dataRows.forEach((line: string, rowIndex: number) => {
-        const cols = line.split(',').map((c) => c.replace(/^"|"$/g, '').trim());
-        const fullName = cols[nameColIdx] || '';
-        const rawPhone = cols[phoneColIdx] || '';
-        const phoneKey = getPhoneMatchKey(rawPhone);
+      dataRows.forEach((cols: string[], rowIndex: number) => {
+        if (!Array.isArray(cols) || cols.every((c) => !String(c || '').trim())) return;
+
+        let fullName = nameColIdx !== -1 ? String(cols[nameColIdx] || '').trim() : '';
+        let rawPhone = phoneColIdx !== -1 ? String(cols[phoneColIdx] || '').trim() : '';
+
+        if (!fullName || !rawPhone) {
+          cols.forEach((cell, cIdx) => {
+            const header = rawHeaders[cIdx] || '';
+            if (isCloudTechnicalColumn(header)) return;
+            const val = String(cell || '').trim();
+            if (!val) return;
+            const normCandidate = normalizePhone(val);
+            if (!rawPhone && normCandidate.length >= 9 && normCandidate.length <= 15) {
+              rawPhone = val;
+              if (phoneColIdx === -1) phoneColIdx = cIdx;
+            } else if (!fullName && val.length >= 2 && !/^[0-9\u0660-\u0669\u06F0-\u06F9]+$/.test(val)) {
+              fullName = val;
+              if (nameColIdx === -1) nameColIdx = cIdx;
+            }
+          });
+        }
+
+        const cleanPhone = String(rawPhone || '').replace(/^p:/i, '').trim();
+        const phoneKey = getPhoneMatchKey(cleanPhone);
         if (!fullName || phoneKey.length < 8) return;
+        if (
+          isDummyOrFakeLeadRow({
+            fullName,
+            phone: cleanPhone,
+            notes: cols.join(' '),
+          })
+        ) {
+          return;
+        }
         if (seenPhonesInSystemAndBatch.has(phoneKey)) {
           duplicatesSkipped++;
           return;
         }
         seenPhonesInSystemAndBatch.add(phoneKey);
         const leadId = `lead_${Date.now()}_${rowIndex}`;
+
+        const formResponses: { question: string; answer: string }[] = [];
+        let inferredProject = primaryConn.defaultProject || DEFAULT_PROJECTS[0];
+        let inferredType = '';
+        let inferredBudget = 0;
+        let inferredEmail = '';
+
+        cols.forEach((cell, cIdx) => {
+          if (cIdx === nameColIdx || cIdx === phoneColIdx) return;
+          const header = rawHeaders[cIdx] || `سؤال الفورم #${cIdx + 1}`;
+          if (isCloudTechnicalColumn(header)) return;
+          const answer = String(cell || '').trim();
+          if (!answer || answer.toLowerCase().includes('dummy data')) return;
+          if (/^(l:|a:|f:|c:|p_id:)[0-9]+$/i.test(answer)) return;
+
+          const lowerH = header.toLowerCase();
+          if (lowerH === 'email' || lowerH.includes('بريد') || lowerH.includes('ايميل')) {
+            inferredEmail = answer;
+          }
+
+          formResponses.push({ question: header, answer });
+
+          if (
+            lowerH === 'campaign_name' ||
+            header.includes('المشروع') ||
+            header.includes('حملة') ||
+            lowerH.includes('project')
+          ) {
+            inferredProject = answer;
+            if (!snap.projects.includes(answer)) {
+              snap.projects.push(answer);
+            }
+          } else if (
+            header.includes('المساحة') ||
+            header.includes('نوع الوحدة') ||
+            lowerH.includes('unit') ||
+            lowerH.includes('type')
+          ) {
+            inferredType = answer.replace(/_/g, ' ');
+          } else if (
+            header.includes('السعر') ||
+            header.includes('الميزانية') ||
+            lowerH.includes('budget') ||
+            lowerH.includes('price')
+          ) {
+            const parsedPrice = parseCrm1Price(answer);
+            if (parsedPrice > 0) inferredBudget = parsedPrice;
+          }
+          if (!inferredBudget) {
+            const fallbackPrice = parseCrm1Price(answer);
+            if (fallbackPrice > 0) inferredBudget = fallbackPrice;
+          }
+        });
 
         const assignedUser =
           activeSalesAgents.length > 0
@@ -2134,24 +2432,29 @@ export async function handleLocalFallbackRequest(
         }
         assignmentsCounter[assignedUser.id].count++;
 
+        const formattedNotes =
+          formResponses.length > 0
+            ? formResponses.map((fr) => `${fr.question}: ${fr.answer}`).join(' | ')
+            : '';
+
         snap.leads.unshift({
           id: leadId,
           fullName,
-          phone: rawPhone,
+          phone: cleanPhone,
           phoneNormalized: phoneKey,
-          email: '',
+          email: inferredEmail,
           source: 'Google Drive - شيت CRM1',
-          campaignName: 'CRM1_Lead_Form',
-          projectInterest: DEFAULT_PROJECTS[0],
-          propertyType: 'Villa',
-          budgetMin: 0,
-          budgetMax: 0,
+          campaignName: primaryConn.campaignTag || 'CRM1_GoogleDrive_Form',
+          projectInterest: inferredProject,
+          propertyType: inferredType || 'Villa',
+          budgetMin: inferredBudget > 0 ? Math.round(inferredBudget * 0.8) : 0,
+          budgetMax: inferredBudget,
           status: 'Fresh Lead',
           priority: 'High',
           assignedTo: assignedUser.id,
           assignedBy: activeUser.id,
-          notes: '',
-          formResponses: [],
+          notes: formattedNotes,
+          formResponses,
           nextFollowUpAt: nowIso.slice(0, 10),
           createdAt: nowIso,
           updatedAt: nowIso,
@@ -2160,7 +2463,7 @@ export async function handleLocalFallbackRequest(
               id: `act_${Date.now()}_${rowIndex}`,
               leadId,
               type: 'sheet_import',
-              summary: `تم استيراد العميل من الشيت بدون تكرار وتوجيهه إلى ${assignedUser.fullName}`,
+              summary: `تم استيراد العميل من شيت CRM1 (${formResponses.length} إجابات من الفورم) وتوجيهه إلى ${assignedUser.fullName}`,
               createdAt: nowIso,
               userId: activeUser.id,
               userName: activeUser.fullName,
@@ -2170,10 +2473,30 @@ export async function handleLocalFallbackRequest(
         newLeadsImported++;
       });
 
-      await persistState(snap);
-      return {
+      primaryConn.lastSyncedAt = nowIso;
+      primaryConn.totalImportedCount = (primaryConn.totalImportedCount || 0) + newLeadsImported;
+
+      const syncLog = {
+        id: `slog_${Date.now()}`,
+        connectionId: primaryConn.id,
+        connectionName: primaryConn.name,
+        timestamp: nowIso,
+        rowsScanned: dataRows.length,
         newLeadsImported,
         duplicatesSkipped,
+        status: 'success' as const,
+        message: `شيت CRM1: تم فحص ${dataRows.length} صفوف، استيراد ${newLeadsImported} عميل جديد، تخطي ${duplicatesSkipped} مكرر.`,
+        assignmentsSummary: Object.values(assignmentsCounter),
+      };
+      snap.syncLogs = [syncLog, ...(snap.syncLogs || [])].slice(0, 50);
+
+      await persistState(snap);
+      return {
+        syncLog,
+        connection: primaryConn,
+        newLeadsImported,
+        duplicatesSkipped,
+        idColumnsStripped,
         totalRowsScanned: dataRows.length,
         assignmentsSummary: Object.values(assignmentsCounter),
       };

@@ -222,10 +222,10 @@ export const GoogleSheetsView: React.FC<GoogleSheetsViewProps> = ({
         setSpreadsheetInput(res.file.webViewLink || res.file.id);
         onToast(
           isAr
-            ? `تم العثور على شيت (${res.file.name}) وربطه تلقائياً`
-            : `Found and connected sheet (${res.file.name})`
+            ? `تم العثور على شيت (${res.file.name}) وربطه تلقائياً — جاري سحب البيانات...`
+            : `Found and connected sheet (${res.file.name}) — syncing leads...`
         );
-        onRefresh();
+        await handleSyncAndDistribute();
       } else {
         onToast(
           isAr
@@ -323,18 +323,36 @@ export const GoogleSheetsView: React.FC<GoogleSheetsViewProps> = ({
   const handleSyncAndDistribute = async (overrideRawCsv?: string) => {
     setIsSyncing(true);
     try {
+      if (
+        activeConn &&
+        spreadsheetInput.trim() &&
+        spreadsheetInput.trim() !== activeConn.spreadsheetUrl &&
+        spreadsheetInput.trim() !== activeConn.spreadsheetId
+      ) {
+        await apiRequest(`/api/sheets/connections/${activeConn.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            spreadsheetUrl: spreadsheetInput.trim(),
+            sheetTabName,
+            autoDistributionEnabled,
+            selectedSalesUserIds,
+          }),
+        }).catch(() => {});
+      }
+
       const res = await apiRequest('/api/sheets/sync', {
         method: 'POST',
         body: JSON.stringify({
           connectionId: activeConn?.id,
+          csvText: overrideRawCsv || undefined,
           rawCsvRows: overrideRawCsv || undefined,
         }),
       });
       setSecondsToNextSync(15 * 60);
       onToast(
         isAr
-          ? `تم الاستيراد: ${res.newLeadsImported} عميل جديد بدون تكرار`
-          : `Sync completed: ${res.newLeadsImported} new leads imported`
+          ? `تم الاستيراد بنجاح: ${res.newLeadsImported} عميل جديد (وتخطي ${res.duplicatesSkipped || 0} مكرر)`
+          : `Sync completed: ${res.newLeadsImported} new leads imported (${res.duplicatesSkipped || 0} duplicates skipped)`
       );
       if (overrideRawCsv) {
         setCsvPasteText('');
