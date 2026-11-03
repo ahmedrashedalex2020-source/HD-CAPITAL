@@ -5,6 +5,7 @@ import {
   Firestore,
   doc,
   getDoc,
+  getDocFromServer,
   setDoc,
   collection,
   getDocs,
@@ -173,7 +174,13 @@ export function handleFirestoreError(
  */
 export async function testConnection(): Promise<boolean> {
   const db = getClientFirestore();
-  return Boolean(db);
+  if (!db) return false;
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+    return true;
+  } catch {
+    return true;
+  }
 }
 
 /**
@@ -322,7 +329,86 @@ export function doesUserMatchLoginIdentifier(u: any, rawIdentifier: string): boo
 }
 
 /**
- * Fetches the shared CRM workspace state and users collection directly from Firebase Firestore.
+ * Fetches all standalone lead documents from the `leads` collection in Firebase Firestore.
+ */
+export async function fetchAllFirestoreLeads(): Promise<any[]> {
+  const db = getClientFirestore();
+  if (!db) return [];
+  try {
+    const snap = await getDocs(collection(db, 'leads')).catch(() => null);
+    if (!snap) return [];
+    const leads: any[] = [];
+    snap.forEach((docSnap) => {
+      const d = docSnap.data();
+      if (d && (d.id || docSnap.id)) {
+        leads.push({ ...d, id: d.id || docSnap.id });
+      }
+    });
+    return leads;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Persists a single lead record directly to the `leads/{leadId}` collection in Firebase Firestore.
+ */
+export async function saveFirestoreLead(lead: any): Promise<void> {
+  if (clientWriteQuotaExhausted) return;
+  const db = getClientFirestore();
+  if (!db || !lead || !lead.id) return;
+  const path = `leads/${lead.id}`;
+  try {
+    const cleanLead = JSON.parse(JSON.stringify(lead));
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('FIRESTORE_WRITE_TIMEOUT')), 2500);
+    });
+    await Promise.race([
+      setDoc(doc(db, 'leads', String(lead.id)), cleanLead, { merge: true }),
+      timeoutPromise,
+    ]);
+    if (timer) clearTimeout(timer);
+  } catch (error) {
+    markClientWriteQuotaExhausted();
+    try {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    } catch {
+      // handled gracefully
+    }
+  }
+}
+
+/**
+ * Deletes a lead record from the `leads/{leadId}` collection in Firebase Firestore.
+ */
+export async function removeFirestoreLead(leadId: string): Promise<void> {
+  if (clientWriteQuotaExhausted) return;
+  const db = getClientFirestore();
+  if (!db || !leadId) return;
+  const path = `leads/${leadId}`;
+  try {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('FIRESTORE_WRITE_TIMEOUT')), 2500);
+    });
+    await Promise.race([
+      deleteDoc(doc(db, 'leads', String(leadId))),
+      timeoutPromise,
+    ]);
+    if (timer) clearTimeout(timer);
+  } catch (error) {
+    markClientWriteQuotaExhausted();
+    try {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    } catch {
+      // handled gracefully
+    }
+  }
+}
+
+/**
+ * Fetches the shared CRM workspace state, `users` collection, and `leads` collection directly from Firebase Firestore.
  * Remains active for reading even if the daily write quota is exhausted.
  */
 export async function fetchFirestoreWorkspace(): Promise<any | null> {
@@ -331,14 +417,18 @@ export async function fetchFirestoreWorkspace(): Promise<any | null> {
 
   try {
     const docRef = doc(db, 'crm_state', 'workspace');
-    const [workspaceSnap, usersSnap] = await Promise.all([
+    const [workspaceSnap, usersSnap, collectionLeadsRaw] = await Promise.all([
       getDoc(docRef),
       getDocs(collection(db, 'users')).catch(() => null),
+      fetchAllFirestoreLeads().catch(() => []),
     ]);
 
     const workspaceData = workspaceSnap.exists() ? workspaceSnap.data() : {};
     const deletedSet = new Set<string>(
       Array.isArray(workspaceData?.deletedUserIds) ? workspaceData.deletedUserIds : []
+    );
+    const deletedLeadSet = new Set<string>(
+      Array.isArray(workspaceData?.deletedLeadIds) ? workspaceData.deletedLeadIds.map(String) : []
     );
 
     const collectionUsers: any[] = [];
@@ -351,7 +441,11 @@ export async function fetchFirestoreWorkspace(): Promise<any | null> {
       });
     }
 
-    if (!workspaceSnap.exists() && collectionUsers.length === 0) {
+    const collectionLeads = (collectionLeadsRaw || []).filter(
+      (l: any) => l && l.id && !deletedLeadSet.has(String(l.id))
+    );
+
+    if (!workspaceSnap.exists() && collectionUsers.length === 0 && collectionLeads.length === 0) {
       return null;
     }
 
@@ -361,12 +455,20 @@ export async function fetchFirestoreWorkspace(): Promise<any | null> {
         )
       : [];
 
+    const baseLeads = Array.isArray(workspaceData.leads)
+      ? workspaceData.leads.filter((l: any) => l && l.id && !deletedLeadSet.has(String(l.id)))
+      : [];
+
     return {
       ...workspaceData,
       users:
         collectionUsers.length > 0
           ? mergeRecordsById(baseUsers, collectionUsers)
           : baseUsers,
+      leads:
+        collectionLeads.length > 0
+          ? mergeRecordsById(baseLeads, collectionLeads)
+          : baseLeads,
     };
   } catch {
     return null;
@@ -563,7 +665,7 @@ function getRecTimestampMs(rec: any): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-function mergeRecordsById(baseList: any[], incomingList: any[]): any[] {
+export function mergeRecordsById(baseList: any[], incomingList: any[]): any[] {
   const map = new Map<string, any>();
   for (const item of baseList || []) {
     if (item && item.id) map.set(item.id, item);
@@ -586,6 +688,13 @@ function mergeRecordsById(baseList: any[], incomingList: any[]): any[] {
       if (v !== undefined) {
         merged[k] = v;
       }
+    }
+
+    if (older.isManualEntry || newer.isManualEntry) {
+      merged.isManualEntry = true;
+    }
+    if ((!merged.notes || String(merged.notes).trim() === '') && older.notes) {
+      merged.notes = older.notes;
     }
 
     const authKeys = ['password', 'accessPassword', 'passwordHash', 'clientAuthDigest'] as const;

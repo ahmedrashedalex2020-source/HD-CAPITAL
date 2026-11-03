@@ -23,9 +23,11 @@ import {
   resetCloudStoreTestState,
   sanitizeCrm1Workspace,
   saveLocalSnapshot,
+  isDummyOrFakeLeadRow,
+  mergeById,
   normalizePhone as clientNormalizePhone,
 } from '../src/services/cloudStore';
-import { createCrmApp } from '../server';
+import { createCrmApp, upgradeExistingDbForCrm1, isDummyOrFakeLead } from '../server';
 
 test('Security Baseline: Scrypt password hashing, legacy SHA-256 upgrade, and HMAC-SHA256 Session Tokens', () => {
   const hash = hashPasswordSecure('MySecretPass!2026');
@@ -884,5 +886,118 @@ test('Full 9-Feature End-to-End & Integration Audit (Server API + CloudStore Fal
     assert.ok(cloudSecondLogin.user?.id, 'CloudStore fallback login must also succeed with CustomPass#99');
     assert.equal(cloudSecondLogin.user.username, 'mostafa_agent');
   });
+
+  // =========================================================================
+  // 11. Test 11: Manual Lead Persistence Across Server Restart, Upgrade, Sanitizer & Sheet Sync
+  // =========================================================================
+  await t.test('11. Manual Lead Entry by Sales Rep Persists Intact Across Server Restart, upgradeExistingDbForCrm1, sanitizeCrm1Workspace & Sheet Sync', async () => {
+    const manualNotes = 'عميل مهتم جداً بفيلا مستقلة ٤٠٠ متر - تواصل مباشر من السيلز مع دفعة مقدم ١٠٪';
+    const manualProject = 'كمبوند تاج سيتي القاهرة الجديدة';
+
+    // 1. Sales employee enters a manual lead with Arabic digits in phone and empty formResponses: []
+    const manualLeadRes = await api('/api/leads', {
+      method: 'POST',
+      token: empToken,
+      body: {
+        fullName: 'المهندس طارق عبد الرحمن (إدخال يدوي)',
+        phone: '٠١٠٩٤٤٥٥٦٦٧',
+        source: 'بروكر',
+        projectInterest: manualProject,
+        propertyType: 'Standalone Villa',
+        budgetMax: 14500000,
+        notes: manualNotes,
+        formResponses: [],
+      },
+    });
+    assert.equal(manualLeadRes.status, 200);
+    const createdManualLead = manualLeadRes.data.lead;
+    assert.equal(createdManualLead.isManualEntry, true, 'Manual lead must have isManualEntry: true');
+    assert.equal(createdManualLead.assignedTo, empUserId, 'Manual lead must belong to the sales rep');
+    assert.equal(createdManualLead.notes, manualNotes, 'Manual lead notes must be saved intact');
+    assert.equal(createdManualLead.projectInterest, manualProject);
+
+    // 2. Verify isDummyOrFakeLead and isDummyOrFakeLeadRow never flag manual leads (even with Arabic digits)
+    assert.equal(isDummyOrFakeLead(createdManualLead), false);
+    assert.equal(isDummyOrFakeLeadRow(createdManualLead), false);
+
+    // 3. Simulate Server Restart on the same database file (testDbPath) + run upgradeExistingDbForCrm1 + sanitizeCrm1Workspace
+    const rawDiskDb = JSON.parse(fs.readFileSync(testDbPath, 'utf-8'));
+    const upgradedDb = upgradeExistingDbForCrm1(rawDiskDb);
+    const afterUpgradeLead = upgradedDb.leads.find((l: any) => l.id === createdManualLead.id);
+    assert.ok(afterUpgradeLead, 'Manual lead must survive upgradeExistingDbForCrm1');
+    assert.equal(afterUpgradeLead.notes, manualNotes, 'upgradeExistingDbForCrm1 must NOT wipe manual lead notes when formResponses is empty');
+    assert.equal(afterUpgradeLead.projectInterest, manualProject);
+    assert.equal(afterUpgradeLead.assignedTo, empUserId);
+    assert.equal(afterUpgradeLead.isManualEntry, true);
+
+    const { cleaned: sanitizedDb } = sanitizeCrm1Workspace(upgradedDb);
+    const afterSanitizeLead = sanitizedDb.leads.find((l: any) => l.id === createdManualLead.id);
+    assert.ok(afterSanitizeLead, 'Manual lead must survive sanitizeCrm1Workspace');
+    assert.equal(afterSanitizeLead.notes, manualNotes, 'sanitizeCrm1Workspace must NOT wipe manual lead notes when formResponses is empty');
+    assert.equal(afterSanitizeLead.projectInterest, manualProject);
+    assert.equal(afterSanitizeLead.assignedTo, empUserId);
+    assert.equal(afterSanitizeLead.isManualEntry, true);
+
+    // Spin up a brand-new server instance reading from testDbPath (simulating code edit / server restart)
+    const restartedInstance = createCrmApp({
+      dbPath: testDbPath,
+      disableBackgroundSync: true,
+      strictAuth: true,
+    });
+    const restartedServer = restartedInstance.app.listen(0);
+    const restartedPort = (restartedServer.address() as AddressInfo).port;
+    const restartedBaseUrl = `http://127.0.0.1:${restartedPort}`;
+
+    try {
+      // 4. Trigger Google Sheet Sync on the restarted server and verify manual lead is untouched alongside sheet leads
+      const sheetCsvAfterRestart = [
+        'الاسم,رقم التليفون,campaign_name,الميزانية',
+        'عميل شيت بعد إعادة التشغيل ١,01088776651,ليدز مغتربين,4500000',
+        'عميل شيت بعد إعادة التشغيل ٢,01088776652,ليدز مغتربين,6000000',
+      ].join('\n');
+
+      const syncRes = await fetch(`${restartedBaseUrl}/api/sheets/sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session-token': adminToken,
+        },
+        body: JSON.stringify({ csvText: sheetCsvAfterRestart }),
+      });
+      assert.equal(syncRes.status, 200);
+      const syncJson: any = await syncRes.json();
+      assert.equal(syncJson.newLeadsImported, 2);
+
+      // 5. Fetch leads as the sales employee on the restarted server and verify the manual lead is 100% intact
+      const empBootRes = await fetch(`${restartedBaseUrl}/api/bootstrap`, {
+        headers: { 'x-session-token': empToken },
+      });
+      assert.equal(empBootRes.status, 200);
+      const empBootData: any = await empBootRes.json();
+      const persistedManualLead = empBootData.leads.find((l: any) => l.id === createdManualLead.id);
+      assert.ok(persistedManualLead, 'Manual lead must remain in database after server restart and sheet sync');
+      assert.equal(persistedManualLead.fullName, 'المهندس طارق عبد الرحمن (إدخال يدوي)');
+      assert.equal(persistedManualLead.notes, manualNotes);
+      assert.equal(persistedManualLead.projectInterest, manualProject);
+      assert.equal(persistedManualLead.budgetMax, 14500000);
+      assert.equal(persistedManualLead.assignedTo, empUserId);
+      assert.equal(persistedManualLead.isManualEntry, true);
+
+      // Verify mergeById never loses manual lead when merging older static snapshot with Firestore/local leads
+      const mergedLeadsList = mergeById(
+        [{ id: 'sheet_only_1', fullName: 'عميل قديم من الشيت', phone: '01011223344' }],
+        [persistedManualLead]
+      );
+      assert.equal(mergedLeadsList.length, 2);
+      const mergedManual = mergedLeadsList.find((l: any) => l.id === createdManualLead.id);
+      assert.ok(mergedManual);
+      assert.equal(mergedManual.notes, manualNotes);
+      assert.equal(mergedManual.isManualEntry, true);
+    } finally {
+      restartedInstance.stopBackgroundSync();
+      restartedServer.close();
+    }
+  });
 });
+
 

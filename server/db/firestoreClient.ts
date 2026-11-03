@@ -1,5 +1,6 @@
 import 'dotenv/config';
-import { initializeApp, getApps, cert, applicationDefault, App } from 'firebase-admin/app';
+import crypto from 'crypto';
+import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import {
   initializeApp as initClientApp,
@@ -8,6 +9,7 @@ import {
 } from 'firebase/app';
 import {
   getFirestore as getClientFirestoreSdk,
+  initializeFirestore as initClientFirestoreSdk,
   doc as clientDoc,
   getDoc as clientGetDoc,
   setDoc as clientSetDoc,
@@ -69,6 +71,23 @@ export const FIRESTORE_DATABASE_ID =
 
 export const firestoreDatabaseId = FIRESTORE_DATABASE_ID;
 
+function isValidPemPrivateKey(pemCandidate: string | undefined): boolean {
+  if (!pemCandidate) return false;
+  const body = pemCandidate
+    .replace(/-----BEGIN [A-Z ]+-----/g, '')
+    .replace(/-----END [A-Z ]+-----/g, '')
+    .replace(/\s+/g, '');
+  if (body.length < 500 || body.includes('YOUR_') || body.includes('...')) {
+    return false;
+  }
+  try {
+    crypto.createPrivateKey(pemCandidate);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 let adminApp: App;
 let hasExplicitServiceAccountCreds = false;
 if (getApps().length === 0) {
@@ -96,7 +115,9 @@ if (getApps().length === 0) {
     if (key && !key.includes('-----BEGIN')) {
       key = `-----BEGIN PRIVATE KEY-----\n${key}\n-----END PRIVATE KEY-----`;
     }
-    privateKey = key;
+    if (isValidPemPrivateKey(key)) {
+      privateKey = key;
+    }
   }
 
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
@@ -117,8 +138,7 @@ if (getApps().length === 0) {
         projectId: FIREBASE_PROJECT_ID || 'dummy-project',
       });
     }
-  } catch (err: any) {
-    console.error('[Firestore] Failed to initialize Firebase Admin SDK:', err.message);
+  } catch {
     adminApp = initializeApp(
       {
         projectId: FIREBASE_PROJECT_ID || 'dummy-project',
@@ -142,8 +162,7 @@ function initAdminFirestoreSafe(): Firestore {
       // settings() may already have been called
     }
     return db;
-  } catch (err: any) {
-    console.warn('[Firestore] Fallback Firestore instance notice:', err?.message || err);
+  } catch {
     return getFirestore(adminApp);
   }
 }
@@ -179,10 +198,21 @@ export function getServerWebFirestore(): ClientFirestore | null {
             appId: appletConfig.appId,
           })
         : getClientAppInstance();
-    serverClientFirestore =
-      FIRESTORE_DATABASE_ID && FIRESTORE_DATABASE_ID !== '(default)'
-        ? getClientFirestoreSdk(app, FIRESTORE_DATABASE_ID)
-        : getClientFirestoreSdk(app);
+    try {
+      serverClientFirestore =
+        FIRESTORE_DATABASE_ID && FIRESTORE_DATABASE_ID !== '(default)'
+          ? initClientFirestoreSdk(
+              app,
+              { experimentalAutoDetectLongPolling: true },
+              FIRESTORE_DATABASE_ID
+            )
+          : initClientFirestoreSdk(app, { experimentalAutoDetectLongPolling: true });
+    } catch {
+      serverClientFirestore =
+        FIRESTORE_DATABASE_ID && FIRESTORE_DATABASE_ID !== '(default)'
+          ? getClientFirestoreSdk(app, FIRESTORE_DATABASE_ID)
+          : getClientFirestoreSdk(app);
+    }
     return serverClientFirestore;
   } catch {
     return null;
@@ -307,24 +337,145 @@ export async function pullUsersFromLiveCloudFirestore(): Promise<any[]> {
   }
 }
 
+function mergeLeadRecords(existing: any, incoming: any): any {
+  if (!existing) return incoming ? { ...incoming } : {};
+  if (!incoming) return { ...existing };
+
+  const existingTs = getRecordTs(existing);
+  const incomingTs = getRecordTs(incoming);
+  const existingIsNewer = existingTs > incomingTs;
+
+  const older = existingIsNewer ? incoming : existing;
+  const newer = existingIsNewer ? existing : incoming;
+
+  const merged: Record<string, any> = { ...older };
+  for (const [k, v] of Object.entries(newer)) {
+    if (v !== undefined) {
+      merged[k] = v;
+    }
+  }
+  if (older.isManualEntry || newer.isManualEntry) {
+    merged.isManualEntry = true;
+  }
+  if ((!merged.notes || String(merged.notes).trim() === '') && older.notes) {
+    merged.notes = older.notes;
+  }
+  return merged;
+}
+
 /**
- * Pulls the full workspace document + users collection from live Cloud Firestore on server boot.
+ * Fetches all standalone lead documents from the `leads` collection in Cloud Firestore.
  */
-export async function pullWorkspaceFromLiveCloudFirestore(): Promise<any | null> {
+export async function fetchAllFirestoreLeads(): Promise<any[]> {
+  if (firestoreDirectAvailable) {
+    try {
+      const snap = await adminFirestore.collection('leads').get();
+      const list: any[] = [];
+      snap.forEach((docSnap) => {
+        const d = docSnap.data();
+        if (d && (d.id || docSnap.id)) {
+          list.push({ ...d, id: d.id || docSnap.id });
+        }
+      });
+      if (list.length > 0) return list;
+    } catch {
+      // fall through to webDb bridge
+    }
+  }
   const webDb = getServerWebFirestore();
-  if (!webDb) return null;
+  if (!webDb) return [];
   try {
-    const [usersSnap, wsSnap] = await Promise.all([
-      clientGetDocs(clientCollection(webDb, 'users')).catch(() => null),
-      clientGetDoc(clientDoc(webDb, 'crm_state', 'workspace')).catch(() => null),
+    const snap = await clientGetDocs(clientCollection(webDb, 'leads')).catch(() => null);
+    if (!snap) return [];
+    const list: any[] = [];
+    for (const d of snap.docs) {
+      const data = d.data();
+      if (data && (data.id || d.id)) {
+        list.push({ ...data, id: data.id || d.id });
+      }
+    }
+    return list;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Persists a single lead record directly to the `leads/{leadId}` collection in Cloud Firestore.
+ */
+export async function saveFirestoreLead(lead: any): Promise<void> {
+  if (serverFirestoreWriteQuotaExhausted || !lead || !lead.id) return;
+  const cleanLead = JSON.parse(JSON.stringify(lead));
+  if (firestoreDirectAvailable) {
+    try {
+      await adminFirestore.collection('leads').doc(String(lead.id)).set(cleanLead, { merge: true });
+      return;
+    } catch {
+      // fall through to webDb bridge
+    }
+  }
+  const webDb = getServerWebFirestore();
+  if (!webDb) return;
+  try {
+    await Promise.race([
+      clientSetDoc(clientDoc(webDb, 'leads', String(lead.id)), cleanLead, { merge: true }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 2500)),
+    ]);
+  } catch {
+    markServerWriteQuotaExhausted();
+  }
+}
+
+/**
+ * Removes a single lead record from the `leads/{leadId}` collection in Cloud Firestore.
+ */
+export async function removeFirestoreLead(leadId: string): Promise<void> {
+  if (serverFirestoreWriteQuotaExhausted || !leadId) return;
+  if (firestoreDirectAvailable) {
+    try {
+      await adminFirestore.collection('leads').doc(String(leadId)).delete();
+      return;
+    } catch {
+      // fall through to webDb bridge
+    }
+  }
+  const webDb = getServerWebFirestore();
+  if (!webDb) return;
+  try {
+    await Promise.race([
+      clientDeleteDoc(clientDoc(webDb, 'leads', String(leadId))),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 2500)),
+    ]);
+  } catch {
+    markServerWriteQuotaExhausted();
+  }
+}
+
+/**
+ * Pulls the full workspace document + `users` collection + `leads` collection from live Cloud Firestore on server boot.
+ */
+export async function pullFullWorkspaceFromLiveCloudFirestore(): Promise<any | null> {
+  const webDb = getServerWebFirestore();
+  if (!webDb && !firestoreDirectAvailable) return null;
+  try {
+    const [usersSnap, leadsList, wsSnap] = await Promise.all([
+      webDb ? clientGetDocs(clientCollection(webDb, 'users')).catch(() => null) : Promise.resolve(null),
+      fetchAllFirestoreLeads().catch(() => []),
+      webDb ? clientGetDoc(clientDoc(webDb, 'crm_state', 'workspace')).catch(() => null) : Promise.resolve(null),
     ]);
 
     const wsData = wsSnap && wsSnap.exists() ? wsSnap.data() : {};
-    const mergedUsers = new Map<string, any>();
+    const deletedUserIds = new Set<string>(
+      Array.isArray(wsData?.deletedUserIds) ? wsData.deletedUserIds.map(String) : []
+    );
+    const deletedLeadIds = new Set<string>(
+      Array.isArray(wsData?.deletedLeadIds) ? wsData.deletedLeadIds.map(String) : []
+    );
 
+    const mergedUsers = new Map<string, any>();
     if (Array.isArray(wsData?.users)) {
       for (const u of wsData.users) {
-        if (u && u.id && !isExplicitFakeDemoUserRecord(u)) {
+        if (u && u.id && !isExplicitFakeDemoUserRecord(u) && !deletedUserIds.has(String(u.id))) {
           mergedUsers.set(u.id, mergeUserRecordsPreservingAuth(mergedUsers.get(u.id), u));
         }
       }
@@ -333,19 +484,50 @@ export async function pullWorkspaceFromLiveCloudFirestore(): Promise<any | null>
     if (usersSnap) {
       for (const d of usersSnap.docs) {
         const u = d.data();
-        if (u && u.id && !isExplicitFakeDemoUserRecord(u) && !FAKE_DEMO_USER_IDS.has(d.id)) {
+        if (
+          u &&
+          u.id &&
+          !isExplicitFakeDemoUserRecord(u) &&
+          !FAKE_DEMO_USER_IDS.has(d.id) &&
+          !deletedUserIds.has(String(u.id))
+        ) {
           mergedUsers.set(u.id, mergeUserRecordsPreservingAuth(mergedUsers.get(u.id), u));
         }
       }
     }
 
+    const mergedLeads = new Map<string, any>();
+    if (Array.isArray(wsData?.leads)) {
+      for (const l of wsData.leads) {
+        if (l && l.id && !deletedLeadIds.has(String(l.id))) {
+          mergedLeads.set(String(l.id), mergeLeadRecords(mergedLeads.get(String(l.id)), l));
+        }
+      }
+    }
+    if (Array.isArray(leadsList)) {
+      for (const l of leadsList) {
+        if (l && l.id && !deletedLeadIds.has(String(l.id))) {
+          mergedLeads.set(String(l.id), mergeLeadRecords(mergedLeads.get(String(l.id)), l));
+        }
+      }
+    }
+
+    if (!wsSnap?.exists() && mergedUsers.size === 0 && mergedLeads.size === 0) {
+      return null;
+    }
+
     return {
       ...wsData,
       users: Array.from(mergedUsers.values()),
+      leads: Array.from(mergedLeads.values()),
     };
   } catch {
     return null;
   }
+}
+
+export async function pullWorkspaceFromLiveCloudFirestore(): Promise<any | null> {
+  return pullFullWorkspaceFromLiveCloudFirestore();
 }
 
 /**
@@ -532,8 +714,8 @@ export async function verifyFirestoreConnectivity(): Promise<boolean> {
       );
       return true;
     }
-  } catch (err: any) {
-    console.warn('[Firestore] Web SDK probe notice:', err?.message || err);
+  } catch {
+    firestoreWebBridgeAvailable = false;
   }
 
   return false;

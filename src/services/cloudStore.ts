@@ -1,8 +1,11 @@
 import {
   doesUserMatchLoginIdentifier,
+  fetchAllFirestoreLeads,
   fetchFirestoreWorkspace,
   queryFirestoreUserByUsername,
+  removeFirestoreLead,
   removeFirestoreUser,
+  saveFirestoreLead,
   saveFirestoreUser,
   saveFirestoreWorkspace,
 } from './firebaseClient';
@@ -208,10 +211,36 @@ function parseCrm1Price(rawAnswer: string): number {
   return 0;
 }
 
-function isDummyOrFakeLeadRow(lead: any): boolean {
+const MANUAL_LEAD_SOURCES = new Set([
+  'حملة اعلانية',
+  'اورجانيك',
+  'بروكر',
+  'Direct Entry',
+  'Direct Call',
+]);
+
+export function isProtectedManualLeadRow(lead: any): boolean {
+  if (!lead || typeof lead !== 'object') return false;
+  if (lead.isManualEntry === true) return true;
+  if (lead.source && MANUAL_LEAD_SOURCES.has(String(lead.source).trim())) return true;
+  if (
+    Array.isArray(lead.activities) &&
+    lead.activities.some((a: any) => a && a.type === 'created')
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function isDummyOrFakeLeadRow(lead: any): boolean {
   if (!lead || typeof lead !== 'object') return true;
   if (FAKE_LEAD_IDS.has(lead.id)) return true;
   if (String(lead.sheetRowId || '').startsWith('meta_row_')) return true;
+  const digits = normalizePhone(String(lead.phone || ''));
+  if (digits.length < 8) return true;
+  if (isProtectedManualLeadRow(lead)) {
+    return false;
+  }
   const combined = `${lead.fullName || ''} ${lead.phone || ''} ${lead.notes || ''}`.toLowerCase();
   if (
     combined.includes('dummy data') ||
@@ -220,8 +249,6 @@ function isDummyOrFakeLeadRow(lead: any): boolean {
   ) {
     return true;
   }
-  const digits = normalizePhone(String(lead.phone || ''));
-  if (digits.length < 8) return true;
   return false;
 }
 
@@ -288,6 +315,9 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
     })
     .map((l: any) => {
       const copy = { ...l };
+      if (isProtectedManualLeadRow(copy)) {
+        copy.isManualEntry = true;
+      }
       if (copy.assignedBy === 'usr_admin') {
         copy.assignedBy = 'usr_admin2';
       }
@@ -298,7 +328,7 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
       const isUneditedImport =
         !copy.lastContactedAt && (!copy.updatedAt || copy.updatedAt === copy.createdAt);
 
-      if (Array.isArray(copy.formResponses)) {
+      if (Array.isArray(copy.formResponses) && copy.formResponses.length > 0) {
         copy.formResponses = copy.formResponses.filter((fr: any) => {
           const q = String(fr?.question || '').trim().toLowerCase();
           const a = String(fr?.answer || '').trim().toLowerCase();
@@ -316,40 +346,42 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
           return true;
         });
 
-        for (const fr of copy.formResponses) {
-          const q = String(fr.question || '').trim();
-          const a = String(fr.answer || '').trim();
-          const cleanAnswer = a.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
-          if (q === 'campaign_name' || q.includes('المشروع') || q.includes('حملة')) {
-            if (a && !isInvalidProjectName(a)) {
-              if (!copy.projectInterest || isInvalidProjectName(copy.projectInterest)) {
-                copy.projectInterest = a;
+        if (copy.formResponses.length > 0) {
+          for (const fr of copy.formResponses) {
+            const q = String(fr.question || '').trim();
+            const a = String(fr.answer || '').trim();
+            const cleanAnswer = a.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+            if (q === 'campaign_name' || q.includes('المشروع') || q.includes('حملة')) {
+              if (a && !isInvalidProjectName(a)) {
+                if (!copy.projectInterest || isInvalidProjectName(copy.projectInterest)) {
+                  copy.projectInterest = a;
+                }
+              }
+            } else if (q.includes('المساحة') || q.includes('نوع الوحدة')) {
+              if (cleanAnswer && (!copy.propertyType || (copy.propertyType === 'Villa' && isUneditedImport))) {
+                copy.propertyType = cleanAnswer;
+              }
+            } else if (q.includes('السعر') || q.includes('الميزانية')) {
+              const parsedBudget = parseCrm1Price(a);
+              if (parsedBudget > 0 && (!copy.budgetMax || copy.budgetMax === 0)) {
+                copy.budgetMax = parsedBudget;
+                copy.budgetMin = Math.round(parsedBudget * 0.85);
+              }
+            } else if (
+              q.includes('نظام_السداد') ||
+              q.includes('نظام السداد') ||
+              q.includes('سداد') ||
+              q.toLowerCase().includes('payment')
+            ) {
+              if (cleanAnswer && !copy.paymentPlan) {
+                copy.paymentPlan = cleanAnswer;
               }
             }
-          } else if (q.includes('المساحة') || q.includes('نوع الوحدة')) {
-            if (cleanAnswer && (!copy.propertyType || (copy.propertyType === 'Villa' && isUneditedImport))) {
-              copy.propertyType = cleanAnswer;
-            }
-          } else if (q.includes('السعر') || q.includes('الميزانية')) {
-            const parsedBudget = parseCrm1Price(a);
-            if (parsedBudget > 0 && (!copy.budgetMax || copy.budgetMax === 0)) {
-              copy.budgetMax = parsedBudget;
-              copy.budgetMin = Math.round(parsedBudget * 0.85);
-            }
-          } else if (
-            q.includes('نظام_السداد') ||
-            q.includes('نظام السداد') ||
-            q.includes('سداد') ||
-            q.toLowerCase().includes('payment')
-          ) {
-            if (cleanAnswer && !copy.paymentPlan) {
-              copy.paymentPlan = cleanAnswer;
-            }
           }
-        }
 
-        if (!copy.notes || String(copy.notes).toLowerCase().includes('dummy data')) {
-          copy.notes = copy.formResponses.map((fr: any) => `${fr.question}: ${fr.answer}`).join(' | ');
+          if (!copy.notes || String(copy.notes).toLowerCase().includes('dummy data')) {
+            copy.notes = copy.formResponses.map((fr: any) => `${fr.question}: ${fr.answer}`).join(' | ');
+          }
         }
       }
 
@@ -950,6 +982,13 @@ export function mergeById(baseList: any[], incomingList: any[]): any[] {
         }
       }
 
+      if (older.isManualEntry || newer.isManualEntry) {
+        merged.isManualEntry = true;
+      }
+      if ((!merged.notes || String(merged.notes).trim() === '') && older.notes) {
+        merged.notes = older.notes;
+      }
+
       // Strictly preserve authentication fields so undefined or stripped fields never wipe credentials
       const authKeys = ['password', 'accessPassword', 'passwordHash', 'clientAuthDigest'] as const;
       for (const k of authKeys) {
@@ -1078,9 +1117,10 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
   if (forceRemote || !cachedLiveSnapshot || now - lastRemoteFetchTime > 15000) {
     lastRemoteFetchTime = now;
     try {
-      const [staticSnap, rawFirestoreSnap] = await Promise.all([
+      const [staticSnap, rawFirestoreSnap, standaloneFirestoreLeads] = await Promise.all([
         withFastTimeout(fetchStaticSnapshotJson(now), 2500, null),
-        withFastTimeout(fetchFirestoreWorkspace(), 3000, null),
+        withFastTimeout(fetchFirestoreWorkspace(), 8000, null),
+        withFastTimeout(fetchAllFirestoreLeads(), 8000, []),
       ]);
 
       const firestoreSanitized = rawFirestoreSnap
@@ -1088,16 +1128,18 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
         : { cleaned: null, hadFakeData: false };
       const firestoreSnap = firestoreSanitized.cleaned;
 
-      if (staticSnap || firestoreSnap || browserSaved) {
+      if (staticSnap || firestoreSnap || browserSaved || cachedLiveSnapshot) {
         const base = staticSnap || {};
         const cloud = firestoreSnap || {};
         const local = browserSaved || {};
+        const session = cachedLiveSnapshot || {};
 
         const deletedUserIds = Array.from(
           new Set<string>([
             ...(base.deletedUserIds || []),
             ...(cloud.deletedUserIds || []),
             ...(local.deletedUserIds || []),
+            ...(session.deletedUserIds || []),
           ])
         );
         const deletedProjectIds = Array.from(
@@ -1105,6 +1147,7 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
             ...(base.deletedProjectIds || []),
             ...(cloud.deletedProjectIds || []),
             ...(local.deletedProjectIds || []),
+            ...(session.deletedProjectIds || []),
           ])
         );
         const deletedPropertyIds = Array.from(
@@ -1112,6 +1155,7 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
             ...(base.deletedPropertyIds || []),
             ...(cloud.deletedPropertyIds || []),
             ...(local.deletedPropertyIds || []),
+            ...(session.deletedPropertyIds || []),
           ])
         );
         const deletedLeadIds = Array.from(
@@ -1119,39 +1163,49 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
             ...(base.deletedLeadIds || []),
             ...(cloud.deletedLeadIds || []),
             ...(local.deletedLeadIds || []),
+            ...(session.deletedLeadIds || []),
           ])
         );
 
         try {
           const combinedUsers = mergeById(
-            mergeById(getDefaultCoreUsers(), cloud.users || []),
-            mergeById(base.users || [], local.users || [])
+            mergeById(
+              mergeById(getDefaultCoreUsers(), base.users || []),
+              cloud.users || []
+            ),
+            mergeById(local.users || [], session.users || [])
+          );
+          // Cloud Firestore (`fetchFirestoreWorkspace` + standalone `leads` collection) + session/local take priority over static snapshot
+          const cloudLeadsUnion = mergeById(
+            cloud.leads || [],
+            Array.isArray(standaloneFirestoreLeads) ? standaloneFirestoreLeads : []
           );
           const combinedLeads = mergeById(
-            mergeById(cloud.leads || [], base.leads || []),
-            local.leads || []
+            mergeById(base.leads || [], cloudLeadsUnion),
+            mergeById(local.leads || [], session.leads || [])
           );
           const combinedDeals = mergeById(
-            mergeById(cloud.deals || [], base.deals || []),
-            local.deals || []
+            mergeById(base.deals || [], cloud.deals || []),
+            mergeById(local.deals || [], session.deals || [])
           );
           const combinedProperties = mergeById(
-            mergeById(cloud.properties || [], base.properties || []),
-            local.properties || []
+            mergeById(base.properties || [], cloud.properties || []),
+            mergeById(local.properties || [], session.properties || [])
           );
           const combinedEvents = mergeById(
-            mergeById(cloud.events || [], base.events || []),
-            local.events || []
+            mergeById(base.events || [], cloud.events || []),
+            mergeById(local.events || [], session.events || [])
           );
           const combinedProjectsCatalog = mergeById(
-            mergeById(cloud.projectsCatalog || [], base.projectsCatalog || []),
-            local.projectsCatalog || []
+            mergeById(base.projectsCatalog || [], cloud.projectsCatalog || []),
+            mergeById(local.projectsCatalog || [], session.projectsCatalog || [])
           );
 
           const rawMerged = {
-            ...cloud,
             ...base,
+            ...cloud,
             ...local,
+            ...session,
             deletedUserIds,
             deletedProjectIds,
             deletedPropertyIds,
@@ -1159,7 +1213,7 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
             roles: ensureCloudSystemRolesIntegrity(
               mergeById(
                 mergeById(DEFAULT_ROLES, base.roles || []),
-                mergeById(cloud.roles || [], local.roles || [])
+                mergeById(cloud.roles || [], mergeById(local.roles || [], session.roles || []))
               )
             ),
             users: combinedUsers,
@@ -1168,23 +1222,24 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
             properties: combinedProperties,
             events: combinedEvents,
             sheetConnections:
-              Array.isArray(local.sheetConnections) && local.sheetConnections.length > 0
-                ? local.sheetConnections
-                : Array.isArray(cloud.sheetConnections) && cloud.sheetConnections.length > 0
+              Array.isArray(cloud.sheetConnections) && cloud.sheetConnections.length > 0
                 ? cloud.sheetConnections
+                : Array.isArray(local.sheetConnections) && local.sheetConnections.length > 0
+                ? local.sheetConnections
+                : Array.isArray(session.sheetConnections) && session.sheetConnections.length > 0
+                ? session.sheetConnections
                 : base.sheetConnections || [],
             syncLogs:
-              Array.isArray(base.syncLogs) &&
-              base.syncLogs.length > (cloud.syncLogs?.length || 0)
-                ? base.syncLogs
-                : Array.isArray(cloud.syncLogs) && cloud.syncLogs.length > 0
+              Array.isArray(cloud.syncLogs) && cloud.syncLogs.length > 0
                 ? cloud.syncLogs
-                : base.syncLogs || [],
+                : Array.isArray(base.syncLogs) && base.syncLogs.length > 0
+                ? base.syncLogs
+                : local.syncLogs || [],
             notifications:
-              Array.isArray(local.notifications) && local.notifications.length > 0
-                ? local.notifications
-                : Array.isArray(cloud.notifications) && cloud.notifications.length > 0
+              Array.isArray(cloud.notifications) && cloud.notifications.length > 0
                 ? cloud.notifications
+                : Array.isArray(local.notifications) && local.notifications.length > 0
+                ? local.notifications
                 : base.notifications || [],
             projects: Array.from(
               new Set([
@@ -1192,6 +1247,7 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
                 ...(Array.isArray(base.projects) ? base.projects : []),
                 ...(Array.isArray(cloud.projects) ? cloud.projects : []),
                 ...(Array.isArray(local.projects) ? local.projects : []),
+                ...(Array.isArray(session.projects) ? session.projects : []),
               ])
             ),
             projectsCatalog: combinedProjectsCatalog,
@@ -1664,6 +1720,7 @@ export async function handleLocalFallbackRequest(
       secondaryPhone: body.secondaryPhone ? String(body.secondaryPhone).trim() : '',
       email: body.email || '',
       source: body.source || 'Direct Call',
+      isManualEntry: true,
       campaignName: body.campaignName || '',
       formResponses: Array.isArray(body.formResponses) ? body.formResponses : [],
       projectInterest: body.projectInterest || DEFAULT_PROJECTS[0],
@@ -1693,7 +1750,11 @@ export async function handleLocalFallbackRequest(
       ],
     };
     snap.leads = [newLead, ...(snap.leads || [])];
-    await persistState(snap);
+    if (isCloudStoreTestMode) {
+      await persistState(snap);
+    } else {
+      await Promise.all([saveFirestoreLead(newLead), persistState(snap)]);
+    }
     return { lead: newLead };
   }
 
@@ -1784,7 +1845,15 @@ export async function handleLocalFallbackRequest(
       ];
     }
 
-    await persistState(snap);
+    const transferredLeads = (snap.leads || []).filter((l: any) => idsToTransfer.has(String(l.id)));
+    if (isCloudStoreTestMode) {
+      await persistState(snap);
+    } else {
+      await Promise.all([
+        ...transferredLeads.map((l: any) => saveFirestoreLead(l)),
+        persistState(snap),
+      ]);
+    }
     return { transferredCount: actualTransferred, toUser: targetUser?.fullName };
   }
 
@@ -1955,7 +2024,15 @@ export async function handleLocalFallbackRequest(
       snap.notifications = [...newNotifications, ...(snap.notifications || [])];
     }
 
-    await persistState(snap);
+    const distributedLeads = (snap.leads || []).filter((l: any) => matchingIds.has(String(l.id)));
+    if (isCloudStoreTestMode) {
+      await persistState(snap);
+    } else {
+      await Promise.all([
+        ...distributedLeads.map((l: any) => saveFirestoreLead(l)),
+        persistState(snap),
+      ]);
+    }
     return {
       distributedCount: rrIndex,
       assignmentsSummary: Object.values(assignmentsCounter).map(({ userId, userName, count }) => ({
@@ -2016,7 +2093,11 @@ export async function handleLocalFallbackRequest(
         ];
       }
     }
-    await persistState(snap);
+    if (isCloudStoreTestMode) {
+      await persistState(snap);
+    } else {
+      await Promise.all([saveFirestoreLead(snap.leads[leadIdx]), persistState(snap)]);
+    }
     return { lead: snap.leads[leadIdx], activity: act };
   }
 
@@ -2118,16 +2199,24 @@ export async function handleLocalFallbackRequest(
       ];
     }
 
-    await persistState(snap);
+    if (isCloudStoreTestMode) {
+      await persistState(snap);
+    } else {
+      await Promise.all([saveFirestoreLead(snap.leads[idx]), persistState(snap)]);
+    }
     return { lead: snap.leads[idx] };
   }
 
-    if (pathname.startsWith('/api/leads/') && method === 'DELETE') {
+  if (pathname.startsWith('/api/leads/') && method === 'DELETE') {
     const leadId = pathname.split('/')[3];
     if (!Array.isArray(snap.deletedLeadIds)) snap.deletedLeadIds = [];
     if (!snap.deletedLeadIds.includes(leadId)) snap.deletedLeadIds.push(leadId);
     snap.leads = (snap.leads || []).filter((l: any) => l.id !== leadId);
-    await persistState(snap);
+    if (isCloudStoreTestMode) {
+      await persistState(snap);
+    } else {
+      await Promise.all([removeFirestoreLead(leadId), persistState(snap)]);
+    }
     return { ok: true };
   }
 

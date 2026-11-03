@@ -32,9 +32,13 @@ import {
   isLiveFirestoreConnected,
   isExplicitFakeDemoUserRecord,
   pullUsersFromLiveCloudFirestore,
+  pullFullWorkspaceFromLiveCloudFirestore,
   pullWorkspaceFromLiveCloudFirestore,
   removeUserFromLiveCloudFirestore,
   saveUserToLiveCloudFirestore,
+  fetchAllFirestoreLeads,
+  saveFirestoreLead,
+  removeFirestoreLead,
   syncStateToLiveCloudFirestore,
 } from './server/db/firestoreClient';
 import { seedOrMigrateDataset } from './server/db/repositories';
@@ -87,7 +91,40 @@ export function parseCrm1PriceValue(rawAnswer: string): number {
   return 0;
 }
 
-export function isDummyOrFakeLead(leadOrName: string, phoneStr: string, notesStr = ''): boolean {
+const MANUAL_LEAD_SOURCES = new Set([
+  'حملة اعلانية',
+  'اورجانيك',
+  'بروكر',
+  'Direct Entry',
+  'Direct Call',
+]);
+
+export function isProtectedManualLead(lead: any): boolean {
+  if (!lead || typeof lead !== 'object') return false;
+  if (lead.isManualEntry === true) return true;
+  if (lead.source && MANUAL_LEAD_SOURCES.has(String(lead.source).trim())) return true;
+  if (
+    Array.isArray(lead.activities) &&
+    lead.activities.some((a: any) => a && a.type === 'created')
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function isDummyOrFakeLead(
+  leadOrName: any,
+  phoneStr?: string,
+  notesStr = ''
+): boolean {
+  if (leadOrName && typeof leadOrName === 'object') {
+    const leadObj = leadOrName;
+    if (isProtectedManualLead(leadObj)) {
+      const digits = normalizePhone(String(leadObj.phone || ''));
+      return digits.length < 8;
+    }
+    return isDummyOrFakeLead(leadObj.fullName, leadObj.phone, leadObj.notes);
+  }
   const combined = `${leadOrName || ''} ${phoneStr || ''} ${notesStr || ''}`.toLowerCase();
   if (
     combined.includes('dummy data') ||
@@ -181,9 +218,15 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
       if (FAKE_LEAD_IDS.has(l.id)) return false;
       if (deletedLeadIds.has(String(l.id || ''))) return false;
       if (String(l.sheetRowId || '').startsWith('meta_row_')) return false;
+      const normalizedDigits = normalizePhone(String(l.phone || ''));
+      if (normalizedDigits.length < 8) return false;
+      if (isProtectedManualLead(l)) {
+        l.isManualEntry = true;
+        return true;
+      }
       if (isDummyOrFakeLead(l.fullName, l.phone, l.notes)) return false;
-      const digits = String(l.phone || '').replace(/[^0-9]/g, '').slice(-10);
-      if (FAKE_PHONES.has(digits)) return false;
+      const lastTenDigits = normalizedDigits.slice(-10);
+      if (FAKE_PHONES.has(lastTenDigits)) return false;
       return true;
     });
   } else {
@@ -256,7 +299,7 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
     const isUneditedImport =
       !l.lastContactedAt && (!l.updatedAt || l.updatedAt === l.createdAt);
 
-    if (Array.isArray(l.formResponses)) {
+    if (Array.isArray(l.formResponses) && l.formResponses.length > 0) {
       l.formResponses = l.formResponses.filter((fr: any) => {
         const q = String(fr?.question || '').trim().toLowerCase();
         const a = String(fr?.answer || '').trim().toLowerCase();
@@ -267,40 +310,42 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
         return true;
       });
 
-      for (const fr of l.formResponses) {
-        const q = String(fr.question || '').trim();
-        const a = String(fr.answer || '').trim();
-        const cleanAnswer = a.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
-        if (q === 'campaign_name' || q.includes('المشروع') || q.includes('حملة')) {
-          if (a && !isInvalidProjectName(a)) {
-            if (!l.projectInterest || isInvalidProjectName(l.projectInterest)) {
-              l.projectInterest = a;
+      if (l.formResponses.length > 0) {
+        for (const fr of l.formResponses) {
+          const q = String(fr.question || '').trim();
+          const a = String(fr.answer || '').trim();
+          const cleanAnswer = a.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+          if (q === 'campaign_name' || q.includes('المشروع') || q.includes('حملة')) {
+            if (a && !isInvalidProjectName(a)) {
+              if (!l.projectInterest || isInvalidProjectName(l.projectInterest)) {
+                l.projectInterest = a;
+              }
+            }
+          } else if (q.includes('المساحة') || q.includes('نوع الوحدة')) {
+            if (cleanAnswer && (!l.propertyType || (l.propertyType === 'Villa' && isUneditedImport))) {
+              l.propertyType = cleanAnswer;
+            }
+          } else if (q.includes('السعر') || q.includes('الميزانية')) {
+            const parsedBudget = parseCrm1PriceValue(a);
+            if (parsedBudget > 0 && (!l.budgetMax || l.budgetMax === 0)) {
+              l.budgetMax = parsedBudget;
+              l.budgetMin = Math.round(parsedBudget * 0.85);
+            }
+          } else if (
+            q.includes('نظام_السداد') ||
+            q.includes('نظام السداد') ||
+            q.includes('سداد') ||
+            q.toLowerCase().includes('payment')
+          ) {
+            if (cleanAnswer && !l.paymentPlan) {
+              l.paymentPlan = cleanAnswer;
             }
           }
-        } else if (q.includes('المساحة') || q.includes('نوع الوحدة')) {
-          if (cleanAnswer && (!l.propertyType || (l.propertyType === 'Villa' && isUneditedImport))) {
-            l.propertyType = cleanAnswer;
-          }
-        } else if (q.includes('السعر') || q.includes('الميزانية')) {
-          const parsedBudget = parseCrm1PriceValue(a);
-          if (parsedBudget > 0 && (!l.budgetMax || l.budgetMax === 0)) {
-            l.budgetMax = parsedBudget;
-            l.budgetMin = Math.round(parsedBudget * 0.85);
-          }
-        } else if (
-          q.includes('نظام_السداد') ||
-          q.includes('نظام السداد') ||
-          q.includes('سداد') ||
-          q.toLowerCase().includes('payment')
-        ) {
-          if (cleanAnswer && !l.paymentPlan) {
-            l.paymentPlan = cleanAnswer;
-          }
         }
-      }
 
-      if (!l.notes || String(l.notes).toLowerCase().includes('dummy data')) {
-        l.notes = l.formResponses.map((fr: any) => `${fr.question}: ${fr.answer}`).join(' | ');
+        if (!l.notes || String(l.notes).toLowerCase().includes('dummy data')) {
+          l.notes = l.formResponses.map((fr: any) => `${fr.question}: ${fr.answer}`).join(' | ');
+        }
       }
     }
 
@@ -600,6 +645,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
 
   let writeSequence = 0;
   let isSyncingToFirestore = false;
+  let hasCompletedInitialCloudPull = Boolean(options.dbPath);
 
   function saveDb(state: any, skipCloudSync = false) {
     writeSequence++;
@@ -631,7 +677,13 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     }
 
     // Mirror state into unified Firestore / repository layer asynchronously
-    if (!skipCloudSync && !isSyncingToFirestore && !options.dbPath) {
+    // NEVER overwrite Cloud Firestore before initial cloud pull has completed!
+    if (
+      !skipCloudSync &&
+      hasCompletedInitialCloudPull &&
+      !isSyncingToFirestore &&
+      !options.dbPath
+    ) {
       isSyncingToFirestore = true;
       Promise.all([
         seedOrMigrateDataset(state).catch(() => {}),
@@ -647,14 +699,13 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       if (fs.existsSync(targetDbPath)) {
         const raw = fs.readFileSync(targetDbPath, 'utf-8');
         const parsed = JSON.parse(raw);
-        const upgraded = upgradeExistingDbForCrm1(parsed);
-        saveDb(upgraded, true);
-        return upgraded;
+        return upgradeExistingDbForCrm1(parsed);
       }
     } catch (err) {
       console.error('Error loading DB, initializing fresh DB:', err);
     }
     const initial = upgradeExistingDbForCrm1(getInitialDatabase());
+    // Write local file only if missing, strictly skipping cloud sync until pullFullWorkspaceFromLiveCloudFirestore runs
     saveDb(initial, true);
     return initial;
   }
@@ -733,10 +784,12 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
   async function mergeCloudUsersIntoDb(): Promise<boolean> {
     if (options.dbPath) return false;
     try {
-      const [cloudUsers, cloudWorkspace] = await Promise.all([
+      const [cloudUsers, cloudWorkspace, standaloneLeads] = await Promise.all([
         pullUsersFromLiveCloudFirestore(),
-        pullWorkspaceFromLiveCloudFirestore(),
+        pullFullWorkspaceFromLiveCloudFirestore(),
+        fetchAllFirestoreLeads().catch(() => []),
       ]);
+      hasCompletedInitialCloudPull = true;
 
       const deletedUserIds = new Set<string>(
         Array.isArray(db.deletedUserIds) ? db.deletedUserIds.map(String) : []
@@ -828,8 +881,50 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
         }
       }
 
+      // 3. Merge Leads from BOTH `crm_state/workspace.leads` AND standalone `leads` collection (Merge by ID & Phone)
+      const deletedLeadIds = new Set<string>(
+        Array.isArray(db.deletedLeadIds) ? db.deletedLeadIds.map(String) : []
+      );
+      if (Array.isArray(cloudWorkspace?.deletedLeadIds)) {
+        cloudWorkspace.deletedLeadIds.forEach((id: any) => deletedLeadIds.add(String(id)));
+      }
+      db.deletedLeadIds = Array.from(deletedLeadIds);
+
+      const combinedCloudLeads = [
+        ...(Array.isArray(cloudWorkspace?.leads) ? cloudWorkspace.leads : []),
+        ...(Array.isArray(standaloneLeads) ? standaloneLeads : []),
+      ];
+
+      for (const cl of combinedCloudLeads) {
+        if (!cl || !cl.id || deletedLeadIds.has(String(cl.id))) continue;
+        if (isDummyOrFakeLead(cl)) continue;
+        const clPhoneKey = getPhoneMatchKey(String(cl.phone || ''));
+        const existingIdx = db.leads.findIndex((l: any) => {
+          if (l.id === cl.id) return true;
+          const lPhoneKey = getPhoneMatchKey(String(l.phone || ''));
+          return clPhoneKey.length >= 8 && lPhoneKey === clPhoneKey;
+        });
+        if (existingIdx === -1) {
+          if (isProtectedManualLead(cl)) {
+            cl.isManualEntry = true;
+          }
+          db.leads.push(cl);
+          changed = true;
+        } else if (getRecordTimestampMs(cl) > getRecordTimestampMs(db.leads[existingIdx])) {
+          const prev = db.leads[existingIdx];
+          db.leads[existingIdx] = {
+            ...prev,
+            ...cl,
+            id: prev.id,
+            isManualEntry: Boolean(prev.isManualEntry || cl.isManualEntry || isProtectedManualLead(cl)),
+            notes: cl.notes && String(cl.notes).trim() !== '' ? cl.notes : prev.notes || '',
+          };
+          changed = true;
+        }
+      }
+
       if (cloudWorkspace && typeof cloudWorkspace === 'object') {
-        // 3. Merge Projects Catalog
+        // 4. Merge Projects Catalog & Projects
         const deletedProjIds = new Set<string>(
           Array.isArray(db.deletedProjectIds) ? db.deletedProjectIds.map(String) : []
         );
@@ -854,7 +949,17 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
           }
         }
 
-        // 4. Merge Properties
+        if (Array.isArray(cloudWorkspace.projects)) {
+          for (const projName of cloudWorkspace.projects) {
+            const cleanName = String(projName || '').trim();
+            if (cleanName && !isInvalidProjectName(cleanName) && !db.projects.includes(cleanName)) {
+              db.projects.push(cleanName);
+              changed = true;
+            }
+          }
+        }
+
+        // 5. Merge Properties
         const deletedPropIds = new Set<string>(
           Array.isArray(db.deletedPropertyIds) ? db.deletedPropertyIds.map(String) : []
         );
@@ -872,39 +977,6 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
               changed = true;
             } else if (getRecordTimestampMs(prop) > getRecordTimestampMs(db.properties[idx])) {
               db.properties[idx] = { ...db.properties[idx], ...prop };
-              changed = true;
-            }
-          }
-        }
-
-        // 5. Merge Leads (preserving all leads across Cloud Firestore and Local DB without duplicates)
-        const deletedLeadIds = new Set<string>(
-          Array.isArray(db.deletedLeadIds) ? db.deletedLeadIds.map(String) : []
-        );
-        if (Array.isArray(cloudWorkspace.deletedLeadIds)) {
-          cloudWorkspace.deletedLeadIds.forEach((id: any) => deletedLeadIds.add(String(id)));
-        }
-        db.deletedLeadIds = Array.from(deletedLeadIds);
-
-        if (Array.isArray(cloudWorkspace.leads)) {
-          for (const cl of cloudWorkspace.leads) {
-            if (!cl || !cl.id || deletedLeadIds.has(String(cl.id))) continue;
-            if (isDummyOrFakeLead(cl.fullName, cl.phone, cl.notes)) continue;
-            const clPhoneKey = getPhoneMatchKey(String(cl.phone || ''));
-            const existingIdx = db.leads.findIndex((l: any) => {
-              if (l.id === cl.id) return true;
-              const lPhoneKey = getPhoneMatchKey(String(l.phone || ''));
-              return clPhoneKey.length >= 8 && lPhoneKey === clPhoneKey;
-            });
-            if (existingIdx === -1) {
-              db.leads.push(cl);
-              changed = true;
-            } else if (getRecordTimestampMs(cl) > getRecordTimestampMs(db.leads[existingIdx])) {
-              db.leads[existingIdx] = {
-                ...db.leads[existingIdx],
-                ...cl,
-                id: db.leads[existingIdx].id,
-              };
               changed = true;
             }
           }
@@ -953,19 +1025,20 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
         }
       }
 
-      if (changed) {
-        upgradeExistingDbForCrm1(db);
-        saveDb(db);
-      }
+      upgradeExistingDbForCrm1(db);
+      saveDb(db);
       return changed;
     } catch {
+      hasCompletedInitialCloudPull = true;
       return false;
     }
   }
 
   if (!options.dbPath && !options.disableBackgroundSync) {
-    void verifyFirestoreConnectivity();
-    void mergeCloudUsersIntoDb();
+    void (async () => {
+      await verifyFirestoreConnectivity();
+      await mergeCloudUsersIntoDb();
+    })();
   }
 
   interface SseClient {
@@ -2015,6 +2088,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       secondaryPhone: secondaryPhone ? String(secondaryPhone).trim() : '',
       email: email ? String(email).trim() : '',
       source: source || 'Direct Entry',
+      isManualEntry: true,
       campaignName: campaignName || 'Direct Inbound',
       projectInterest: projectInterest || DEFAULT_PROJECTS[0],
       propertyType: propertyType || 'Apartment',
@@ -2046,6 +2120,9 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
 
     db.leads.unshift(newLead);
     saveDb(db);
+    if (!options.dbPath) {
+      void saveFirestoreLead(newLead);
+    }
 
     if (targetAgentId !== user.id) {
       broadcastNotification({
@@ -2242,6 +2319,9 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
 
     db.leads[idx] = lead;
     saveDb(db);
+    if (!options.dbPath) {
+      void saveFirestoreLead(lead);
+    }
     res.json({ lead });
   });
 
@@ -2342,6 +2422,9 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
 
     db.leads[idx] = lead;
     saveDb(db);
+    if (!options.dbPath) {
+      void saveFirestoreLead(lead);
+    }
     res.json({ lead, activity });
   });
 
@@ -2418,6 +2501,11 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     });
 
     saveDb(db);
+    if (!options.dbPath) {
+      for (const lead of targetLeads) {
+        void saveFirestoreLead(lead);
+      }
+    }
 
     broadcastNotification({
       id: `notif_${Date.now()}_bulk`,
@@ -2614,6 +2702,11 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     });
 
     saveDb(db);
+    if (!options.dbPath) {
+      for (const lead of leadsToDistribute) {
+        void saveFirestoreLead(lead);
+      }
+    }
     res.json({
       distributedCount: leadsToDistribute.length,
       assignmentsSummary,
@@ -2648,6 +2741,9 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     }
     db.leads = db.leads.filter((l: any) => l.id !== req.params.id);
     saveDb(db);
+    if (!options.dbPath) {
+      void removeFirestoreLead(req.params.id);
+    }
     res.json({ ok: true });
   });
 
@@ -3893,7 +3989,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       const delLeads = new Set<string>(db.deletedLeadIds || []);
       for (const il of incoming.leads) {
         if (!il || !il.id || delLeads.has(String(il.id))) continue;
-        if (isDummyOrFakeLead(il.fullName, il.phone, il.notes)) continue;
+        if (isDummyOrFakeLead(il)) continue;
         const ilPhoneKey = getPhoneMatchKey(String(il.phone || ''));
         const idx = db.leads.findIndex((l: any) => {
           if (l.id === il.id) return true;
@@ -3901,10 +3997,20 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
           return ilPhoneKey.length >= 8 && lPhoneKey === ilPhoneKey;
         });
         if (idx === -1) {
+          if (isProtectedManualLead(il)) {
+            il.isManualEntry = true;
+          }
           db.leads.unshift(il);
           changed = true;
         } else if (getRecordTimestampMs(il) > getRecordTimestampMs(db.leads[idx])) {
-          db.leads[idx] = { ...db.leads[idx], ...il, id: db.leads[idx].id };
+          const prev = db.leads[idx];
+          db.leads[idx] = {
+            ...prev,
+            ...il,
+            id: prev.id,
+            isManualEntry: Boolean(prev.isManualEntry || il.isManualEntry || isProtectedManualLead(il)),
+            notes: il.notes && String(il.notes).trim() !== '' ? il.notes : prev.notes || '',
+          };
           changed = true;
         }
       }
