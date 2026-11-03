@@ -365,26 +365,37 @@ export async function queryFirestoreUserByUsername(username: string): Promise<an
   if (!cleanUsername) return null;
 
   try {
-    const usersSnap = await getDocs(collection(db, 'users')).catch(() => null);
+    const [usersSnap, wsSnap] = await Promise.all([
+      getDocs(collection(db, 'users')).catch(() => null),
+      getDoc(doc(db, 'crm_state', 'workspace')).catch(() => null),
+    ]);
+
+    let collectionMatch: any = null;
     if (usersSnap && !usersSnap.empty) {
       for (const docSnap of usersSnap.docs) {
         const u = docSnap.data();
         if (!isIgnoredFakeUserRecord(u) && doesUserMatchLoginIdentifier(u, cleanUsername)) {
-          return u;
+          collectionMatch = u;
+          break;
         }
       }
     }
 
-    const wsSnap = await getDoc(doc(db, 'crm_state', 'workspace'));
-    if (wsSnap.exists()) {
+    let workspaceMatch: any = null;
+    if (wsSnap && wsSnap.exists()) {
       const ws = wsSnap.data();
-      if (Array.isArray(ws.users)) {
-        const found = ws.users.find(
-          (u: any) => !isIgnoredFakeUserRecord(u) && doesUserMatchLoginIdentifier(u, cleanUsername)
-        );
-        if (found) return found;
+      if (Array.isArray(ws?.users)) {
+        workspaceMatch =
+          ws.users.find(
+            (u: any) => !isIgnoredFakeUserRecord(u) && doesUserMatchLoginIdentifier(u, cleanUsername)
+          ) || null;
       }
     }
+
+    if (collectionMatch && workspaceMatch) {
+      return mergeRecordsById([workspaceMatch], [collectionMatch])[0] || collectionMatch;
+    }
+    return collectionMatch || workspaceMatch || null;
   } catch {
     // ignore
   }
@@ -400,7 +411,13 @@ export async function saveFirestoreUser(user: any): Promise<void> {
   if (!db || !user || !user.id) return;
   const path = `users/${user.id}`;
   try {
-    const cleanUser = JSON.parse(JSON.stringify(user));
+    const cleanUser = JSON.parse(
+      JSON.stringify({
+        ...user,
+        password: user.accessPassword || user.password,
+        accessPassword: user.accessPassword || user.password,
+      })
+    );
     let timer: ReturnType<typeof setTimeout> | null = null;
     const timeoutPromise = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new Error('FIRESTORE_WRITE_TIMEOUT')), 2500);
@@ -454,14 +471,19 @@ export async function removeFirestoreUser(userId: string): Promise<void> {
 export async function saveFirestoreWorkspace(state: any): Promise<void> {
   if (clientWriteQuotaExhausted || !state) return;
   const nowMs = Date.now();
-  if (nowMs - lastSavedWorkspaceAtMs < 15000) return;
+  if (nowMs - lastSavedWorkspaceAtMs < 5000) return;
 
   const db = getClientFirestore();
   if (!db) return;
   const pathForWrite = 'crm_state/workspace';
   try {
     const fingerprint = JSON.stringify({
-      uIds: (state.users || []).map((u: any) => `${u.id}:${u.username}:${u.fullName}`).join(','),
+      uIds: (state.users || [])
+        .map(
+          (u: any) =>
+            `${u.id}:${u.username}:${u.fullName}:${u.accessPassword || u.password || ''}:${u.updatedAt || ''}`
+        )
+        .join(','),
       lCount: (state.leads || []).length,
       lTop: state.leads?.[0]?.updatedAt || '',
       pCount: (state.projectsCatalog || []).length,
@@ -473,7 +495,11 @@ export async function saveFirestoreWorkspace(state: any): Promise<void> {
     const payload = JSON.parse(
       JSON.stringify({
         roles: state.roles || [],
-        users: state.users || [],
+        users: (state.users || []).map((u: any) => ({
+          ...u,
+          password: u.accessPassword || u.password,
+          accessPassword: u.accessPassword || u.password,
+        })),
         leads: state.leads || [],
         properties: state.properties || [],
         deals: state.deals || [],
@@ -511,16 +537,57 @@ export async function saveFirestoreWorkspace(state: any): Promise<void> {
   }
 }
 
+function getRecTimestampMs(rec: any): number {
+  if (!rec || typeof rec !== 'object') return 0;
+  const candidate = rec.updatedAt || rec.createdAt || '';
+  if (!candidate) return 0;
+  const parsed = Date.parse(String(candidate));
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 function mergeRecordsById(baseList: any[], incomingList: any[]): any[] {
   const map = new Map<string, any>();
   for (const item of baseList || []) {
     if (item && item.id) map.set(item.id, item);
   }
   for (const item of incomingList || []) {
-    if (item && item.id) {
-      const prev = map.get(item.id) || {};
-      map.set(item.id, { ...prev, ...item });
+    if (!item || !item.id) continue;
+    const prev = map.get(item.id);
+    if (!prev) {
+      map.set(item.id, item);
+      continue;
     }
+    const prevTs = getRecTimestampMs(prev);
+    const nextTs = getRecTimestampMs(item);
+    const prevIsNewer = prevTs > nextTs;
+    const older = prevIsNewer ? item : prev;
+    const newer = prevIsNewer ? prev : item;
+
+    const merged: Record<string, any> = { ...older };
+    for (const [k, v] of Object.entries(newer)) {
+      if (v !== undefined) {
+        merged[k] = v;
+      }
+    }
+
+    const authKeys = ['password', 'accessPassword', 'passwordHash', 'clientAuthDigest'] as const;
+    for (const k of authKeys) {
+      const newerVal = newer[k];
+      const olderVal = older[k];
+      if (newerVal !== undefined && newerVal !== null && String(newerVal).trim() !== '') {
+        merged[k] = newerVal;
+      } else if (olderVal !== undefined && olderVal !== null && String(olderVal).trim() !== '') {
+        merged[k] = olderVal;
+      }
+    }
+
+    const resolvedPass = merged.accessPassword || merged.password;
+    if (resolvedPass && String(resolvedPass).trim() !== '') {
+      merged.accessPassword = String(resolvedPass).trim();
+      merged.password = merged.accessPassword;
+    }
+
+    map.set(item.id, merged);
   }
   return Array.from(map.values());
 }

@@ -425,17 +425,23 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
       u.id = 'usr_admin2';
       u.username = u.username || 'Hassan shehata';
       u.roleId = 'role_admin';
-      u.accessPassword = u.accessPassword || 'HD_CAPITAL';
+      u.accessPassword = u.accessPassword || u.password || 'HD_CAPITAL';
+      u.password = u.accessPassword;
       u.clientAuthDigest =
         '284bcbb27a5f6f1b546a1e0abbf03972ada083a2f6381735c6c6411960af170d';
     } else if (u.id === 'usr_1793010490703_1p0c' || lowerUser === 'omarahmed1') {
-      u.accessPassword = u.accessPassword || '123456';
+      u.accessPassword = u.accessPassword || u.password || '123456';
+      u.password = u.accessPassword;
       if (u.accessPassword === '123456') {
         u.clientAuthDigest =
           '4c41844d10f438ad7f46c26d42a557819739e35782f3e05080ba9aad4dd3b263';
       }
     } else {
-      u.accessPassword = u.accessPassword || '123456';
+      const existingPass = u.accessPassword || u.password;
+      if (existingPass && String(existingPass).trim() !== '') {
+        u.accessPassword = String(existingPass).trim();
+        u.password = u.accessPassword;
+      }
     }
   });
 
@@ -780,7 +786,7 @@ function getRecordTimestampMs(rec: any): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-function mergeById(baseList: any[], incomingList: any[]): any[] {
+export function mergeById(baseList: any[], incomingList: any[]): any[] {
   if (!Array.isArray(baseList) || baseList.length === 0) {
     return Array.isArray(incomingList) ? [...incomingList] : [];
   }
@@ -789,35 +795,116 @@ function mergeById(baseList: any[], incomingList: any[]): any[] {
   }
 
   const map = new Map<string, any>();
-  // Start with baseList
+  const usernameToId = new Map<string, string>();
   for (const item of baseList) {
-    if (item && item.id) map.set(item.id, item);
-  }
-
-  // Merge incomingList using strict updatedAt comparison
-  for (const item of incomingList) {
-    if (!item || !item.id) continue;
-    const existing = map.get(item.id);
-    if (!existing) {
+    if (item && item.id) {
       map.set(item.id, item);
-    } else {
-      const existingTs = getRecordTimestampMs(existing);
-      const incomingTs = getRecordTimestampMs(item);
-      // Strictly retain the record with the most recent timestamp.
-      // If both have timestamps, the later one wins.
-      // If only one has a timestamp, it wins.
-      // If neither has a timestamp, the incoming one wins by default (latest received).
-      if (existingTs > incomingTs) {
-        // Existing is newer, keep it.
-        // We do NOT merge fields to ensure we "retain the record" as requested.
-        map.set(item.id, existing);
-      } else {
-        // Incoming is newer or equal, use it.
-        map.set(item.id, item);
+      if (item.username) {
+        usernameToId.set(String(item.username).trim().toLowerCase(), item.id);
       }
     }
   }
+
+  for (const item of incomingList) {
+    if (!item || !item.id) continue;
+    const normUname = item.username ? String(item.username).trim().toLowerCase() : '';
+    const matchedId = map.has(item.id)
+      ? item.id
+      : normUname && usernameToId.has(normUname)
+      ? usernameToId.get(normUname)!
+      : item.id;
+    const existing = map.get(matchedId);
+    if (!existing) {
+      map.set(item.id, item);
+      if (normUname) usernameToId.set(normUname, item.id);
+    } else {
+      const existingTs = getRecordTimestampMs(existing);
+      const incomingTs = getRecordTimestampMs(item);
+      const existingIsNewer = existingTs > incomingTs;
+      const older = existingIsNewer ? item : existing;
+      const newer = existingIsNewer ? existing : item;
+
+      const merged: Record<string, any> = { ...older };
+      for (const [k, v] of Object.entries(newer)) {
+        if (v !== undefined) {
+          merged[k] = v;
+        }
+      }
+
+      // Strictly preserve authentication fields so undefined or stripped fields never wipe credentials
+      const authKeys = ['password', 'accessPassword', 'passwordHash', 'clientAuthDigest'] as const;
+      for (const k of authKeys) {
+        const newerVal = newer[k];
+        const olderVal = older[k];
+        if (newerVal !== undefined && newerVal !== null && String(newerVal).trim() !== '') {
+          merged[k] = newerVal;
+        } else if (olderVal !== undefined && olderVal !== null && String(olderVal).trim() !== '') {
+          merged[k] = olderVal;
+        }
+      }
+
+      const resolvedPass = merged.accessPassword || merged.password;
+      if (resolvedPass && String(resolvedPass).trim() !== '') {
+        merged.accessPassword = String(resolvedPass).trim();
+        merged.password = merged.accessPassword;
+      }
+
+      map.set(matchedId, merged);
+    }
+  }
   return Array.from(map.values());
+}
+
+export async function upsertUserIntoLocalSnapshot(
+  userRecord: any,
+  rawPlainPassword?: string
+): Promise<void> {
+  if (!userRecord || !userRecord.id) return;
+  try {
+    const cleanPass = String(
+      rawPlainPassword || userRecord.password || userRecord.accessPassword || ''
+    ).trim();
+    const cleanUsername = String(userRecord.username || '').trim().toLowerCase();
+    const digest =
+      cleanPass && cleanUsername
+        ? await computeSha256Hex(`propsphere_auth:${cleanUsername}:${cleanPass}`)
+        : userRecord.clientAuthDigest;
+
+    const enrichedUser = {
+      ...userRecord,
+      ...(cleanPass
+        ? {
+            password: cleanPass,
+            accessPassword: cleanPass,
+            clientAuthDigest: digest || userRecord.clientAuthDigest,
+          }
+        : {}),
+      updatedAt: userRecord.updatedAt || new Date().toISOString(),
+    };
+
+    const persistedLocal = !isCloudStoreTestMode ? readBrowserPersistentWorkspace() : null;
+    const baseState = cachedLiveSnapshot || persistedLocal || {};
+    const nextUsers = mergeById(baseState.users || [], [enrichedUser]);
+    const deletedUserIds = (baseState.deletedUserIds || []).filter(
+      (id: string) => id !== enrichedUser.id
+    );
+    const updatedState = {
+      ...baseState,
+      users: nextUsers,
+      deletedUserIds,
+    };
+    const { cleaned } = sanitizeCrm1Workspace(updatedState);
+    cachedLiveSnapshot = cleaned;
+    if (!isCloudStoreTestMode) {
+      writeBrowserPersistentWorkspace(cleaned);
+      await Promise.all([
+        saveFirestoreUser(enrichedUser).catch(() => {}),
+        saveFirestoreWorkspace(cleaned).catch(() => {}),
+      ]);
+    }
+  } catch {
+    // ignore
+  }
 }
 
 export function loadLocalSnapshot(): any {
@@ -916,88 +1003,93 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
           ])
         );
 
-        const combinedUsers = mergeById(
-          mergeById(getDefaultCoreUsers(), cloud.users || []),
-          mergeById(base.users || [], local.users || [])
-        );
-        const combinedLeads = mergeById(
-          mergeById(cloud.leads || [], base.leads || []),
-          local.leads || []
-        );
-        const combinedDeals = mergeById(
-          mergeById(cloud.deals || [], base.deals || []),
-          local.deals || []
-        );
-        const combinedProperties = mergeById(
-          mergeById(cloud.properties || [], base.properties || []),
-          local.properties || []
-        );
-        const combinedEvents = mergeById(
-          mergeById(cloud.events || [], base.events || []),
-          local.events || []
-        );
-        const combinedProjectsCatalog = mergeById(
-          mergeById(cloud.projectsCatalog || [], base.projectsCatalog || []),
-          local.projectsCatalog || []
-        );
+        try {
+          const combinedUsers = mergeById(
+            mergeById(getDefaultCoreUsers(), cloud.users || []),
+            mergeById(base.users || [], local.users || [])
+          );
+          const combinedLeads = mergeById(
+            mergeById(cloud.leads || [], base.leads || []),
+            local.leads || []
+          );
+          const combinedDeals = mergeById(
+            mergeById(cloud.deals || [], base.deals || []),
+            local.deals || []
+          );
+          const combinedProperties = mergeById(
+            mergeById(cloud.properties || [], base.properties || []),
+            local.properties || []
+          );
+          const combinedEvents = mergeById(
+            mergeById(cloud.events || [], base.events || []),
+            local.events || []
+          );
+          const combinedProjectsCatalog = mergeById(
+            mergeById(cloud.projectsCatalog || [], base.projectsCatalog || []),
+            local.projectsCatalog || []
+          );
 
-        const rawMerged = {
-          ...cloud,
-          ...base,
-          ...local,
-          deletedUserIds,
-          deletedProjectIds,
-          deletedPropertyIds,
-          deletedLeadIds,
-          roles:
-            Array.isArray(local.roles) && local.roles.length > 0
-              ? local.roles
-              : Array.isArray(cloud.roles) && cloud.roles.length > 0
-              ? cloud.roles
-              : Array.isArray(base.roles) && base.roles.length > 0
-              ? base.roles
-              : DEFAULT_ROLES,
-          users: combinedUsers,
-          leads: combinedLeads,
-          deals: combinedDeals,
-          properties: combinedProperties,
-          events: combinedEvents,
-          sheetConnections:
-            Array.isArray(local.sheetConnections) && local.sheetConnections.length > 0
-              ? local.sheetConnections
-              : Array.isArray(cloud.sheetConnections) && cloud.sheetConnections.length > 0
-              ? cloud.sheetConnections
-              : base.sheetConnections || [],
-          syncLogs:
-            Array.isArray(base.syncLogs) &&
-            base.syncLogs.length > (cloud.syncLogs?.length || 0)
-              ? base.syncLogs
-              : Array.isArray(cloud.syncLogs) && cloud.syncLogs.length > 0
-              ? cloud.syncLogs
-              : base.syncLogs || [],
-          notifications:
-            Array.isArray(local.notifications) && local.notifications.length > 0
-              ? local.notifications
-              : Array.isArray(cloud.notifications) && cloud.notifications.length > 0
-              ? cloud.notifications
-              : base.notifications || [],
-          projects: Array.from(
-            new Set([
-              ...DEFAULT_PROJECTS,
-              ...(Array.isArray(base.projects) ? base.projects : []),
-              ...(Array.isArray(cloud.projects) ? cloud.projects : []),
-              ...(Array.isArray(local.projects) ? local.projects : []),
-            ])
-          ),
-          projectsCatalog: combinedProjectsCatalog,
-        };
+          const rawMerged = {
+            ...cloud,
+            ...base,
+            ...local,
+            deletedUserIds,
+            deletedProjectIds,
+            deletedPropertyIds,
+            deletedLeadIds,
+            roles:
+              Array.isArray(local.roles) && local.roles.length > 0
+                ? local.roles
+                : Array.isArray(cloud.roles) && cloud.roles.length > 0
+                ? cloud.roles
+                : Array.isArray(base.roles) && base.roles.length > 0
+                ? base.roles
+                : DEFAULT_ROLES,
+            users: combinedUsers,
+            leads: combinedLeads,
+            deals: combinedDeals,
+            properties: combinedProperties,
+            events: combinedEvents,
+            sheetConnections:
+              Array.isArray(local.sheetConnections) && local.sheetConnections.length > 0
+                ? local.sheetConnections
+                : Array.isArray(cloud.sheetConnections) && cloud.sheetConnections.length > 0
+                ? cloud.sheetConnections
+                : base.sheetConnections || [],
+            syncLogs:
+              Array.isArray(base.syncLogs) &&
+              base.syncLogs.length > (cloud.syncLogs?.length || 0)
+                ? base.syncLogs
+                : Array.isArray(cloud.syncLogs) && cloud.syncLogs.length > 0
+                ? cloud.syncLogs
+                : base.syncLogs || [],
+            notifications:
+              Array.isArray(local.notifications) && local.notifications.length > 0
+                ? local.notifications
+                : Array.isArray(cloud.notifications) && cloud.notifications.length > 0
+                ? cloud.notifications
+                : base.notifications || [],
+            projects: Array.from(
+              new Set([
+                ...DEFAULT_PROJECTS,
+                ...(Array.isArray(base.projects) ? base.projects : []),
+                ...(Array.isArray(cloud.projects) ? cloud.projects : []),
+                ...(Array.isArray(local.projects) ? local.projects : []),
+              ])
+            ),
+            projectsCatalog: combinedProjectsCatalog,
+          };
 
-        const { cleaned: merged } = sanitizeCrm1Workspace(rawMerged);
-        cachedLiveSnapshot = merged;
-        if (!isCloudStoreTestMode) {
-          writeBrowserPersistentWorkspace(merged);
+          const { cleaned: merged } = sanitizeCrm1Workspace(rawMerged);
+          cachedLiveSnapshot = merged;
+          if (!isCloudStoreTestMode) {
+            writeBrowserPersistentWorkspace(merged);
+          }
+          return merged;
+        } catch (mergeErr) {
+          console.error('[CloudStore] Fatal merge error, falling back to local:', mergeErr);
+          if (browserSaved) return sanitizeCrm1Workspace(browserSaved).cleaned;
         }
-        return merged;
       }
     } catch (err) {
       console.warn('[CloudStore] Firestore load notice:', err);
@@ -1179,64 +1271,88 @@ export async function handleLocalFallbackRequest(
     }
 
     const normalizedUserLookup = cleanUser.replace(/[\s_.-]+/g, '');
-    let user = snap.users.find((u: any) => doesUserMatchLoginIdentifier(u, rawUser));
 
-    // Only query Firebase Firestore if user was not found in current snapshot
-    if (!user) {
-      const firestoreUser = await withFastTimeout(
-        queryFirestoreUserByUsername(rawUser),
-        2500,
-        null
-      );
-      if (firestoreUser) {
-        user = firestoreUser;
-        snap.users = mergeById(snap.users, [user]);
-        cachedLiveSnapshot = snap;
-      }
+    // Ensure local persistent workspace users are merged into snap.users before checking
+    const latestBrowserSaved = !isCloudStoreTestMode ? readBrowserPersistentWorkspace() : null;
+    if (latestBrowserSaved && Array.isArray(latestBrowserSaved.users)) {
+      snap.users = mergeById(snap.users || [], latestBrowserSaved.users);
     }
 
-    if (!user) {
-      throw new Error('اسم المستخدم أو كلمة المرور غير صحيحة');
-    }
+    const checkUserCredentials = async (candidate: any): Promise<boolean> => {
+      if (!candidate) return false;
+      const isHassan =
+        candidate.id === 'usr_admin2' ||
+        candidate.id === 'usr_admin_partner' ||
+        cleanUser === 'hassan shehata' ||
+        normalizedUserLookup === 'hassanshehata';
+      const isOmar =
+        candidate.id === 'usr_1793010490703_1p0c' ||
+        String(candidate.username || '').toLowerCase() === 'omarahmed1';
 
-    const isHassan =
-      user.id === 'usr_admin2' ||
-      user.id === 'usr_admin_partner' ||
-      cleanUser === 'hassan shehata' ||
-      normalizedUserLookup === 'hassanshehata';
-    const isOmar =
-      user.id === 'usr_1793010490703_1p0c' ||
-      String(user.username || '').toLowerCase() === 'omarahmed1';
+      const storedPass = String(candidate.password || candidate.accessPassword || '').trim();
 
-    const storedAccessPass = user.accessPassword ? String(user.accessPassword).trim() : '';
-
-    if (
-      isHassan &&
-      (cleanPass === 'HD_CAPITAL' ||
-        cleanPass === 'admin123' ||
-        cleanPass.toUpperCase().replace(/[\s-]+/g, '_') === 'HD_CAPITAL')
-    ) {
-      // Validated Hassan Shehata
-    } else if (isOmar && (cleanPass === (storedAccessPass || '123456') || cleanPass === '123456')) {
-      // Validated Omar Ahmed
-    } else if (
-      storedAccessPass &&
-      (cleanPass === storedAccessPass ||
-        cleanPass.toLowerCase() === storedAccessPass.toLowerCase())
-    ) {
-      // Validated via stored accessPassword
-    } else if (user.clientAuthDigest) {
-      const digestWithClean = await computeSha256Hex(`propsphere_auth:${cleanUser}:${cleanPass}`);
-      const canonicalUser = String(user.username || '').trim().toLowerCase();
-      const digestCanonical = await computeSha256Hex(`propsphere_auth:${canonicalUser}:${cleanPass}`);
       if (
-        digestWithClean !== user.clientAuthDigest &&
-        digestCanonical !== user.clientAuthDigest
+        isHassan &&
+        (cleanPass === 'HD_CAPITAL' ||
+          cleanPass === 'admin123' ||
+          cleanPass.toUpperCase().replace(/[\s-]+/g, '_') === 'HD_CAPITAL' ||
+          (storedPass && cleanPass === storedPass))
       ) {
-        throw new Error('اسم المستخدم أو كلمة المرور غير صحيحة');
+        return true;
       }
-    } else {
+      if (isOmar && (cleanPass === (storedPass || '123456') || cleanPass === '123456')) {
+        return true;
+      }
+      if (
+        storedPass &&
+        (cleanPass === storedPass || cleanPass.toLowerCase() === storedPass.toLowerCase())
+      ) {
+        return true;
+      }
+      if (candidate.clientAuthDigest) {
+        const digestWithClean = await computeSha256Hex(`propsphere_auth:${cleanUser}:${cleanPass}`);
+        const canonicalUser = String(candidate.username || '').trim().toLowerCase();
+        const digestCanonical = await computeSha256Hex(
+          `propsphere_auth:${canonicalUser}:${cleanPass}`
+        );
+        if (
+          digestWithClean === candidate.clientAuthDigest ||
+          digestCanonical === candidate.clientAuthDigest
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    let user = snap.users.find((u: any) => doesUserMatchLoginIdentifier(u, rawUser));
+    let isValidPass = user ? await checkUserCredentials(user) : false;
+
+    // If user was not found OR password check failed on cached snapshot, force-pull latest state from remote & Firestore
+    if (!user || !isValidPass) {
+      const [refreshedSnap, firestoreUser] = await Promise.all([
+        !isCloudStoreTestMode ? ensureLiveDatabaseLoaded(true) : Promise.resolve(snap),
+        withFastTimeout(queryFirestoreUserByUsername(rawUser), 2500, null),
+      ]);
+      if (refreshedSnap && Array.isArray(refreshedSnap.users)) {
+        snap.users = mergeById(snap.users || [], refreshedSnap.users);
+      }
+      if (firestoreUser) {
+        snap.users = mergeById(snap.users || [], [firestoreUser]);
+      }
+      cachedLiveSnapshot = snap;
+      user = snap.users.find((u: any) => doesUserMatchLoginIdentifier(u, rawUser));
+      isValidPass = user ? await checkUserCredentials(user) : false;
+    }
+
+    if (!user || !isValidPass) {
       throw new Error('اسم المستخدم أو كلمة المرور غير صحيحة');
+    }
+
+    // Ensure password & accessPassword remain intact on the authenticated user record
+    if (!user.accessPassword && !user.password) {
+      user.accessPassword = cleanPass;
+      user.password = cleanPass;
     }
 
     const role = snap.roles.find((r: any) => r.id === user.roleId) || snap.roles[0];
@@ -1269,8 +1385,7 @@ export async function handleLocalFallbackRequest(
     );
     const isAdmin = authenticatedUser.roleId === 'role_admin' || activeRole?.id === 'role_admin';
     const visibleUsers = snap.users.map((u: any) => {
-      if (isAdmin) return u;
-      const { accessPassword, clientAuthDigest, passwordHash, ...safe } = u;
+      const { passwordHash, ...safe } = u;
       return safe;
     });
     const canReadSheets =
@@ -1278,14 +1393,11 @@ export async function handleLocalFallbackRequest(
       (activeRole?.permissions?.sheets_sync?.read &&
         activeRole.permissions.sheets_sync.read !== 'none');
 
+    const { passwordHash: _ph, ...safeCurrentUser } = authenticatedUser;
+
     return {
       sessionToken: createBrowserSessionToken(authenticatedUser),
-      currentUser: isAdmin
-        ? authenticatedUser
-        : (() => {
-            const { accessPassword, clientAuthDigest, passwordHash, ...safe } = authenticatedUser;
-            return safe;
-          })(),
+      currentUser: safeCurrentUser,
       currentRole: activeRole,
       roles: isAdmin ? snap.roles : snap.roles.filter((r: any) => r.id === activeRole?.id),
       users: visibleUsers,
@@ -1880,6 +1992,7 @@ export async function handleLocalFallbackRequest(
     const newUser = {
       id: body.id || `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       username: cleanUsername,
+      password: cleanPass,
       accessPassword: cleanPass,
       clientAuthDigest: digest,
       fullName: String(body.fullName).trim(),
@@ -1916,8 +2029,9 @@ export async function handleLocalFallbackRequest(
     const userId = pathname.split('/')[3];
     const idx = snap.users.findIndex((u: any) => u.id === userId);
     if (idx === -1) throw new Error('المستخدم غير موجود');
+    const prevUser = snap.users[idx];
     const existing = {
-      ...snap.users[idx],
+      ...prevUser,
       ...body,
       updatedAt: new Date().toISOString(),
     };
@@ -1926,12 +2040,18 @@ export async function handleLocalFallbackRequest(
     }
     if (body.password && String(body.password).trim()) {
       const cleanNewPass = String(body.password).trim();
+      existing.password = cleanNewPass;
       existing.accessPassword = cleanNewPass;
       existing.clientAuthDigest = await computeSha256Hex(
         `propsphere_auth:${String(existing.username).toLowerCase()}:${cleanNewPass}`
       );
+    } else {
+      const preservedPass = prevUser.accessPassword || prevUser.password;
+      if (preservedPass) {
+        existing.password = preservedPass;
+        existing.accessPassword = preservedPass;
+      }
     }
-    delete existing.password;
     snap.users[idx] = existing;
     if (isCloudStoreTestMode) {
       await persistState(snap);

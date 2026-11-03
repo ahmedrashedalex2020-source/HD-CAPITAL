@@ -634,9 +634,9 @@ export default function App() {
       ? leads
           .filter(
             (l) =>
-              l.fullName.toLowerCase().includes(globalSearch.toLowerCase()) ||
-              l.phone.toLowerCase().includes(globalSearch.toLowerCase()) ||
-              l.projectInterest.toLowerCase().includes(globalSearch.toLowerCase())
+              String(l.fullName || '').toLowerCase().includes(globalSearch.toLowerCase()) ||
+              String(l.phone || '').toLowerCase().includes(globalSearch.toLowerCase()) ||
+              String(l.projectInterest || '').toLowerCase().includes(globalSearch.toLowerCase())
           )
           .slice(0, 5)
       : [];

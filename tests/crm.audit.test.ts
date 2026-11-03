@@ -820,4 +820,69 @@ test('Full 9-Feature End-to-End & Integration Audit (Server API + CloudStore Fal
     assert.equal(cloudMinProj.project.name, 'مشروع سحابي سريع بدون تفاصيل');
     assert.ok(cloudMinProj.projects.includes('مشروع سحابي سريع بدون تفاصيل'));
   });
+
+  // =========================================================================
+  // 10. Test 10: Manually Created Employee Re-Login After Bootstrap, Sync & Reload
+  // =========================================================================
+  await t.test('10. Manually Created Employee Login -> Bootstrap -> Workspace Sync -> Logout/Reload -> Re-Login', async () => {
+    // 1. Admin creates a new sales employee with a custom password
+    const createEmpRes = await api('/api/users', {
+      method: 'POST',
+      token: adminToken,
+      body: {
+        username: 'mostafa_agent',
+        password: 'CustomPass#99',
+        fullName: 'مصطفى مندوب مبيعات',
+        roleId: 'role_employee',
+      },
+    });
+    assert.equal(createEmpRes.status, 200);
+    assert.equal(createEmpRes.data.user.username, 'mostafa_agent');
+    assert.equal(createEmpRes.data.user.accessPassword, 'CustomPass#99');
+    assert.equal(createEmpRes.data.user.password, 'CustomPass#99');
+
+    // 2. First login by the newly created employee
+    const firstLogin = await api('/api/auth/login', {
+      method: 'POST',
+      body: { username: 'mostafa_agent', password: 'CustomPass#99' },
+    });
+    assert.equal(firstLogin.status, 200, 'First login must succeed');
+    const mostafaToken = firstLogin.data.token;
+
+    // 3. Employee fetches /api/bootstrap and client saves local snapshot (as App.tsx does on load/reload)
+    const empBootstrap = await api('/api/bootstrap', { token: mostafaToken });
+    assert.equal(empBootstrap.status, 200);
+    saveLocalSnapshot(empBootstrap.data);
+
+    // 4. Client pushes workspace sync back to server (as persistState does in cloudStore)
+    const syncBackRes = await api('/api/workspace/sync', {
+      method: 'POST',
+      token: mostafaToken,
+      body: {
+        users: empBootstrap.data.users,
+      },
+    });
+    assert.equal(syncBackRes.status, 200);
+
+    // 5. Employee logs out and logs back in with the same custom password on Server
+    const secondLogin = await api('/api/auth/login', {
+      method: 'POST',
+      body: { username: 'mostafa_agent', password: 'CustomPass#99' },
+    });
+    assert.equal(
+      secondLogin.status,
+      200,
+      'Subsequent login after bootstrap + workspace sync + logout/reload must succeed'
+    );
+    assert.equal(secondLogin.data.user.username, 'mostafa_agent');
+
+    // 6. Also verify login in CloudStore fallback after bootstrap snapshot
+    const cloudSecondLogin = await cloudApi('/api/auth/login', {
+      method: 'POST',
+      body: { username: 'mostafa_agent', password: 'CustomPass#99' },
+    });
+    assert.ok(cloudSecondLogin.user?.id, 'CloudStore fallback login must also succeed with CustomPass#99');
+    assert.equal(cloudSecondLogin.user.username, 'mostafa_agent');
+  });
 });
+

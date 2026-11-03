@@ -1,6 +1,10 @@
 import { getAccessToken } from './googleAuth';
 import { Lead } from '../types/crm';
-import { handleLocalFallbackRequest, saveLocalSnapshot } from './cloudStore';
+import {
+  handleLocalFallbackRequest,
+  saveLocalSnapshot,
+  upsertUserIntoLocalSnapshot,
+} from './cloudStore';
 
 export const SESSION_INACTIVITY_LIMIT_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -341,6 +345,18 @@ export async function apiRequest<T = any>(
     if (path === '/api/bootstrap' && result && result.currentUser) {
       saveLocalSnapshot(result);
     }
+    if ((path === '/api/users' || path.startsWith('/api/users/')) && result && result.user) {
+      let rawPlainPassword: string | undefined;
+      try {
+        const parsedBody = options.body ? JSON.parse(String(options.body)) : null;
+        if (parsedBody && typeof parsedBody.password === 'string' && parsedBody.password.trim()) {
+          rawPlainPassword = parsedBody.password.trim();
+        }
+      } catch {
+        // ignore body parse errors
+      }
+      void upsertUserIntoLocalSnapshot(result.user, rawPlainPassword);
+    }
     return result as T;
   };
 
@@ -396,6 +412,18 @@ export async function apiRequest<T = any>(
     }
     const cloudResult = await handleLocalFallbackRequest(path, options, currentUserId);
     return finalizeResponse(cloudResult);
+  }
+
+  // If login returned 401 on server, also check CloudStore / Firestore fallback in case the user was created in cloud/local state
+  if (!res.ok && res.status === 401 && isLoginRoute) {
+    try {
+      const cloudLoginResult = await handleLocalFallbackRequest(path, options, currentUserId);
+      if (cloudLoginResult && cloudLoginResult.user?.id) {
+        return finalizeResponse(cloudLoginResult);
+      }
+    } catch {
+      // fall through to standard 401 error below
+    }
   }
 
   // If an authenticated route returned 401 while we have a valid active session, try CloudStore fallback first

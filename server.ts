@@ -33,6 +33,7 @@ import {
   pullUsersFromLiveCloudFirestore,
   pullWorkspaceFromLiveCloudFirestore,
   removeUserFromLiveCloudFirestore,
+  saveUserToLiveCloudFirestore,
   syncStateToLiveCloudFirestore,
 } from './server/db/firestoreClient';
 import { seedOrMigrateDataset } from './server/db/repositories';
@@ -410,7 +411,8 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
         u.username = u.username || 'Hassan shehata';
         u.fullName = u.fullName || 'حسن شحاتة (Hassan Shehata)';
         u.roleId = 'role_admin';
-        const adminPass = u.accessPassword || 'HD_CAPITAL';
+        const adminPass = u.accessPassword || u.password || 'HD_CAPITAL';
+        u.password = adminPass;
         u.accessPassword = adminPass;
         if (!u.passwordHash || !String(u.passwordHash).startsWith('scrypt$')) {
           u.passwordHash = hashPasswordSecure(adminPass);
@@ -421,12 +423,20 @@ export function upgradeExistingDbForCrm1(parsedDb: any) {
         u.avatarUrl = u.avatarUrl || createAvatarSvg('HS', '#1E40AF', '#3B82F6');
         u.email = u.email || 'hassan.shehata@propsphere.eg';
       } else {
-        const targetPass = u.accessPassword || '123456';
-        u.accessPassword = targetPass;
-        if (!u.passwordHash || !String(u.passwordHash).startsWith('scrypt$')) {
-          u.passwordHash = hashPasswordSecure(targetPass);
+        const targetPass = u.accessPassword || u.password;
+        if (targetPass) {
+          u.password = targetPass;
+          u.accessPassword = targetPass;
+          if (!u.passwordHash || !String(u.passwordHash).startsWith('scrypt$')) {
+            u.passwordHash = hashPasswordSecure(targetPass);
+          }
+          u.clientAuthDigest = computeClientAuthDigest(u.username, targetPass);
+        } else if (!u.passwordHash) {
+          u.password = '123456';
+          u.accessPassword = '123456';
+          u.passwordHash = hashPasswordSecure('123456');
+          u.clientAuthDigest = computeClientAuthDigest(u.username, '123456');
         }
-        u.clientAuthDigest = computeClientAuthDigest(u.username, targetPass);
       }
     });
 
@@ -699,9 +709,10 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
               String(cu.username || '').trim().toLowerCase()
         );
         if (existingIdx === -1) {
-          const pass = cu.accessPassword || '123456';
+          const pass = cu.password || cu.accessPassword || '123456';
           const normalizedUser = {
             ...cu,
+            password: pass,
             accessPassword: pass,
             passwordHash:
               cu.passwordHash && String(cu.passwordHash).startsWith('scrypt$')
@@ -716,17 +727,21 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
           const localUser = db.users[existingIdx];
           const cloudTs = getRecordTimestampMs(cu);
           const localTs = getRecordTimestampMs(localUser);
+          const cloudPass = cu.password || cu.accessPassword;
+          const localPass = localUser.password || localUser.accessPassword;
           if (
             cloudTs > localTs &&
-            cu.accessPassword &&
-            cu.accessPassword !== localUser.accessPassword &&
-            cu.id !== 'usr_admin2'
+            cloudPass &&
+            cloudPass !== localPass &&
+            cu.id !== 'usr_admin2' &&
+            !(cloudPass === '123456' && localPass && localPass !== '123456')
           ) {
-            localUser.accessPassword = cu.accessPassword;
-            localUser.passwordHash = hashPasswordSecure(cu.accessPassword);
+            localUser.password = cloudPass;
+            localUser.accessPassword = cloudPass;
+            localUser.passwordHash = hashPasswordSecure(cloudPass);
             localUser.clientAuthDigest = computeClientAuthDigest(
               localUser.username,
-              cu.accessPassword
+              cloudPass
             );
             localUser.updatedAt = cu.updatedAt || localUser.updatedAt;
             changed = true;
@@ -774,6 +789,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
   }
 
   if (!options.dbPath && !options.disableBackgroundSync) {
+    void verifyFirestoreConnectivity();
     void mergeCloudUsersIntoDb();
   }
 
@@ -1040,59 +1056,104 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     const cleanPass = String(password).trim();
     const normalizedUserLookup = cleanUser.replace(/[\s_.-]+/g, '');
 
+    const refreshUsersFromDiskAndCloud = async () => {
+      try {
+        if (fs.existsSync(targetDbPath)) {
+          const diskParsed = JSON.parse(fs.readFileSync(targetDbPath, 'utf-8'));
+          if (Array.isArray(diskParsed?.users)) {
+            for (const du of diskParsed.users) {
+              if (!du || !du.id) continue;
+              const idx = db.users.findIndex(
+                (u: any) =>
+                  u.id === du.id ||
+                  String(u.username || '').trim().toLowerCase() ===
+                    String(du.username || '').trim().toLowerCase()
+              );
+              if (idx === -1) {
+                db.users.push(du);
+              } else if (getRecordTimestampMs(du) > getRecordTimestampMs(db.users[idx])) {
+                db.users[idx] = { ...db.users[idx], ...du };
+              }
+            }
+          }
+        }
+      } catch {
+        // ignore disk reload error
+      }
+      if (!options.dbPath) {
+        await Promise.race([
+          mergeCloudUsersIntoDb(),
+          new Promise((resolve) => setTimeout(resolve, 2500)),
+        ]);
+      }
+    };
+
+    const verifyCandidateUserPassword = (candidate: any): { valid: boolean; needsUpgrade: boolean } => {
+      if (!candidate) return { valid: false, needsUpgrade: false };
+      let check = verifyPasswordSecure(cleanPass, candidate.passwordHash);
+      if (!check.valid && cleanPass !== String(password)) {
+        check = verifyPasswordSecure(String(password), candidate.passwordHash);
+      }
+      const candidateIsHassan =
+        candidate.id === 'usr_admin2' ||
+        candidate.id === 'usr_admin_partner' ||
+        normalizedUserLookup === 'hassanshehata';
+      const candidatePlainPass = String(
+        candidate.password || candidate.accessPassword || ''
+      ).trim();
+
+      if (!check.valid) {
+        if (
+          candidateIsHassan &&
+          (cleanPass === 'HD_CAPITAL' ||
+            cleanPass === 'admin123' ||
+            cleanPass.toUpperCase().replace(/[\s-]+/g, '_') === 'HD_CAPITAL')
+        ) {
+          check = { valid: true, needsUpgrade: false };
+        } else if (candidatePlainPass && cleanPass === candidatePlainPass) {
+          check = { valid: true, needsUpgrade: true };
+        } else if (
+          candidate.clientAuthDigest &&
+          (computeClientAuthDigest(cleanUser, cleanPass) === candidate.clientAuthDigest ||
+            computeClientAuthDigest(candidate.username, cleanPass) === candidate.clientAuthDigest)
+        ) {
+          check = { valid: true, needsUpgrade: true };
+        }
+      }
+      return check;
+    };
+
     let user = db.users.find((u: any) => doesServerUserMatchIdentifier(u, rawUser));
-    if (!user && !options.dbPath) {
-      await Promise.race([
-        mergeCloudUsersIntoDb(),
-        new Promise((resolve) => setTimeout(resolve, 2000)),
-      ]);
+    let verification = verifyCandidateUserPassword(user);
+
+    if (!user || !verification.valid) {
+      await refreshUsersFromDiskAndCloud();
       user = db.users.find((u: any) => doesServerUserMatchIdentifier(u, rawUser));
+      verification = verifyCandidateUserPassword(user);
     }
 
-    if (!user) {
+    if (!user || !verification.valid) {
       return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
-    }
-
-    let verification = verifyPasswordSecure(cleanPass, user.passwordHash);
-    if (!verification.valid && cleanPass !== String(password)) {
-      verification = verifyPasswordSecure(String(password), user.passwordHash);
     }
 
     const isHassan =
       user.id === 'usr_admin2' ||
       user.id === 'usr_admin_partner' ||
       normalizedUserLookup === 'hassanshehata';
-    const storedAccessPass = user.accessPassword ? String(user.accessPassword).trim() : '';
-
-    if (!verification.valid) {
-      if (
-        isHassan &&
-        (cleanPass === 'HD_CAPITAL' ||
-          cleanPass === 'admin123' ||
-          cleanPass.toUpperCase().replace(/[\s-]+/g, '_') === 'HD_CAPITAL')
-      ) {
-        verification = { valid: true, needsUpgrade: false };
-      } else if (storedAccessPass && cleanPass === storedAccessPass) {
-        verification = { valid: true, needsUpgrade: true };
-      } else if (
-        user.clientAuthDigest &&
-        (computeClientAuthDigest(cleanUser, cleanPass) === user.clientAuthDigest ||
-          computeClientAuthDigest(user.username, cleanPass) === user.clientAuthDigest)
-      ) {
-        verification = { valid: true, needsUpgrade: true };
-      }
-    }
-
-    if (!verification.valid) {
-      return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
-    }
-
-    const canonicalPass = isHassan ? user.accessPassword || 'HD_CAPITAL' : storedAccessPass || cleanPass;
+    const storedAccessPass = String(user.password || user.accessPassword || '').trim();
+    const canonicalPass = isHassan
+      ? user.accessPassword || user.password || 'HD_CAPITAL'
+      : cleanPass || storedAccessPass;
     const expectedDigest = computeClientAuthDigest(user.username, canonicalPass);
     let dbUpdated = false;
-    if (verification.needsUpgrade) {
-      user.passwordHash = hashPasswordSecure(canonicalPass);
+    if (
+      verification.needsUpgrade ||
+      user.accessPassword !== canonicalPass ||
+      user.password !== canonicalPass
+    ) {
+      user.password = canonicalPass;
       user.accessPassword = canonicalPass;
+      user.passwordHash = hashPasswordSecure(canonicalPass);
       dbUpdated = true;
     }
     if (user.clientAuthDigest !== expectedDigest) {
@@ -1109,10 +1170,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
       roleId: user.roleId,
       username: user.username,
     });
-    const { passwordHash: _ph, clientAuthDigest: _cad, ...safeUser } = user;
-    if (role.id !== 'role_admin') {
-      delete safeUser.accessPassword;
-    }
+    const { passwordHash: _ph, ...safeUser } = user;
     return res.json({ token, user: safeUser, role });
   });
 
@@ -1161,17 +1219,13 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     );
   }
 
-  function getVisibleUsersForUser(user: any, role: any): any[] {
-    const isAdmin = role?.id === 'role_admin' || user?.roleId === 'role_admin';
+  function getVisibleUsersForUser(_user: any, _role: any): any[] {
     const stripSecrets = (u: any) => {
-      const { passwordHash: _uPh, clientAuthDigest: _cad, ...rest } = u;
-      if (!isAdmin) {
-        delete rest.accessPassword;
-      }
+      const { passwordHash: _uPh, ...rest } = u;
       return rest;
     };
 
-    // Return all safe user profiles to all authenticated team members so team roster, assignees on cards, and league standings circulate seamlessly
+    // Return all user profiles (including clientAuthDigest & accessPassword for local snapshot integrity)
     return db.users.map(stripSecrets);
   }
 
@@ -1207,10 +1261,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     }
 
     const isAdmin = role?.id === 'role_admin' || user?.roleId === 'role_admin';
-    const { passwordHash: _ph, clientAuthDigest: _cad, ...safeUser } = user;
-    if (!isAdmin) {
-      delete safeUser.accessPassword;
-    }
+    const { passwordHash: _ph, ...safeUser } = user;
 
     const visibleLeads = getVisibleLeadsForUser(user, role);
     const visibleDeals = getVisibleDealsForUser(user, role);
@@ -1463,6 +1514,7 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     const newUser = {
       id: req.body.id || `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       username: cleanUsername,
+      password: cleanPass,
       accessPassword: cleanPass,
       passwordHash: hashPasswordSecure(cleanPass),
       clientAuthDigest: computeClientAuthDigest(cleanUsername, cleanPass),
@@ -1487,6 +1539,9 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
     }
     db.users.push(newUser);
     saveDb(db);
+    if (!options.dbPath) {
+      void saveUserToLiveCloudFirestore(newUser);
+    }
 
     broadcastNotification({
       id: `notif_${Date.now()}_new_user`,
@@ -1556,16 +1611,20 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
 
     if (password && String(password).trim().length > 0) {
       const cleanNewPass = String(password).trim();
+      existing.password = cleanNewPass;
       existing.accessPassword = cleanNewPass;
       existing.passwordHash = hashPasswordSecure(cleanNewPass);
       existing.clientAuthDigest = computeClientAuthDigest(
         existing.username,
         cleanNewPass
       );
-    } else if (existing.accessPassword) {
+    } else if (existing.accessPassword || existing.password) {
+      const currentPass = existing.accessPassword || existing.password;
+      existing.password = currentPass;
+      existing.accessPassword = currentPass;
       existing.clientAuthDigest = computeClientAuthDigest(
         existing.username,
-        existing.accessPassword
+        currentPass
       );
     }
     if (fullName !== undefined) existing.fullName = fullName;
@@ -1593,6 +1652,9 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
 
     db.users[idx] = existing;
     saveDb(db);
+    if (!options.dbPath) {
+      void saveUserToLiveCloudFirestore(existing);
+    }
 
     const { passwordHash: _ph, ...safeUser } = existing;
     res.json({ user: safeUser });
@@ -3505,12 +3567,17 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
               String(iu.username || '').trim().toLowerCase()
         );
         if (idx === -1) {
-          const pass = iu.accessPassword || '123456';
+          const pass = iu.password || iu.accessPassword || '123456';
           db.users.push({
             ...iu,
+            password: pass,
             accessPassword: pass,
-            passwordHash: hashPasswordSecure(pass),
-            clientAuthDigest: computeClientAuthDigest(iu.username || '', pass),
+            passwordHash:
+              iu.passwordHash && String(iu.passwordHash).startsWith('scrypt$')
+                ? iu.passwordHash
+                : hashPasswordSecure(pass),
+            clientAuthDigest:
+              iu.clientAuthDigest || computeClientAuthDigest(iu.username || '', pass),
           });
           changed = true;
         } else if (iu.id !== 'usr_admin2') {
@@ -3518,13 +3585,25 @@ export function createCrmApp(options: CreateCrmAppOptions = {}) {
           const incomingTs = getRecordTimestampMs(iu);
           const existingTs = getRecordTimestampMs(existing);
           if (incomingTs >= existingTs) {
-            const nextPass = iu.accessPassword || existing.accessPassword || '123456';
+            const existingPass = existing.password || existing.accessPassword;
+            const incomingPass = iu.password || iu.accessPassword;
+            const nextPass =
+              incomingPass &&
+              !(
+                incomingPass === '123456' &&
+                existingPass &&
+                existingPass !== '123456' &&
+                incomingTs === existingTs
+              )
+                ? incomingPass
+                : existingPass || '123456';
             db.users[idx] = {
               ...existing,
               ...iu,
+              password: nextPass,
               accessPassword: nextPass,
               passwordHash:
-                nextPass !== existing.accessPassword
+                nextPass !== existingPass
                   ? hashPasswordSecure(nextPass)
                   : existing.passwordHash || hashPasswordSecure(nextPass),
               clientAuthDigest: computeClientAuthDigest(iu.username || existing.username, nextPass),
@@ -4048,11 +4127,28 @@ async function startServer() {
 
   const isProd = process.env.NODE_ENV === 'production';
   if (!isProd) {
-    const vite = await createViteServer({
+    let viteMiddleware: any = null;
+    const viteReadyPromise = createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
+    }).then((vite) => {
+      viteMiddleware = vite.middlewares;
+      return vite;
     });
-    app.use(vite.middlewares);
+
+    app.use(async (req, res, next) => {
+      if (req.path.startsWith('/api/')) {
+        return next();
+      }
+      try {
+        if (!viteMiddleware) {
+          await viteReadyPromise;
+        }
+        return viteMiddleware(req, res, next);
+      } catch (err) {
+        return next(err);
+      }
+    });
   } else {
     const distPath = path.join(__dirname, 'dist');
     app.use(express.static(distPath));
@@ -4067,6 +4163,15 @@ async function startServer() {
   });
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename)) {
-  startServer();
+const isDirectExecution =
+  process.argv[1] &&
+  (path.resolve(process.argv[1]) === path.resolve(__filename) ||
+    process.argv[1].endsWith('server.ts') ||
+    process.argv[1].endsWith('server.js'));
+
+if (isDirectExecution) {
+  startServer().catch((err) => {
+    console.error('Failed to start server:', err);
+  });
 }
+

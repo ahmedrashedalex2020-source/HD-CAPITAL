@@ -10,6 +10,8 @@ import {
   getFirestore as getClientFirestoreSdk,
   doc as clientDoc,
   getDoc as clientGetDoc,
+  setDoc as clientSetDoc,
+  deleteDoc as clientDeleteDoc,
   collection as clientCollection,
   getDocs as clientGetDocs,
   setLogLevel as setClientFirestoreLogLevel,
@@ -68,41 +70,85 @@ export const FIRESTORE_DATABASE_ID =
 export const firestoreDatabaseId = FIRESTORE_DATABASE_ID;
 
 let adminApp: App;
+let hasExplicitServiceAccountCreds = false;
 if (getApps().length === 0) {
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY
-    ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
-    : undefined;
+  const rawPrivateKey = process.env.FIREBASE_PRIVATE_KEY;
+  let privateKey: string | undefined = undefined;
 
-  if (clientEmail && privateKey) {
-    adminApp = initializeApp({
-      credential: cert({
+  if (rawPrivateKey) {
+    let key = rawPrivateKey.trim();
+    // 1. Handle JSON-wrapped private key (common if whole service account is pasted)
+    if (key.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(key);
+        key = parsed.private_key || parsed.privateKey || key;
+      } catch {
+        // ignore JSON parse error, use as string
+      }
+    }
+    // 2. Remove potential surrounding quotes
+    if (key.startsWith('"') && key.endsWith('"')) {
+      key = key.substring(1, key.length - 1);
+    }
+    // 3. Unescape newlines (literal \n to real newline)
+    key = key.replace(/\\n/g, '\n');
+    // 4. Ensure it has PEM headers if it looks like a key but headers are missing
+    if (key && !key.includes('-----BEGIN')) {
+      key = `-----BEGIN PRIVATE KEY-----\n${key}\n-----END PRIVATE KEY-----`;
+    }
+    privateKey = key;
+  }
+
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+
+  try {
+    if (clientEmail && privateKey) {
+      adminApp = initializeApp({
+        credential: cert({
+          projectId: FIREBASE_PROJECT_ID,
+          clientEmail,
+          privateKey,
+        }),
         projectId: FIREBASE_PROJECT_ID,
-        clientEmail,
-        privateKey,
-      }),
-      projectId: FIREBASE_PROJECT_ID,
-    });
-  } else {
-    adminApp = initializeApp({
-      credential: applicationDefault(),
-      projectId: FIREBASE_PROJECT_ID,
-    });
+      });
+      hasExplicitServiceAccountCreds = true;
+    } else {
+      adminApp = initializeApp({
+        projectId: FIREBASE_PROJECT_ID || 'dummy-project',
+      });
+    }
+  } catch (err: any) {
+    console.error('[Firestore] Failed to initialize Firebase Admin SDK:', err.message);
+    adminApp = initializeApp(
+      {
+        projectId: FIREBASE_PROJECT_ID || 'dummy-project',
+      },
+      'fallback-app'
+    );
   }
 } else {
   adminApp = getApps()[0]!;
 }
 
-export const adminFirestore: Firestore =
-  FIRESTORE_DATABASE_ID && FIRESTORE_DATABASE_ID !== '(default)'
-    ? getFirestore(adminApp, FIRESTORE_DATABASE_ID)
-    : getFirestore(adminApp);
-
-try {
-  adminFirestore.settings({ ignoreUndefinedProperties: true });
-} catch {
-  // settings() may already have been called
+function initAdminFirestoreSafe(): Firestore {
+  try {
+    const db =
+      FIRESTORE_DATABASE_ID && FIRESTORE_DATABASE_ID !== '(default)'
+        ? getFirestore(adminApp, FIRESTORE_DATABASE_ID)
+        : getFirestore(adminApp);
+    try {
+      db.settings({ ignoreUndefinedProperties: true });
+    } catch {
+      // settings() may already have been called
+    }
+    return db;
+  } catch (err: any) {
+    console.warn('[Firestore] Fallback Firestore instance notice:', err?.message || err);
+    return getFirestore(adminApp);
+  }
 }
+
+export const adminFirestore: Firestore = initAdminFirestoreSafe();
 
 let serverClientFirestore: ClientFirestore | null = null;
 let serverFirestoreWriteQuotaExhausted = false;
@@ -114,7 +160,7 @@ function markServerWriteQuotaExhausted(): void {
 }
 
 /**
- * Returns the Firebase Web SDK Firestore instance for read operations.
+ * Returns the Firebase Web SDK Firestore instance for read/write operations.
  * Write-quota exhaustion NEVER disables read operations from Firestore.
  */
 export function getServerWebFirestore(): ClientFirestore | null {
@@ -169,6 +215,54 @@ export function isExplicitFakeDemoUserRecord(u: any): boolean {
   return false;
 }
 
+function getRecordTs(rec: any): number {
+  if (!rec || typeof rec !== 'object') return 0;
+  const candidate = rec.updatedAt || rec.createdAt || '';
+  if (!candidate) return 0;
+  const parsed = Date.parse(String(candidate));
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+export function mergeUserRecordsPreservingAuth(existing: any, incoming: any): any {
+  if (!existing) return incoming ? { ...incoming } : {};
+  if (!incoming) return { ...existing };
+
+  const existingTs = getRecordTs(existing);
+  const incomingTs = getRecordTs(incoming);
+  const existingIsNewer = existingTs > incomingTs;
+
+  const base = existingIsNewer ? incoming : existing;
+  const winner = existingIsNewer ? existing : incoming;
+
+  const merged: Record<string, any> = { ...base };
+  for (const [k, v] of Object.entries(winner)) {
+    if (v !== undefined) {
+      merged[k] = v;
+    }
+  }
+
+  // Strictly preserve authentication fields so undefined or stripped fields never wipe credentials
+  const authFields = ['password', 'accessPassword', 'passwordHash', 'clientAuthDigest'] as const;
+  for (const field of authFields) {
+    const winVal = winner[field];
+    const baseVal = base[field];
+    if (winVal !== undefined && winVal !== null && String(winVal).trim() !== '') {
+      merged[field] = winVal;
+    } else if (baseVal !== undefined && baseVal !== null && String(baseVal).trim() !== '') {
+      merged[field] = baseVal;
+    }
+  }
+
+  // Keep password and accessPassword synchronized if either is present
+  const resolvedPass = merged.accessPassword || merged.password;
+  if (resolvedPass && String(resolvedPass).trim() !== '') {
+    merged.accessPassword = String(resolvedPass).trim();
+    merged.password = merged.accessPassword;
+  }
+
+  return merged;
+}
+
 /**
  * Pulls real employee/user accounts from live Google Firebase Cloud Firestore (`users` collection and `crm_state/workspace`).
  * Strictly read-only (never issues delete/write operations during reads, and remains active even if write quota is full).
@@ -189,7 +283,7 @@ export async function pullUsersFromLiveCloudFirestore(): Promise<any[]> {
       if (Array.isArray(wsData?.users)) {
         for (const u of wsData.users) {
           if (u && u.id && !isExplicitFakeDemoUserRecord(u)) {
-            mergedMap.set(u.id, u);
+            mergedMap.set(u.id, mergeUserRecordsPreservingAuth(mergedMap.get(u.id), u));
           }
         }
       }
@@ -202,8 +296,7 @@ export async function pullUsersFromLiveCloudFirestore(): Promise<any[]> {
           continue;
         }
         if (u && u.id) {
-          const prev = mergedMap.get(u.id) || {};
-          mergedMap.set(u.id, { ...prev, ...u });
+          mergedMap.set(u.id, mergeUserRecordsPreservingAuth(mergedMap.get(u.id), u));
         }
       }
     }
@@ -232,7 +325,7 @@ export async function pullWorkspaceFromLiveCloudFirestore(): Promise<any | null>
     if (Array.isArray(wsData?.users)) {
       for (const u of wsData.users) {
         if (u && u.id && !isExplicitFakeDemoUserRecord(u)) {
-          mergedUsers.set(u.id, u);
+          mergedUsers.set(u.id, mergeUserRecordsPreservingAuth(mergedUsers.get(u.id), u));
         }
       }
     }
@@ -241,8 +334,7 @@ export async function pullWorkspaceFromLiveCloudFirestore(): Promise<any | null>
       for (const d of usersSnap.docs) {
         const u = d.data();
         if (u && u.id && !isExplicitFakeDemoUserRecord(u) && !FAKE_DEMO_USER_IDS.has(d.id)) {
-          const prev = mergedUsers.get(u.id) || {};
-          mergedUsers.set(u.id, { ...prev, ...u });
+          mergedUsers.set(u.id, mergeUserRecordsPreservingAuth(mergedUsers.get(u.id), u));
         }
       }
     }
@@ -256,10 +348,56 @@ export async function pullWorkspaceFromLiveCloudFirestore(): Promise<any | null>
   }
 }
 
-export async function removeUserFromLiveCloudFirestore(userId: string): Promise<void> {
-  if (!firestoreDirectAvailable || serverFirestoreWriteQuotaExhausted || !userId) return;
+/**
+ * Persists a single user record (with password, accessPassword, passwordHash, and clientAuthDigest intact)
+ * directly to the `users/{id}` collection in Cloud Firestore.
+ */
+export async function saveUserToLiveCloudFirestore(user: any): Promise<void> {
+  if (serverFirestoreWriteQuotaExhausted || !user || !user.id) return;
+  const cleanUser = JSON.parse(
+    JSON.stringify({
+      ...user,
+      password: user.accessPassword || user.password,
+      accessPassword: user.accessPassword || user.password,
+    })
+  );
+  if (firestoreDirectAvailable) {
+    try {
+      await adminFirestore.collection('users').doc(user.id).set(cleanUser, { merge: true });
+      return;
+    } catch {
+      // fall through to webDb bridge
+    }
+  }
+  const webDb = getServerWebFirestore();
+  if (!webDb) return;
   try {
-    await adminFirestore.collection('users').doc(userId).delete();
+    await Promise.race([
+      clientSetDoc(clientDoc(webDb, 'users', user.id), cleanUser, { merge: true }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 2500)),
+    ]);
+  } catch {
+    markServerWriteQuotaExhausted();
+  }
+}
+
+export async function removeUserFromLiveCloudFirestore(userId: string): Promise<void> {
+  if (serverFirestoreWriteQuotaExhausted || !userId) return;
+  if (firestoreDirectAvailable) {
+    try {
+      await adminFirestore.collection('users').doc(userId).delete();
+      return;
+    } catch {
+      // fall through to webDb bridge
+    }
+  }
+  const webDb = getServerWebFirestore();
+  if (!webDb) return;
+  try {
+    await Promise.race([
+      clientDeleteDoc(clientDoc(webDb, 'users', userId)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 2500)),
+    ]);
   } catch {
     markServerWriteQuotaExhausted();
   }
@@ -268,18 +406,25 @@ export async function removeUserFromLiveCloudFirestore(userId: string): Promise<
 /**
  * Syncs the CRM workspace state to `crm_state/workspace` in Cloud Firestore with deduplication,
  * rate-limiting, and an automatic write circuit-breaker if the free-tier daily write quota is exhausted.
+ * Preserves all user password & authentication fields (`password`, `accessPassword`, `passwordHash`, `clientAuthDigest`).
  */
 export async function syncStateToLiveCloudFirestore(state: any): Promise<boolean> {
-  if (!firestoreDirectAvailable || serverFirestoreWriteQuotaExhausted || !state) return false;
+  if (serverFirestoreWriteQuotaExhausted || !state) return false;
+  const webDb = getServerWebFirestore();
+  if (!firestoreDirectAvailable && !webDb) return false;
   const nowMs = Date.now();
-  if (nowMs - lastSyncedTimestampMs < 30000) {
+  if (nowMs - lastSyncedTimestampMs < 10000) {
     return false;
   }
 
   try {
     const safeUsers = (state.users || [])
       .filter((u: any) => !isExplicitFakeDemoUserRecord(u))
-      .map(({ passwordHash: _ph, ...u }: any) => u);
+      .map((u: any) => ({
+        ...u,
+        password: u.accessPassword || u.password,
+        accessPassword: u.accessPassword || u.password,
+      }));
 
     const coreData = {
       roles: state.roles || [],
@@ -300,7 +445,9 @@ export async function syncStateToLiveCloudFirestore(state: any): Promise<boolean
     };
 
     const fingerprint = JSON.stringify({
-      uIds: safeUsers.map((u: any) => `${u.id}:${u.username}:${u.fullName}`).join(','),
+      uIds: safeUsers
+        .map((u: any) => `${u.id}:${u.username}:${u.fullName}:${u.accessPassword || ''}:${u.updatedAt || ''}`)
+        .join(','),
       lCount: coreData.leads.length,
       lTop: coreData.leads[0]?.updatedAt || '',
       pCount: coreData.projectsCatalog.length,
@@ -319,10 +466,17 @@ export async function syncStateToLiveCloudFirestore(state: any): Promise<boolean
       })
     );
 
-    await adminFirestore
-      .collection('crm_state')
-      .doc('workspace')
-      .set(workspacePayload, { merge: true });
+    if (firestoreDirectAvailable) {
+      await adminFirestore
+        .collection('crm_state')
+        .doc('workspace')
+        .set(workspacePayload, { merge: true });
+    } else if (webDb) {
+      await Promise.race([
+        clientSetDoc(clientDoc(webDb, 'crm_state', 'workspace'), workspacePayload, { merge: true }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 2500)),
+      ]);
+    }
 
     lastSyncedWorkspaceFingerprint = fingerprint;
     lastSyncedTimestampMs = nowMs;
@@ -342,21 +496,23 @@ export async function verifyFirestoreConnectivity(): Promise<boolean> {
     return firestoreDirectAvailable || firestoreWebBridgeAvailable;
   }
   firestoreConnectivityChecked = true;
-  try {
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('FIRESTORE_PROBE_TIMEOUT')), 2500)
-    );
-    await Promise.race([
-      adminFirestore.collection('settings').doc('global').get(),
-      timeoutPromise,
-    ]);
-    firestoreDirectAvailable = true;
-    console.log(
-      `[Firestore] Connected to Cloud Firestore via firebase-admin (project=${FIREBASE_PROJECT_ID}, database=${FIRESTORE_DATABASE_ID})`
-    );
-    return true;
-  } catch {
-    firestoreDirectAvailable = false;
+  if (hasExplicitServiceAccountCreds) {
+    try {
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('FIRESTORE_PROBE_TIMEOUT')), 2500)
+      );
+      await Promise.race([
+        adminFirestore.collection('settings').doc('global').get(),
+        timeoutPromise,
+      ]);
+      firestoreDirectAvailable = true;
+      console.log(
+        `[Firestore] Connected to Cloud Firestore via firebase-admin (project=${FIREBASE_PROJECT_ID}, database=${FIRESTORE_DATABASE_ID})`
+      );
+      return true;
+    } catch {
+      firestoreDirectAvailable = false;
+    }
   }
 
   // Fallback to real Cloud Firestore Web SDK bridge with firebase-applet-config.json
