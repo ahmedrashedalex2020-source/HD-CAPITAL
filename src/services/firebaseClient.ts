@@ -256,6 +256,7 @@ export function doesUserMatchLoginIdentifier(u: any, rawIdentifier: string): boo
 
   const storedUsername = String(u.username || '').trim().toLowerCase();
   const compactUsername = storedUsername.replace(/[\s_.-]+/g, '');
+  const firstWordUsername = storedUsername.split(/[\s_.-]+/)[0] || '';
 
   const storedEmail = String(u.email || '').trim().toLowerCase();
   const emailPrefix = storedEmail.split('@')[0] || '';
@@ -263,11 +264,17 @@ export function doesUserMatchLoginIdentifier(u: any, rawIdentifier: string): boo
 
   const storedFullName = String(u.fullName || '').trim().toLowerCase();
   const compactFullName = storedFullName.replace(/[\s_().-]+/g, '');
+  const firstWordFullName = storedFullName.split(/[\s_().-]+/)[0] || '';
 
   const storedPhone = String(u.phone || '').replace(/[^0-9]/g, '');
   const inputDigits = clean.replace(/[^0-9]/g, '');
 
-  if (storedUsername && (storedUsername === clean || compactUsername === compact)) {
+  if (
+    storedUsername &&
+    (storedUsername === clean ||
+      compactUsername === compact ||
+      (clean.length >= 2 && firstWordUsername === clean))
+  ) {
     return true;
   }
   if (
@@ -281,7 +288,8 @@ export function doesUserMatchLoginIdentifier(u: any, rawIdentifier: string): boo
     storedFullName &&
     (storedFullName === clean ||
       compactFullName === compact ||
-      (clean.length >= 4 && storedFullName.includes(clean)))
+      (clean.length >= 2 && firstWordFullName === clean) ||
+      (clean.length >= 3 && storedFullName.includes(clean)))
   ) {
     return true;
   }
@@ -290,7 +298,17 @@ export function doesUserMatchLoginIdentifier(u: any, rawIdentifier: string): boo
   }
   if (
     (u.id === 'usr_admin2' || u.id === 'usr_admin_partner' || compactUsername === 'hassanshehata') &&
-    (clean === 'admin' || clean === 'admin2' || compact === 'hassanshehata' || clean.includes('حسن شحات'))
+    (clean === 'admin' ||
+      clean === 'admin2' ||
+      clean === 'hassan' ||
+      compact === 'hassanshehata' ||
+      clean.includes('حسن شحات'))
+  ) {
+    return true;
+  }
+  if (
+    (u.id === 'usr_1793611426975_9mic' || compactUsername === 'zakariashehata') &&
+    (clean === 'zakaria' || compact === 'zakariashehata' || clean.includes('زكريا'))
   ) {
     return true;
   }

@@ -514,7 +514,11 @@ export default function App() {
   const navItems = React.useMemo(() => {
     if (!currentRole) return [];
     const perms = currentRole.permissions;
-    const isAdmin = currentRole.id === 'role_admin';
+    const isAdmin =
+      currentRole.id === 'role_admin' ||
+      currentUser?.roleId === 'role_admin' ||
+      currentUser?.id === 'usr_admin2' ||
+      currentUser?.id === 'usr_1793611426975_9mic';
     const canReadSettings =
       isAdmin || (Boolean(perms?.sheets_sync?.read) && perms.sheets_sync.read !== 'none');
     return [
@@ -563,13 +567,25 @@ export default function App() {
         visible: isAdmin || (Boolean(perms?.reports?.read) && perms.reports.read !== 'none'),
       },
       {
+        id: 'sheetsSync',
+        label: t.nav.sheetsSync,
+        icon: FileSpreadsheet,
+        visible: canReadSettings,
+      },
+      {
+        id: 'permissions',
+        label: t.nav.permissions,
+        icon: ShieldCheck,
+        visible: isAdmin,
+      },
+      {
         id: 'settings',
         label: t.nav.settings,
         icon: Settings,
         visible: canReadSettings,
       },
     ].filter((item) => item.visible);
-  }, [currentRole, t.nav, leads]);
+  }, [currentRole, currentUser, t.nav, leads]);
 
   // Route Guard: Redirect to first permitted tab if current role does not have access to activeTab
   useEffect(() => {

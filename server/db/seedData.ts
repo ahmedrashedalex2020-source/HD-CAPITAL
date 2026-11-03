@@ -23,10 +23,8 @@ export function createAvatarSvg(initials: string, bgStart: string, bgEnd: string
 // Projects list strictly reflects the CRM1 sheet campaigns/projects only (zero fake projects)
 export const DEFAULT_PROJECTS = ['ليدز مغتربين'];
 
-export function getInitialDatabase() {
-  const nowIso = new Date().toISOString();
-
-  const roles = [
+export function getDefaultRoles() {
+  return [
     {
       id: 'role_admin',
       name: 'Administrator',
@@ -113,11 +111,56 @@ export function getInitialDatabase() {
       },
     },
   ];
+}
+
+export function ensureSystemRolesIntegrity(rawRoles: any): any[] {
+  const defaultRoles = getDefaultRoles();
+  const adminRoleTemplate = defaultRoles[0];
+  const incomingList = Array.isArray(rawRoles) ? rawRoles : [];
+  const roleMap = new Map<string, any>();
+
+  for (const defRole of defaultRoles) {
+    roleMap.set(defRole.id, JSON.parse(JSON.stringify(defRole)));
+  }
+
+  for (const r of incomingList) {
+    if (!r || typeof r !== 'object' || !r.id) continue;
+    if (r.id === 'role_admin') {
+      // Strictly protect Administrator role permissions from ever being downgraded or lost
+      roleMap.set('role_admin', {
+        ...adminRoleTemplate,
+        ...r,
+        id: 'role_admin',
+        isSystem: true,
+        permissions: JSON.parse(JSON.stringify(adminRoleTemplate.permissions)),
+      });
+    } else if (roleMap.has(r.id)) {
+      const baseDef = roleMap.get(r.id);
+      roleMap.set(r.id, {
+        ...baseDef,
+        ...r,
+        permissions: {
+          ...baseDef.permissions,
+          ...(r.permissions || {}),
+        },
+      });
+    } else {
+      roleMap.set(r.id, r);
+    }
+  }
+
+  return Array.from(roleMap.values());
+}
+
+export function getInitialDatabase() {
+  const nowIso = new Date().toISOString();
+  const roles = getDefaultRoles();
 
   const users = [
     {
       id: 'usr_admin2',
       username: 'Hassan shehata',
+      password: 'HD_CAPITAL',
       passwordHash: hashPassword('HD_CAPITAL'),
       clientAuthDigest: '284bcbb27a5f6f1b546a1e0abbf03972ada083a2f6381735c6c6411960af170d',
       accessPassword: 'HD_CAPITAL',
@@ -136,8 +179,31 @@ export function getInitialDatabase() {
       createdAt: '2026-01-15T09:00:00.000Z',
     },
     {
+      id: 'usr_1793611426975_9mic',
+      username: 'zakaria shehata',
+      password: 'zikaa333#',
+      passwordHash: hashPassword('zikaa333#'),
+      clientAuthDigest: '7c4e76a287320f47d09397196a887af1e6f7521c27196da9093d89f73b4fae4b',
+      accessPassword: 'zikaa333#',
+      fullName: 'Zakaria Shehata',
+      roleId: 'role_admin',
+      jobTitle: 'System Administrator',
+      jobTitleAr: 'مدير نظام ومبيعات عقارية',
+      avatarUrl: createAvatarSvg('ZS', '#2563EB', '#60A5FA'),
+      email: 'zakaria shehata@propsphere.eg',
+      phone: '',
+      location: 'القاهرة الجديدة',
+      assignedProjects: [...DEFAULT_PROJECTS],
+      isActiveForRouting: true,
+      routingWeight: 1,
+      preferredLang: 'ar',
+      createdAt: '2026-11-02T09:23:46.975Z',
+      updatedAt: '2026-11-02T09:23:46.975Z',
+    },
+    {
       id: 'usr_1793010490703_1p0c',
       username: 'omarahmed1',
+      password: '123456',
       passwordHash: hashPassword('123456'),
       clientAuthDigest: '4c41844d10f438ad7f46c26d42a557819739e35782f3e05080ba9aad4dd3b263',
       accessPassword: '123456',
@@ -158,6 +224,7 @@ export function getInitialDatabase() {
     {
       id: 'usr_1793444322819_o73a',
       username: 'ali',
+      password: 'hd123',
       passwordHash: hashPassword('hd123'),
       clientAuthDigest: 'f2fee1e6a26e35f51ff3772d77fcc8cc203d9d400477b5820d0ec1168f893574',
       accessPassword: 'hd123',
@@ -178,6 +245,7 @@ export function getInitialDatabase() {
     {
       id: 'usr_1793444555504_yc9q',
       username: 'asmaa',
+      password: 'hd123',
       passwordHash: hashPassword('hd123'),
       clientAuthDigest: 'f9c617cb0d02d07a87f57271744c5f7144c667dfb1c311422c88c728535c9476',
       accessPassword: 'hd123',
@@ -194,6 +262,28 @@ export function getInitialDatabase() {
       routingWeight: 1,
       preferredLang: 'ar',
       createdAt: '2026-10-31T11:02:35.504Z',
+    },
+    {
+      id: 'usr_1793619687380_pvab',
+      username: 'nour',
+      password: 'hd123',
+      passwordHash: hashPassword('hd123'),
+      clientAuthDigest: '36ea735ceed288f57aa6e0c53e15b03ab145579eade2ffe2d414954386a9dffa',
+      accessPassword: 'hd123',
+      fullName: 'nour mohamed',
+      roleId: 'role_employee',
+      jobTitle: 'Property Sales Consultant',
+      jobTitleAr: 'مسؤول مبيعات عقارية',
+      avatarUrl: createAvatarSvg('NM', '#2563EB', '#60A5FA'),
+      email: 'nour@propsphere.eg',
+      phone: '',
+      location: 'القاهرة الجديدة',
+      assignedProjects: [...DEFAULT_PROJECTS],
+      isActiveForRouting: false,
+      routingWeight: 1,
+      preferredLang: 'ar',
+      createdAt: '2026-11-02T11:41:27.381Z',
+      updatedAt: '2026-11-02T11:55:41.022Z',
     },
   ];
 

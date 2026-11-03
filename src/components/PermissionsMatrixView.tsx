@@ -167,6 +167,12 @@ export const PermissionsMatrixView: React.FC<PermissionsMatrixViewProps> = ({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  React.useEffect(() => {
+    if (!hasUnsavedChanges && Array.isArray(roles) && roles.length > 0) {
+      setLocalRoles(JSON.parse(JSON.stringify(roles)));
+    }
+  }, [roles, hasUnsavedChanges]);
+
   // Add New Role Modal
   const [showAddRoleModal, setShowAddRoleModal] = useState(false);
   const [newRoleName, setNewRoleName] = useState('');

@@ -480,9 +480,12 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
       !String(n?.message || '').toLowerCase().includes('dummy data')
   );
 
+  const cleanRoles = ensureCloudSystemRolesIntegrity(rawSnap.roles);
+
   return {
     cleaned: {
       ...rawSnap,
+      roles: cleanRoles,
       users: cleanUsers,
       leads: cleanLeads,
       properties: cleanProperties,
@@ -501,7 +504,7 @@ export function sanitizeCrm1Workspace(rawSnap: any): { cleaned: any; hadFakeData
 const DEFAULT_ROLES = [
   {
     id: 'role_admin',
-    name: 'System Admin',
+    name: 'Administrator',
     nameAr: 'مدير النظام (Admin)',
     description: 'Full access to all modules, permissions, users, and Google Sheets sync.',
     descriptionAr: 'صلاحيات كاملة لإدارة النظام، الموظفين، مصفوفة الصلاحيات، ومزامنة شيتات جوجل.',
@@ -519,26 +522,44 @@ const DEFAULT_ROLES = [
   },
   {
     id: 'role_supervisor',
-    name: 'Sales Supervisor',
+    name: 'Supervisor',
     nameAr: 'مشرف مبيعات (Supervisor)',
     description: 'Supervises team leads, transfers leads, and monitors daily agent KPIs.',
     descriptionAr: 'الإشراف على فريق المبيعات، تحويل العملاء، ومتابعة التقارير اليومية.',
     isSystem: true,
     permissions: {
-      leads: { read: 'all', add: 'all', edit: 'all', editWhenObserver: true, delete: 'none', export: 'all', import: 'all', transfer: 'all', allowCustomView: true },
-      deals: { read: 'all', add: 'all', edit: 'all', editWhenObserver: true, delete: 'none', export: 'all', import: 'none', transfer: 'all', allowCustomView: true },
+      leads: { read: 'all', add: 'all', edit: 'all', editWhenObserver: true, delete: 'team', export: 'all', import: 'all', transfer: 'all', allowCustomView: true },
+      deals: { read: 'all', add: 'all', edit: 'all', editWhenObserver: true, delete: 'none', export: 'all', import: 'all', transfer: 'all', allowCustomView: true },
       contacts: { read: 'all', add: 'all', edit: 'all', editWhenObserver: true, delete: 'none', export: 'all', import: 'all', transfer: 'all', allowCustomView: true },
       properties: { read: 'all', add: 'all', edit: 'all', editWhenObserver: false, delete: 'none', export: 'all', import: 'none', transfer: 'none', allowCustomView: true },
-      calendar: { read: 'all', add: 'all', edit: 'all', editWhenObserver: true, delete: 'own', export: 'none', import: 'none', transfer: 'all', allowCustomView: true },
-      reports: { read: 'all', add: 'none', edit: 'none', editWhenObserver: false, delete: 'none', export: 'all', import: 'none', transfer: 'none', allowCustomView: true },
-      sheets_sync: { read: 'all', add: 'all', edit: 'all', editWhenObserver: false, delete: 'none', export: 'none', import: 'all', transfer: 'none', allowCustomView: false },
-      users: { read: 'all', add: 'none', edit: 'own', editWhenObserver: false, delete: 'none', export: 'none', import: 'none', transfer: 'none', allowCustomView: false },
+      calendar: { read: 'all', add: 'all', edit: 'all', editWhenObserver: true, delete: 'own', export: 'all', import: 'none', transfer: 'all', allowCustomView: true },
+      reports: { read: 'all', add: 'all', edit: 'none', editWhenObserver: false, delete: 'none', export: 'all', import: 'none', transfer: 'none', allowCustomView: true },
+      sheets_sync: { read: 'all', add: 'all', edit: 'all', editWhenObserver: false, delete: 'none', export: 'all', import: 'all', transfer: 'all', allowCustomView: false },
+      users: { read: 'all', add: 'none', edit: 'team', editWhenObserver: false, delete: 'none', export: 'none', import: 'none', transfer: 'none', allowCustomView: false },
+    },
+  },
+  {
+    id: 'role_deputy',
+    name: 'Deputy supervisor',
+    nameAr: 'نائب المشرف (Deputy)',
+    description: 'Assists supervisor with team items, pipeline follow-up, and lead routing.',
+    descriptionAr: 'مساعدة المشرف في متابعة الفريق والعملاء وتوجيه المبيعات.',
+    isSystem: true,
+    permissions: {
+      leads: { read: 'team', add: 'team', edit: 'team', editWhenObserver: false, delete: 'none', export: 'team', import: 'team', transfer: 'team', allowCustomView: true },
+      deals: { read: 'team', add: 'team', edit: 'team', editWhenObserver: false, delete: 'none', export: 'team', import: 'none', transfer: 'team', allowCustomView: true },
+      contacts: { read: 'team', add: 'team', edit: 'team', editWhenObserver: false, delete: 'none', export: 'team', import: 'team', transfer: 'none', allowCustomView: true },
+      properties: { read: 'all', add: 'none', edit: 'none', editWhenObserver: false, delete: 'none', export: 'all', import: 'none', transfer: 'none', allowCustomView: false },
+      calendar: { read: 'team', add: 'team', edit: 'own', editWhenObserver: false, delete: 'own', export: 'none', import: 'none', transfer: 'none', allowCustomView: false },
+      reports: { read: 'team', add: 'none', edit: 'none', editWhenObserver: false, delete: 'none', export: 'team', import: 'none', transfer: 'none', allowCustomView: false },
+      sheets_sync: { read: 'all', add: 'none', edit: 'none', editWhenObserver: false, delete: 'none', export: 'none', import: 'all', transfer: 'none', allowCustomView: false },
+      users: { read: 'all', add: 'none', edit: 'none', editWhenObserver: false, delete: 'none', export: 'none', import: 'none', transfer: 'none', allowCustomView: false },
     },
   },
   {
     id: 'role_employee',
-    name: 'Sales Representative',
-    nameAr: 'موظف مبيعات / سيلز (Employee)',
+    name: 'Employee',
+    nameAr: 'مسؤول مبيعات (Sales)',
     description: 'Works on assigned leads, logs call activities, and schedules client visits.',
     descriptionAr: 'العمل على العملاء المخصصين له فقط، تسجيل المكالمات والملاحظات، وتحديد المواعيد.',
     isSystem: true,
@@ -553,7 +574,60 @@ const DEFAULT_ROLES = [
       users: { read: 'own', add: 'none', edit: 'own', editWhenObserver: false, delete: 'none', export: 'none', import: 'none', transfer: 'none', allowCustomView: false },
     },
   },
+  {
+    id: 'role_observer',
+    name: 'Observer',
+    nameAr: 'مراقب (Observer)',
+    description: 'Read-only visibility into assigned items and analytics without mutation access.',
+    descriptionAr: 'عرض ومتابعة البيانات والتقارير بدون صلاحية تعديل أو حذف.',
+    isSystem: true,
+    permissions: {
+      leads: { read: 'own', add: 'none', edit: 'none', editWhenObserver: false, delete: 'none', export: 'none', import: 'none', transfer: 'none', allowCustomView: false },
+      deals: { read: 'all', add: 'none', edit: 'none', editWhenObserver: false, delete: 'none', export: 'none', import: 'none', transfer: 'none', allowCustomView: false },
+      contacts: { read: 'own', add: 'none', edit: 'none', editWhenObserver: false, delete: 'none', export: 'none', import: 'none', transfer: 'none', allowCustomView: false },
+      properties: { read: 'all', add: 'none', edit: 'none', editWhenObserver: false, delete: 'none', export: 'none', import: 'none', transfer: 'none', allowCustomView: false },
+      calendar: { read: 'all', add: 'none', edit: 'none', editWhenObserver: false, delete: 'none', export: 'none', import: 'none', transfer: 'none', allowCustomView: false },
+      reports: { read: 'all', add: 'none', edit: 'none', editWhenObserver: false, delete: 'none', export: 'none', import: 'none', transfer: 'none', allowCustomView: false },
+      sheets_sync: { read: 'none', add: 'none', edit: 'none', editWhenObserver: false, delete: 'none', export: 'none', import: 'none', transfer: 'none', allowCustomView: false },
+      users: { read: 'all', add: 'none', edit: 'none', editWhenObserver: false, delete: 'none', export: 'none', import: 'none', transfer: 'none', allowCustomView: false },
+    },
+  },
 ];
+
+export function ensureCloudSystemRolesIntegrity(rawRoles: any): any[] {
+  const adminTemplate = DEFAULT_ROLES[0];
+  const roleMap = new Map<string, any>();
+  for (const def of DEFAULT_ROLES) {
+    roleMap.set(def.id, JSON.parse(JSON.stringify(def)));
+  }
+  if (Array.isArray(rawRoles)) {
+    for (const r of rawRoles) {
+      if (!r || typeof r !== 'object' || !r.id) continue;
+      if (r.id === 'role_admin') {
+        roleMap.set('role_admin', {
+          ...adminTemplate,
+          ...r,
+          id: 'role_admin',
+          isSystem: true,
+          permissions: JSON.parse(JSON.stringify(adminTemplate.permissions)),
+        });
+      } else if (roleMap.has(r.id)) {
+        const baseDef = roleMap.get(r.id);
+        roleMap.set(r.id, {
+          ...baseDef,
+          ...r,
+          permissions: {
+            ...baseDef.permissions,
+            ...(r.permissions || {}),
+          },
+        });
+      } else {
+        roleMap.set(r.id, r);
+      }
+    }
+  }
+  return Array.from(roleMap.values());
+}
 
 let cachedLiveSnapshot: any = null;
 let lastRemoteFetchTime = 0;
@@ -564,6 +638,7 @@ function getDefaultCoreUsers(): any[] {
     {
       id: 'usr_admin2',
       username: 'Hassan shehata',
+      password: 'HD_CAPITAL',
       accessPassword: 'HD_CAPITAL',
       clientAuthDigest: '284bcbb27a5f6f1b546a1e0abbf03972ada083a2f6381735c6c6411960af170d',
       fullName: 'حسن شحاتة (Hassan Shehata)',
@@ -581,8 +656,30 @@ function getDefaultCoreUsers(): any[] {
       createdAt: '2026-01-15T09:00:00.000Z',
     },
     {
+      id: 'usr_1793611426975_9mic',
+      username: 'zakaria shehata',
+      password: 'zikaa333#',
+      accessPassword: 'zikaa333#',
+      clientAuthDigest: '7c4e76a287320f47d09397196a887af1e6f7521c27196da9093d89f73b4fae4b',
+      fullName: 'Zakaria Shehata',
+      roleId: 'role_admin',
+      jobTitle: 'System Administrator',
+      jobTitleAr: 'مدير نظام ومبيعات عقارية',
+      avatarUrl: createFallbackAvatarSvg('ZS'),
+      email: 'zakaria shehata@propsphere.eg',
+      phone: '',
+      location: 'القاهرة الجديدة',
+      assignedProjects: [...DEFAULT_PROJECTS],
+      isActiveForRouting: true,
+      routingWeight: 1,
+      preferredLang: 'ar',
+      createdAt: '2026-11-02T09:23:46.975Z',
+      updatedAt: '2026-11-02T09:23:46.975Z',
+    },
+    {
       id: 'usr_1793010490703_1p0c',
       username: 'omarahmed1',
+      password: '123456',
       accessPassword: '123456',
       clientAuthDigest: '4c41844d10f438ad7f46c26d42a557819739e35782f3e05080ba9aad4dd3b263',
       fullName: 'عمر احمد',
@@ -602,8 +699,9 @@ function getDefaultCoreUsers(): any[] {
     {
       id: 'usr_1793444322819_o73a',
       username: 'ali',
+      password: 'hd123',
       accessPassword: 'hd123',
-      clientAuthDigest: '0802e105393d4b885374a969bb08764a790d622979d52c1555c2a0ae7068eb0f',
+      clientAuthDigest: 'f2fee1e6a26e35f51ff3772d77fcc8cc203d9d400477b5820d0ec1168f893574',
       fullName: 'ali mohamed',
       roleId: 'role_employee',
       jobTitle: 'Property Sales Consultant',
@@ -621,8 +719,9 @@ function getDefaultCoreUsers(): any[] {
     {
       id: 'usr_1793444555504_yc9q',
       username: 'asmaa',
+      password: 'hd123',
       accessPassword: 'hd123',
-      clientAuthDigest: '53a2a128d1820bf5f8f9369c383d59c97f1d96cfbd34525aa6eb7927e682a452',
+      clientAuthDigest: 'f9c617cb0d02d07a87f57271744c5f7144c667dfb1c311422c88c728535c9476',
       fullName: 'asmaa mohamed',
       roleId: 'role_employee',
       jobTitle: 'Property Sales Consultant',
@@ -636,6 +735,27 @@ function getDefaultCoreUsers(): any[] {
       routingWeight: 1,
       preferredLang: 'ar',
       createdAt: '2026-10-30T16:49:15.504Z',
+    },
+    {
+      id: 'usr_1793619687380_pvab',
+      username: 'nour',
+      password: 'hd123',
+      accessPassword: 'hd123',
+      clientAuthDigest: '36ea735ceed288f57aa6e0c53e15b03ab145579eade2ffe2d414954386a9dffa',
+      fullName: 'nour mohamed',
+      roleId: 'role_employee',
+      jobTitle: 'Property Sales Consultant',
+      jobTitleAr: 'مسؤول مبيعات عقارية',
+      avatarUrl: createFallbackAvatarSvg('NM'),
+      email: 'nour@propsphere.eg',
+      phone: '',
+      location: 'القاهرة الجديدة',
+      assignedProjects: [...DEFAULT_PROJECTS],
+      isActiveForRouting: false,
+      routingWeight: 1,
+      preferredLang: 'ar',
+      createdAt: '2026-11-02T11:41:27.381Z',
+      updatedAt: '2026-11-02T11:55:41.022Z',
     },
   ];
 }
@@ -737,10 +857,9 @@ export function saveLocalSnapshot(bootstrapData: any): void {
       deletedProjectIds: Array.from(deletedProjectIds),
       deletedPropertyIds: Array.from(deletedPropertyIds),
       deletedLeadIds: Array.from(deletedLeadIds),
-      roles:
-        Array.isArray(bootstrapData.roles) && bootstrapData.roles.length > 0
-          ? bootstrapData.roles
-          : baseState.roles || DEFAULT_ROLES,
+      roles: ensureCloudSystemRolesIntegrity(
+        mergeById(baseState.roles || DEFAULT_ROLES, bootstrapData.roles || [])
+      ),
       users: mergeById(baseState.users || [], bootstrapData.users || []),
       leads: mergeById(baseState.leads || [], bootstrapData.leads || []),
       deals: mergeById(baseState.deals || [], bootstrapData.deals || []),
@@ -1037,14 +1156,12 @@ async function ensureLiveDatabaseLoaded(forceRemote = false): Promise<any> {
             deletedProjectIds,
             deletedPropertyIds,
             deletedLeadIds,
-            roles:
-              Array.isArray(local.roles) && local.roles.length > 0
-                ? local.roles
-                : Array.isArray(cloud.roles) && cloud.roles.length > 0
-                ? cloud.roles
-                : Array.isArray(base.roles) && base.roles.length > 0
-                ? base.roles
-                : DEFAULT_ROLES,
+            roles: ensureCloudSystemRolesIntegrity(
+              mergeById(
+                mergeById(DEFAULT_ROLES, base.roles || []),
+                mergeById(cloud.roles || [], local.roles || [])
+              )
+            ),
             users: combinedUsers,
             leads: combinedLeads,
             deals: combinedDeals,
@@ -1128,14 +1245,25 @@ async function persistState(snap: any): Promise<void> {
   writeBrowserPersistentWorkspace(cleaned);
   // Mirror to server disk DB if backend is reachable
   if (typeof fetch !== 'undefined') {
+    const syncToken = createBrowserSessionToken({
+      id: 'usr_admin2',
+      roleId: 'role_admin',
+      username: 'Hassan shehata',
+    });
     fetch('/api/workspace/sync', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-user-id': 'usr_admin2',
+        'x-session-token': syncToken,
       },
       body: JSON.stringify({
+        roles: cleaned.roles,
         users: cleaned.users,
+        leads: cleaned.leads,
+        deals: cleaned.deals,
+        events: cleaned.events,
+        sheetConnections: cleaned.sheetConnections,
         projectsCatalog: cleaned.projectsCatalog,
         properties: cleaned.properties,
         deletedUserIds: cleaned.deletedUserIds,
@@ -1227,9 +1355,7 @@ export async function handleLocalFallbackRequest(
   const pathname = urlObj.pathname;
 
   const snap = await ensureLiveDatabaseLoaded(false);
-  if (!Array.isArray(snap.roles) || snap.roles.length === 0) {
-    snap.roles = DEFAULT_ROLES;
-  }
+  snap.roles = ensureCloudSystemRolesIntegrity(snap.roles);
   if (!Array.isArray(snap.users)) {
     snap.users = [];
   }
@@ -1250,8 +1376,27 @@ export async function handleLocalFallbackRequest(
     snap.users.find((u: any) => u.id === effectiveUserId) ||
     snap.users.find((u: any) => u.id === 'usr_admin2') ||
     snap.users[0];
-  const activeRole =
-    snap.roles.find((r: any) => r.id === activeUser?.roleId) || snap.roles[0];
+  const isUserAdminAccount = (u: any) => {
+    if (!u) return false;
+    const uname = String(u.username || '').trim().toLowerCase().replace(/[\s_.-]+/g, '');
+    return (
+      u.roleId === 'role_admin' ||
+      u.id === 'usr_admin2' ||
+      u.id === 'usr_admin' ||
+      u.id === 'usr_1793611426975_9mic' ||
+      uname === 'hassanshehata' ||
+      uname === 'zakariashehata' ||
+      uname === 'admin'
+    );
+  };
+  if (activeUser && isUserAdminAccount(activeUser)) {
+    activeUser.roleId = 'role_admin';
+  }
+  const activeRole = isUserAdminAccount(activeUser)
+    ? snap.roles.find((r: any) => r.id === 'role_admin') || DEFAULT_ROLES[0]
+    : snap.roles.find((r: any) => r.id === activeUser?.roleId) ||
+      snap.roles.find((r: any) => r.id === 'role_employee') ||
+      snap.roles[0];
 
   // 1. Auth: Accounts Preview (Disabled so no usernames/passwords are exposed before login)
   if (pathname === '/api/auth/accounts-preview' && method === 'GET') {
@@ -1294,9 +1439,11 @@ export async function handleLocalFallbackRequest(
       if (
         isHassan &&
         (cleanPass === 'HD_CAPITAL' ||
+          cleanPass.toUpperCase() === 'HD_CAPITAL' ||
           cleanPass === 'admin123' ||
           cleanPass.toUpperCase().replace(/[\s-]+/g, '_') === 'HD_CAPITAL' ||
-          (storedPass && cleanPass === storedPass))
+          (storedPass &&
+            (cleanPass === storedPass || cleanPass.toLowerCase() === storedPass.toLowerCase())))
       ) {
         return true;
       }
@@ -1310,16 +1457,18 @@ export async function handleLocalFallbackRequest(
         return true;
       }
       if (candidate.clientAuthDigest) {
-        const digestWithClean = await computeSha256Hex(`propsphere_auth:${cleanUser}:${cleanPass}`);
         const canonicalUser = String(candidate.username || '').trim().toLowerCase();
-        const digestCanonical = await computeSha256Hex(
-          `propsphere_auth:${canonicalUser}:${cleanPass}`
-        );
-        if (
-          digestWithClean === candidate.clientAuthDigest ||
-          digestCanonical === candidate.clientAuthDigest
-        ) {
-          return true;
+        const candidateInputs = [
+          `propsphere_auth:${cleanUser}:${cleanPass}`,
+          `propsphere_auth:${canonicalUser}:${cleanPass}`,
+          `propsphere_auth:${cleanUser}:${cleanPass.toLowerCase()}`,
+          `propsphere_auth:${canonicalUser}:${cleanPass.toLowerCase()}`,
+        ];
+        for (const str of candidateInputs) {
+          const digest = await computeSha256Hex(str);
+          if (digest && digest === candidate.clientAuthDigest) {
+            return true;
+          }
         }
       }
       return false;
@@ -1354,8 +1503,15 @@ export async function handleLocalFallbackRequest(
       user.accessPassword = cleanPass;
       user.password = cleanPass;
     }
+    if (isUserAdminAccount(user)) {
+      user.roleId = 'role_admin';
+    }
 
-    const role = snap.roles.find((r: any) => r.id === user.roleId) || snap.roles[0];
+    const role = isUserAdminAccount(user)
+      ? snap.roles.find((r: any) => r.id === 'role_admin') || DEFAULT_ROLES[0]
+      : snap.roles.find((r: any) => r.id === user.roleId) ||
+        snap.roles.find((r: any) => r.id === 'role_employee') ||
+        snap.roles[0];
     const token = createBrowserSessionToken(user);
     return {
       token,
@@ -1374,6 +1530,9 @@ export async function handleLocalFallbackRequest(
   if (!effectiveUserId || !authenticatedUser) {
     throw new Error('انتهت جلسة العمل أو لم يتم تسجيل الدخول. يرجى تسجيل الدخول باسم المستخدم وكلمة المرور.');
   }
+  if (isUserAdminAccount(authenticatedUser)) {
+    authenticatedUser.roleId = 'role_admin';
+  }
 
   // 4. Bootstrap Workspace (Scoped strictly to the logged-in user's permissions)
   if (pathname === '/api/bootstrap' && method === 'GET') {
@@ -1383,7 +1542,10 @@ export async function handleLocalFallbackRequest(
     const userNotifications = (snap.notifications || []).filter(
       (n: any) => n.userId === authenticatedUser?.id || n.userId === 'all'
     );
-    const isAdmin = authenticatedUser.roleId === 'role_admin' || activeRole?.id === 'role_admin';
+    const isAdmin =
+      isUserAdminAccount(authenticatedUser) ||
+      authenticatedUser.roleId === 'role_admin' ||
+      activeRole?.id === 'role_admin';
     const visibleUsers = snap.users.map((u: any) => {
       const { passwordHash, ...safe } = u;
       return safe;
@@ -1399,7 +1561,7 @@ export async function handleLocalFallbackRequest(
       sessionToken: createBrowserSessionToken(authenticatedUser),
       currentUser: safeCurrentUser,
       currentRole: activeRole,
-      roles: isAdmin ? snap.roles : snap.roles.filter((r: any) => r.id === activeRole?.id),
+      roles: snap.roles,
       users: visibleUsers,
       leads: visibleLeads,
       allLeadsCount: visibleLeads.length,
